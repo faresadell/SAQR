@@ -402,6 +402,8 @@ model Order {
   number       Int    @unique @default(autoincrement())
   customerId   String
   merchantId   String
+  // Phase 4: this table is the SUBORDER (one merchant). Orders created before Phase 4 have no parent.
+  parentOrderId String?
 
   orderStatus    OrderStatus    @default(AWAITING_PAYMENT)
   paymentStatus  PaymentStatus  @default(NOT_REQUIRED_YET)
@@ -433,6 +435,7 @@ model Order {
 
   customer User     @relation("CustomerOrders", fields: [customerId], references: [id])
   merchant Merchant @relation(fields: [merchantId], references: [id])
+  parent   ParentOrder? @relation(fields: [parentOrderId], references: [id])
 
   items    OrderItem[]
   events   OrderEvent[]
@@ -441,9 +444,30 @@ model Order {
   delivery DeliveryRecord?
   stars    StarLedgerEntry[]
 
+  @@index([parentOrderId])
   @@index([customerId, createdAt])
   @@index([merchantId, orderStatus])
   @@index([orderStatus, paymentStatus])
+}
+
+// One checkout = one ParentOrder. Its status is NOT stored: it is derived from its suborders
+// (src/lib/orders/status.ts deriveParentStatus). Totals are copied from the server-built quote.
+model ParentOrder {
+  id               String   @id @default(cuid())
+  number           Int      @unique @default(autoincrement())
+  customerId       String
+  // Client-supplied key; one checkout request creates at most one parent (retry-safe).
+  idempotencyKey   String
+  subtotalCents    Int
+  deliveryFeeCents Int
+  totalCents       Int
+  addressSnap      Json
+  createdAt        DateTime @default(now())
+
+  suborders Order[]
+
+  @@unique([customerId, idempotencyKey])
+  @@index([customerId, createdAt])
 }
 
 model OrderItem {

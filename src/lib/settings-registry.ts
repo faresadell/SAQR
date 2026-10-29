@@ -18,9 +18,9 @@ export interface IntSettingDefinition {
 export const SETTING_DEFINITIONS = {
   // ───── orders & stars ─────
   "orders.stars_charge_per_party": {
-    label: "النجوم المخصومة من كل طرف عند الموافقة على الطلب",
-    help: "تُخصم من العميل ومن التاجر معاً عند موافقة التاجر على الطلب، وتُسترجع مرة واحدة عند الإلغاء.",
-    group: "orders", unit: "نجمة", min: 0, max: 50, default: 5,
+    label: "النجوم المخصومة من كل طرف عن كل طلب فرعي",
+    help: "تُخصم من العميل ومن التاجر معاً عند موافقة التاجر على كل طلب فرعي، وتُسترجع مرة واحدة عند الإلغاء. الحد الأدنى للرصيد إعداد منفصل.",
+    group: "orders", unit: "نجمة", min: 0, max: 50, default: 2,
   },
   "stars.min_balance_customer": {
     label: "الحد الأدنى لرصيد العميل لإرسال طلب",

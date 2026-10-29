@@ -11,7 +11,7 @@ import {
 
 describe("agreed defaults", () => {
   it("charges 5 stars per party and requires 5 stars to order/accept", () => {
-    expect(SETTING_DEFINITIONS["orders.stars_charge_per_party"].default).toBe(5);
+    expect(SETTING_DEFINITIONS["orders.stars_charge_per_party"].default).toBe(2);
     expect(SETTING_DEFINITIONS["stars.min_balance_customer"].default).toBe(5);
     expect(SETTING_DEFINITIONS["stars.min_balance_merchant"].default).toBe(5);
   });
