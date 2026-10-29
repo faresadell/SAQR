@@ -27,8 +27,8 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-          cache: npm
-      - run: npm ci
+      # package-lock.json was missing from the repo import; use `npm ci` once the lockfile is committed.
+      - run: if [ -f package-lock.json ]; then npm ci; else npm install --no-audit --no-fund; fi
       - run: npx prisma generate
       - run: npm run db:validate
       - run: npm run typecheck
@@ -40,6 +40,7 @@ jobs:
           psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f prisma/manual/001_constraints_and_triggers.sql
           psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f prisma/manual/002_phase2_append_only.sql
           psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f prisma/manual/003_phase3_catalog.sql
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f prisma/manual/004_phase4_parent_orders.sql
       - name: Integration tests (real PostgreSQL)
         run: npm run test:integration
         env:
