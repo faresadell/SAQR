@@ -1,0 +1,6 @@
+body { margin: 0; min-height: 100dvh; display: grid; place-items: center; background: #070b1a; color: #fff; font-family: system-ui, sans-serif; text-align: center; }
+main { padding: 24px; display: grid; gap: 12px; justify-items: center; }
+img { border-radius: 16px; }
+h1 { margin: 0; font-size: 1.5rem; }
+p { margin: 0; color: #c7d2e6; }
+a { margin-top: 8px; padding: 12px 24px; border-radius: 12px; background: #2563eb; color: #fff; text-decoration: none; font-weight: 700; }

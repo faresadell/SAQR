@@ -1,0 +1,558 @@
+// SAQR - Prisma schema (Phase 1-4 core)
+// Money rule: every amount is an Int in piasters (قروش). 100 = 1 EGP. Never Float.
+// Stars are an Int count. 1 star = 1 EGP for platform charges only, not cash.
+// Out of scope for this file (later phases): memberships, benefits engine,
+// monthly settlements, competition, ratings. They will be added by new migrations.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ───────────── Enums ─────────────
+
+enum Role {
+  CUSTOMER
+  MERCHANT
+  DRIVER
+  ADMIN
+}
+
+enum UserStatus {
+  PENDING
+  ACTIVE
+  SUSPENDED
+}
+
+enum OtpPurpose {
+  SIGNUP
+  LOGIN
+  PASSWORD_RESET
+}
+
+enum MerchantStatus {
+  PENDING_REVIEW
+  APPROVED
+  REJECTED
+  SUSPENDED
+}
+
+enum MerchantTier {
+  REGULAR
+  BUSINESS
+}
+
+// Order state, payment, refund and delivery are kept in separate fields on purpose.
+enum OrderStatus {
+  AWAITING_PAYMENT
+  AWAITING_MERCHANT_APPROVAL
+  APPROVED
+  PREPARING
+  READY
+  OUT_FOR_DELIVERY
+  DELIVERED
+  CANCELLATION_REQUESTED
+  CANCELLED
+  REJECTED
+}
+
+enum PaymentStatus {
+  NOT_REQUIRED_YET
+  RECEIPT_SUBMITTED
+  AWAITING_MERCHANT_CONFIRMATION
+  CONFIRMED
+  DISPUTED
+  REJECTED
+}
+
+enum RefundStatus {
+  NONE
+  PENDING
+  UNDER_REVIEW
+  COMPLETED
+}
+
+enum DeliveryStatus {
+  NOT_STARTED
+  AWAITING_DRIVER
+  DRIVER_ASSIGNED
+  PICKED_UP
+  OUT_FOR_DELIVERY
+  DELIVERED
+  FAILED
+}
+
+enum FeeCollectionStatus {
+  PENDING
+  COLLECTED
+  EXCEPTION
+}
+
+enum StarReason {
+  PURCHASE
+  ORDER_CHARGE
+  ORDER_REFUND
+  ADMIN_CORRECTION
+}
+
+// ───────────── Users, auth, permissions ─────────────
+
+model User {
+  id              String     @id @default(cuid())
+  phone           String     @unique
+  phoneVerifiedAt DateTime?
+  email           String?    @unique
+  emailVerifiedAt DateTime?
+  passwordHash    String
+  name            String
+  role            Role
+  status          UserStatus @default(PENDING)
+  totpSecretEnc   String? // AES-256-GCM encrypted TOTP seed, required for ADMIN accounts
+  lastTotpStep    Int? // last accepted TOTP time step (blocks replay)
+  isSuperAdmin    Boolean    @default(false)
+  failedLoginCount Int       @default(0)
+  lockedUntil     DateTime?
+  consentVersion  String?
+  consentAcceptedAt DateTime?
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+
+  sessions       Session[]
+  addresses      Address[]
+  admin          AdminPermission[]
+  merchant       Merchant?         @relation("MerchantOwner")
+  driverProfile  Driver?
+  starAccount    StarAccount?
+  orders         Order[]           @relation("CustomerOrders")
+}
+
+model OtpCode {
+  id         String     @id @default(cuid())
+  phone      String
+  purpose    OtpPurpose
+  codeHash   String
+  attempts   Int        @default(0)
+  expiresAt  DateTime
+  consumedAt DateTime?
+  createdAt  DateTime   @default(now())
+
+  @@index([phone, purpose, createdAt])
+}
+
+// Database-backed sliding-window rate limiting (works across multiple server instances).
+model RateLimitHit {
+  id        String   @id @default(cuid())
+  key       String
+  createdAt DateTime @default(now())
+
+  @@index([key, createdAt])
+}
+
+model Session {
+  id        String   @id @default(cuid())
+  userId    String
+  tokenHash String   @unique
+  ip        String?
+  userAgent String?
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+// Admin sub-roles: one row per granted permission (e.g. "payments.review", "refunds.verify").
+model AdminPermission {
+  id         String @id @default(cuid())
+  userId     String
+  permission String
+  user       User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, permission])
+}
+
+// ───────────── Merchants and drivers ─────────────
+
+model Merchant {
+  id              String         @id @default(cuid())
+  ownerId         String         @unique // one shop per owner for now (docs/PHASE3.md)
+  name            String
+  description     String?
+  businessType    String // BusinessType.code, managed by admins
+  phone           String? // optional public business contact, E.164
+  tier            MerchantTier   @default(REGULAR) // Basic by default; changed only by an admin (audited)
+  status          MerchantStatus @default(PENDING_REVIEW)
+  rejectionReason String?
+  reviewedById    String?
+  reviewedAt      DateTime?
+  address         String?
+  lat             Float?
+  lng             Float?
+  openingHours    Json? // see src/lib/catalog/opening-hours.ts; null = no schedule set
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+
+  owner           User         @relation("MerchantOwner", fields: [ownerId], references: [id])
+  businessTypeRef BusinessType @relation(fields: [businessType], references: [code])
+  products        Product[]
+  drivers         Driver[]
+  orders          Order[]
+
+  @@index([status])
+}
+
+// Configurable list of business kinds (restaurant, shop, ...). Admins add or hide kinds; nothing is a code enum.
+model BusinessType {
+  code      String     @id
+  nameAr    String
+  isActive  Boolean    @default(true)
+  sortOrder Int        @default(0)
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+  merchants Merchant[]
+}
+
+// Drivers belong to the merchant and keep the cash delivery fee themselves.
+model Driver {
+  id         String   @id @default(cuid())
+  userId     String   @unique
+  merchantId String
+  isActive   Boolean  @default(true)
+  createdAt  DateTime @default(now())
+
+  user      User             @relation(fields: [userId], references: [id])
+  merchant  Merchant         @relation(fields: [merchantId], references: [id])
+  deliveries DeliveryRecord[]
+}
+
+// ───────────── Catalog ─────────────
+
+model Category {
+  id         String     @id @default(cuid())
+  parentId   String?
+  nameAr     String
+  nameEn     String?
+  sortOrder  Int        @default(0)
+  isActive   Boolean    @default(true)
+  archivedAt DateTime?
+  fieldsSpec Json? // optional per-category extra product fields (not used yet, docs/PHASE3.md)
+  createdAt  DateTime   @default(now())
+  updatedAt  DateTime   @updatedAt
+  parent     Category?  @relation("CategoryTree", fields: [parentId], references: [id])
+  children   Category[] @relation("CategoryTree")
+  products   Product[]
+
+  @@index([parentId])
+}
+
+model Product {
+  id          String    @id @default(cuid())
+  merchantId  String
+  categoryId  String
+  nameAr      String
+  description String?
+  priceCents  Int
+  isAvailable Boolean   @default(true)
+  imageKey    String?
+  attributes  Json?
+  archivedAt  DateTime? // archive, never hard-delete (history keeps snapshots)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  merchant Merchant    @relation(fields: [merchantId], references: [id])
+  category Category    @relation(fields: [categoryId], references: [id])
+  items    OrderItem[]
+
+  @@index([merchantId, isAvailable])
+  @@index([categoryId])
+}
+
+// ───────────── Addresses and delivery pricing ─────────────
+
+model DeliveryZone {
+  id        String    @id @default(cuid())
+  name      String
+  polygon   Json? // GeoJSON area (optional, later phase)
+  isActive  Boolean   @default(true)
+  createdAt DateTime  @default(now())
+  addresses Address[]
+  fees      DeliveryFeeVersion[]
+}
+
+// Append-only fee history. The fee in force at time T is the newest version with effectiveFrom <= T.
+// Orders copy the fee into their own snapshot, so later changes never touch old orders.
+model DeliveryFeeVersion {
+  id            String       @id @default(cuid())
+  zoneId        String
+  feeCents      Int
+  effectiveFrom DateTime
+  createdById   String
+  createdAt     DateTime     @default(now())
+  zone          DeliveryZone @relation(fields: [zoneId], references: [id])
+
+  @@index([zoneId, effectiveFrom])
+}
+
+model Address {
+  id      String        @id @default(cuid())
+  userId  String
+  label   String?
+  line    String
+  lat     Float?
+  lng     Float?
+  zoneId  String?
+  user    User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  zone    DeliveryZone? @relation(fields: [zoneId], references: [id])
+
+  @@index([userId])
+}
+
+// ───────────── Editable platform settings (no hardcoded business values) ─────────────
+
+// DEPRECATED since phase 2: replaced by PlatformSettingVersion (effective dates + history). Unused.
+model PlatformSetting {
+  key         String   @id // e.g. "stars.min_balance_customer", "refund.deadline_hours"
+  value       Json
+  updatedById String?
+  updatedAt   DateTime @updatedAt
+}
+
+// Append-only. Value is stored as { "v": number | null }.
+model PlatformSettingVersion {
+  id            String   @id @default(cuid())
+  key           String
+  value         Json
+  effectiveFrom DateTime
+  createdById   String
+  createdAt     DateTime @default(now())
+
+  @@index([key, effectiveFrom])
+}
+
+// Which payment methods customers can use. Disabled until an admin enables them.
+model PaymentMethodConfig {
+  code      String   @id // "vodafone_cash" | "instapay"
+  nameAr    String
+  isEnabled Boolean  @default(false)
+  sortOrder Int      @default(0)
+  updatedAt DateTime @updatedAt
+}
+
+// Append-only platform commission history per merchant tier (REGULAR = Basic, BUSINESS = Premium).
+model CommissionRate {
+  id            String       @id @default(cuid())
+  tier          MerchantTier
+  basisPoints   Int // 800 = 8.00%
+  effectiveFrom DateTime
+  createdById   String
+  note          String?
+  createdAt     DateTime     @default(now())
+
+  // No unique on (tier, effectiveFrom): the effective-date design lets a later row at the same start
+  // date correct a scheduled rate (history is append-only, rows are never edited or deleted).
+  @@index([tier, effectiveFrom])
+}
+
+// ───────────── Stars (append-only ledger) ─────────────
+
+model StarPackage {
+  id         String  @id @default(cuid())
+  stars      Int
+  priceCents Int
+  isActive   Boolean @default(true)
+}
+
+model StarAccount {
+  id      String @id @default(cuid())
+  userId  String @unique
+  balance Int    @default(0) // cached; the ledger is the source of truth
+  user    User   @relation(fields: [userId], references: [id])
+
+  entries StarLedgerEntry[]
+}
+
+model StarLedgerEntry {
+  id             String      @id @default(cuid())
+  accountId      String
+  amount         Int // signed: negative = deduction
+  balanceAfter   Int
+  reason         StarReason
+  orderId        String?
+  actorId        String?
+  note           String?
+  idempotencyKey String      @unique
+  createdAt      DateTime    @default(now())
+
+  account StarAccount @relation(fields: [accountId], references: [id])
+  order   Order?      @relation(fields: [orderId], references: [id])
+
+  // One charge and one refund per account per order, enforced by the database.
+  @@unique([accountId, orderId, reason])
+  @@index([accountId, createdAt])
+}
+
+// ───────────── Orders ─────────────
+
+model Order {
+  id           String @id @default(cuid())
+  number       Int    @unique @default(autoincrement())
+  customerId   String
+  merchantId   String
+
+  orderStatus    OrderStatus    @default(AWAITING_PAYMENT)
+  paymentStatus  PaymentStatus  @default(NOT_REQUIRED_YET)
+  refundStatus   RefundStatus   @default(NONE)
+  deliveryStatus DeliveryStatus @default(NOT_STARTED)
+
+  subtotalCents    Int
+  discountCents    Int  @default(0)
+  deliveryFeeCents Int
+  totalCents       Int
+  merchantTierSnap     MerchantTier // merchant membership at order time
+  commissionBp         Int // commission rate (basis points) copied at order time
+  commissionBaseCents  Int // amount the rate was applied to (see docs/PHASE2.md: base is an open decision)
+  commissionCents      Int // resulting commission, provisional until refunds/settlement (phases 7, 11)
+  deliveryRuleSnap Json // fee rule used, frozen at order time
+  addressSnap      Json // delivery address, frozen at order time
+
+  starsChargedAt  DateTime? // set once, when the merchant approves
+  starsRefundedAt DateTime? // set once, on cancellation after charge
+  approvedAt      DateTime?
+  approvedById    String?
+  cancelledAt     DateTime?
+  cancelledById   String?
+  cancelReason    String?
+  cancelPolicy    Json?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  customer User     @relation("CustomerOrders", fields: [customerId], references: [id])
+  merchant Merchant @relation(fields: [merchantId], references: [id])
+
+  items    OrderItem[]
+  events   OrderEvent[]
+  payments Payment[]
+  refunds  Refund[]
+  delivery DeliveryRecord?
+  stars    StarLedgerEntry[]
+
+  @@index([customerId, createdAt])
+  @@index([merchantId, orderStatus])
+  @@index([orderStatus, paymentStatus])
+}
+
+model OrderItem {
+  id             String  @id @default(cuid())
+  orderId        String
+  productId      String?
+  nameSnapshot   String
+  unitPriceCents Int
+  quantity       Int
+  discountCents  Int     @default(0)
+  lineTotalCents Int
+  order          Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  product        Product? @relation(fields: [productId], references: [id], onDelete: SetNull)
+}
+
+// Append-only history of every state change.
+model OrderEvent {
+  id        String   @id @default(cuid())
+  orderId   String
+  field     String // orderStatus | paymentStatus | refundStatus | deliveryStatus
+  fromValue String?
+  toValue   String
+  actorId   String?
+  note      String?
+  createdAt DateTime @default(now())
+  order     Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@index([orderId, createdAt])
+}
+
+// ───────────── Payments (manual transfer to merchant) ─────────────
+
+model Payment {
+  id             String    @id @default(cuid())
+  orderId        String
+  method         String // "vodafone_cash" | "instapay" | ... (configurable)
+  receiptKey     String // private object storage key, never a public URL
+  referenceNo    String?
+  amountCents    Int
+  submittedAt    DateTime  @default(now())
+  confirmedById  String? // merchant (or admin override)
+  confirmedAt    DateTime?
+  rejectedReason String?
+  flagged        Boolean   @default(false)
+  flagReason     String?
+  order          Order     @relation(fields: [orderId], references: [id])
+
+  @@index([orderId])
+  @@index([method, referenceNo])
+}
+
+// ───────────── Refunds (merchant sends money, admin verifies) ─────────────
+
+model Refund {
+  id             String       @id @default(cuid())
+  orderId        String
+  amountCents    Int
+  status         RefundStatus @default(PENDING)
+  dueAt          DateTime // server-recorded deadline (from settings, default 24h)
+  proofKey       String?
+  verifiedById   String?
+  verifiedAt     DateTime?
+  decisionNote   String?
+  createdAt      DateTime     @default(now())
+  order          Order        @relation(fields: [orderId], references: [id])
+
+  @@index([status, dueAt])
+}
+
+// ───────────── Delivery ─────────────
+
+model DeliveryRecord {
+  id                String              @id @default(cuid())
+  orderId           String              @unique
+  driverId          String?
+  feeExpectedCents  Int
+  collectionStatus  FeeCollectionStatus @default(PENDING)
+  collectedAt       DateTime?
+  exceptionNote     String?
+  assignedAt        DateTime?
+  pickedUpAt        DateTime?
+  deliveredAt       DateTime?
+  order             Order               @relation(fields: [orderId], references: [id])
+  driver            Driver?             @relation(fields: [driverId], references: [id])
+}
+
+// ───────────── Audit ─────────────
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  actorId    String?
+  action     String
+  entityType String
+  entityId   String
+  before     Json?
+  after      Json?
+  ip         String?
+  createdAt  DateTime @default(now())
+
+  @@index([entityType, entityId])
+  @@index([actorId, createdAt])
+}
+
+// ───────────── Required raw-SQL migration (Prisma cannot express these) ─────────────
+// 1) ALTER TABLE "StarAccount" ADD CONSTRAINT star_balance_non_negative CHECK (balance >= 0);
+// 2) Triggers that REJECT UPDATE and DELETE on "StarLedgerEntry", "OrderEvent", "AuditLog"
+//    (append-only).
+// 3) CHECK (amount <> 0) on "StarLedgerEntry".
+// The 5-star charge runs in ONE serialized transaction: lock both StarAccount rows
+// (SELECT ... FOR UPDATE, fixed order to avoid deadlock), recheck balance >= required,
+// insert both ledger entries, update balances, set order.starsChargedAt and orderStatus.
+// The unique (accountId, orderId, reason) constraint makes a double charge impossible.
