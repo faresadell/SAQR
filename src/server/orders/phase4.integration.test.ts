@@ -12,6 +12,7 @@ import { NotFoundError } from "@/server/errors";
 import { placeOrder } from "@/server/orders/checkout";
 import { advanceOrder, cancelOrder, confirmPayment, decideOrder, rejectPayment, submitPayment } from "@/server/orders/lifecycle";
 import { applyStarMove, getStarBalance } from "@/server/stars/ledger";
+import { runDailyStarCharge, runMonthlyRewards } from "@/server/stars/jobs";
 
 if (!process.env.DATABASE_URL) throw new Error("DATABASE_URL is required for integration tests");
 
@@ -220,5 +221,35 @@ describe("star ledger", () => {
     expect(await getStarBalance(db, w.customer.id)).toBe(19);
     await expect(db.$transaction((tx) => applyStarMove(tx, { userId: w.customer.id, amount: -500, reason: "ADMIN_CORRECTION", idempotencyKey: "big" }))).rejects.toThrow();
     expect(await getStarBalance(db, w.customer.id)).toBe(19);
+  });
+});
+
+describe("scheduled star jobs", () => {
+  it("charges one star per active account per Cairo day, never twice, never below zero, never admins", async () => {
+    const admin = await db.user.create({ data: { phone: "+201000000099", name: "Admin", passwordHash: "x", role: "ADMIN", status: "ACTIVE" } });
+    await giveStars(admin.id, 10, "seed:admin");
+    const now = new Date();
+    await runDailyStarCharge(now);
+    await runDailyStarCharge(now); // re-run the same day
+    expect(await getStarBalance(db, w.customer.id)).toBe(19);
+    expect(await getStarBalance(db, w.ownerA.id)).toBe(19);
+    expect(await getStarBalance(db, admin.id)).toBe(10);
+    await giveStars(w.customer.id, -19, "drain:c");
+    const summary = await runDailyStarCharge(new Date(now.getTime() + 86_400_000));
+    expect(summary.failed).toBe(0);
+    expect(await getStarBalance(db, w.customer.id)).toBe(0); // zero balance is skipped: no debt
+  });
+
+  it("grants each monthly reward tier once, only for delivered suborders", async () => {
+    for (let i = 0; i < 5; i++) {
+      const r = await placeOrder(w.customer, { idempotencyKey: `reward-key-${i}-abc`, addressId: w.addressId, lines: [{ productId: w.a.product.id, quantity: 1 }] });
+      if (!r.ok) throw new Error("setup");
+      await db.orderEvent.create({ data: { orderId: r.suborderIds[0]!, field: "orderStatus", toValue: "DELIVERED" } });
+    }
+    const before = await getStarBalance(db, w.customer.id);
+    await runMonthlyRewards();
+    await runMonthlyRewards();
+    expect(await getStarBalance(db, w.customer.id)).toBe(before + 15);
+    expect(await db.starLedgerEntry.count({ where: { reason: "MONTHLY_REWARD" } })).toBe(1);
   });
 });

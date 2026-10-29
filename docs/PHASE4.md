@@ -15,7 +15,8 @@ What WAS run: the new pure modules below were type-checked with strict `tsc` and
 - `src/server/orders/checkout.ts` — `placeOrder` (one transaction, idempotent, server-side prices/fees/commission snapshot).
 - `src/server/orders/lifecycle.ts` — payment submit / confirm / reject, approve (charges stars once), reject, advance, cancel (refunds stars once, opens a Refund if paid).
 - `src/server/orders/read.ts`, `src/server/api/http.ts`, `src/app/api/v1/orders/**` — REST contract, documented in `docs/api/orders.md`.
-- `src/server/orders/phase4.integration.test.ts` — 11 integration tests (idempotency, charge/refund once, concurrent approvals, IDOR, duplicate transfer).
+- `src/server/orders/phase4.integration.test.ts` — 13 integration tests (idempotency, charge/refund once, concurrent approvals, IDOR, duplicate transfer).
+- `src/server/stars/jobs.ts` + `POST /api/internal/jobs/{daily-stars|monthly-rewards}` (Bearer `CRON_SECRET`, 503 until set): daily 1-star charge by Cairo day and monthly reward tiers; both idempotent. Needs a scheduler (e.g. hourly) calling them; new StarReason values DAILY_CHARGE / MONTHLY_REWARD / PLAN_GRANT need a migration.
 - `prisma/manual/004_phase4_parent_orders.sql` — CHECKs and a unique index for confirmed transfer references.
 To run: `npm install && npx prisma migrate dev --name phase4 --create-only` (paste 004 into it) then `npm run typecheck && npm run lint && npm test && DATABASE_URL=... npm run test:integration`.
 

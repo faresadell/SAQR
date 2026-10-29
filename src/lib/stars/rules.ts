@@ -1,6 +1,8 @@
 // Star business rules as pure functions. Amounts that the business may change (charge per order, minimum balance,
 // prices) come from settings / plan rows; the tables below are only the seed defaults taken from the master spec.
 
+import { parseCairoLocal } from "../cairo-time";
+
 const CAIRO = "Africa/Cairo";
 
 /** "YYYY-MM-DD" of the Cairo calendar day containing `at`. Used as the once-per-day key. */
@@ -13,6 +15,17 @@ export function cairoDayKey(at: Date): string {
 /** "YYYY-MM" of the Cairo month containing `at`. */
 export function cairoMonthKey(at: Date): string {
   return cairoDayKey(at).slice(0, 7);
+}
+
+/** First instant of the Cairo month containing `at`, and of the next month. */
+export function cairoMonthBounds(at: Date): { start: Date; end: Date } {
+  const key = cairoMonthKey(at); // YYYY-MM
+  const [y, m] = key.split("-").map(Number) as [number, number];
+  const next = m === 12 ? `${y + 1}-01` : `${y}-${String(m + 1).padStart(2, "0")}`;
+  const start = parseCairoLocal(`${key}-01T00:00`);
+  const end = parseCairoLocal(`${next}-01T00:00`);
+  if (!start || !end) throw new Error("Invalid month bounds");
+  return { start, end };
 }
 
 /** Ledger idempotency keys: the same logical event always produces the same key, so a retry hits the unique index. */

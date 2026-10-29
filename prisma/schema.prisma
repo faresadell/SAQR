@@ -97,6 +97,9 @@ enum StarReason {
   ORDER_CHARGE
   ORDER_REFUND
   ADMIN_CORRECTION
+  DAILY_CHARGE
+  MONTHLY_REWARD
+  PLAN_GRANT
 }
 
 // ───────────── Users, auth, permissions ─────────────

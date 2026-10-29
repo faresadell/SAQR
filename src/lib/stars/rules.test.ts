@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { cairoDayKey, cairoMonthKey, computeNewExpiry, DEFAULT_PLANS, DEFAULT_REWARD_TIERS, dailyChargeDecision, ledgerKeys, meetsMinimumBalance, renewalReminderAt, rewardsDue, totalStars } from "./rules";
+import { cairoDayKey, cairoMonthBounds, cairoMonthKey, computeNewExpiry, DEFAULT_PLANS, DEFAULT_REWARD_TIERS, dailyChargeDecision, ledgerKeys, meetsMinimumBalance, renewalReminderAt, rewardsDue, totalStars } from "./rules";
 
 describe("Cairo day and month keys", () => {
   it("uses the Cairo calendar, not UTC", () => {
@@ -63,5 +63,18 @@ describe("plans", () => {
     expect(computeNewExpiry(now, new Date("2026-10-01T00:00:00Z")).toISOString()).toBe("2026-11-28T10:00:00.000Z");
     expect(computeNewExpiry(now, null).toISOString()).toBe("2026-11-28T10:00:00.000Z");
     expect(renewalReminderAt(in10).toISOString()).toBe("2026-11-05T10:00:00.000Z");
+  });
+});
+
+describe("cairoMonthBounds", () => {
+  it("covers exactly the Cairo month, including the DST shift", () => {
+    const oct = cairoMonthBounds(new Date("2026-10-29T10:00:00Z"));
+    expect(cairoDayKey(oct.start)).toBe("2026-10-01");
+    expect(cairoDayKey(new Date(oct.end.getTime() - 1))).toBe("2026-10-31");
+    expect(cairoDayKey(oct.end)).toBe("2026-11-01");
+    const dec = cairoMonthBounds(new Date("2026-12-15T10:00:00Z"));
+    expect(cairoDayKey(dec.end)).toBe("2027-01-01");
+    // a delivery at 23:30 Cairo on the last day belongs to that month
+    expect(cairoMonthKey(new Date(oct.end.getTime() - 30 * 60_000))).toBe("2026-10");
   });
 });
