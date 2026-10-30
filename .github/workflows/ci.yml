@@ -45,4 +45,9 @@ jobs:
         run: npm run test:integration
         env:
           DB_TRIGGERS_APPLIED: "1"
+      - name: Audit details (annotations)
+        if: always()
+        run: |
+          npm audit --omit=dev --json > audit.json || true
+          node -e 'const a=require("./audit.json");for(const [n,v] of Object.entries(a.vulnerabilities||{})){const via=v.via.map(x=>typeof x==="string"?x:x.title+" "+(x.range||"")).join(" | ");console.log("::warning title=audit "+n+" ["+v.severity+"]::fix="+JSON.stringify(v.fixAvailable)+" range="+v.range+" via "+via.slice(0,300))}'
       - run: npm run audit
