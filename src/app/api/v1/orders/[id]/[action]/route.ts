@@ -5,7 +5,7 @@ import { apiError, apiOk, checkMutation, currentActor, mapThrown, readJson, stat
 import { advanceOrder, cancelOrder, confirmPayment, decideOrder, rejectPayment, submitPayment, type LifecycleResult } from "@/server/orders/lifecycle";
 
 const schemas = {
-  payment: z.object({ method: z.string().min(1).max(40), referenceNo: z.string().min(1).max(64), receiptKey: z.string().min(1).max(200) }).strict(),
+  payment: z.object({ method: z.string().min(1).max(40), referenceNo: z.string().min(1).max(64), uploadId: z.string().min(8).max(64) }).strict(),
   "payment-confirm": z.object({}).strict(),
   "payment-reject": z.object({ reason: z.string().min(3).max(300) }).strict(),
   decision: z.object({ decision: z.enum(["APPROVE", "REJECT"]), reason: z.string().min(3).max(300).optional() }).strict(),
@@ -17,7 +17,7 @@ const isAction = (value: string): value is Action => Object.hasOwn(schemas, valu
 
 /**
  * POST /api/v1/orders/{id}/{action}
- *   payment          customer   {method, referenceNo, receiptKey}   submit transfer proof (does NOT confirm payment)
+ *   payment          customer   {method, referenceNo, uploadId}   submit transfer proof (does NOT confirm payment)
  *   payment-confirm  seller     {}                                   confirm the money arrived
  *   payment-reject   seller     {reason}                             reject the proof; customer may resubmit
  *   decision         seller     {decision: APPROVE|REJECT, reason?}  approve (charges stars once) or reject

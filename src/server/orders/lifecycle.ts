@@ -87,13 +87,12 @@ async function setPaymentStatus(tx: Tx, order: OrderRow, to: PaymentStatus, acto
 // ───────────────────────── payment ─────────────────────────
 
 const REFERENCE_PATTERN = /^[A-Za-z0-9\-_/ ]{4,64}$/;
-const RECEIPT_KEY_PATTERN = /^[A-Za-z0-9][A-Za-z0-9/_\-.]{5,199}$/;
 
 export interface SubmitPaymentInput {
   method: string;
   referenceNo: string;
-  /** Private storage key produced by the upload service (never a URL). */
-  receiptKey: string;
+  /** Id returned by POST /orders/{id}/receipt. Must belong to this customer and this order, and can be used once. */
+  uploadId: string;
 }
 
 /**
@@ -102,7 +101,7 @@ export interface SubmitPaymentInput {
  */
 export async function submitPayment(actor: Actor, orderId: string, input: SubmitPaymentInput): Promise<LifecycleResult> {
   const referenceNo = typeof input.referenceNo === "string" ? input.referenceNo.trim() : "";
-  if (!REFERENCE_PATTERN.test(referenceNo) || typeof input.receiptKey !== "string" || !RECEIPT_KEY_PATTERN.test(input.receiptKey) || input.receiptKey.includes("..")) {
+  if (!REFERENCE_PATTERN.test(referenceNo) || typeof input.uploadId !== "string" || input.uploadId.length < 8 || input.uploadId.length > 64) {
     return { ok: false, error: "INVALID_REQUEST" };
   }
   try {
@@ -115,21 +114,29 @@ export async function submitPayment(actor: Actor, orderId: string, input: Submit
     const order = await loadOwnCustomerOrder(tx, actor, orderId);
     if (order.orderStatus !== "AWAITING_PAYMENT" || (order.paymentStatus !== "NOT_REQUIRED_YET" && order.paymentStatus !== "REJECTED")) fail("WRONG_STATE");
 
-    // Same transfer reference already used for another order on this method: keep it, but flag it for the reviewer.
+    // The proof must be an image this customer uploaded for THIS order, and it can be used only once.
+    const upload = await tx.receiptUpload.findFirst({ where: { id: input.uploadId, orderId: order.id, uploaderId: actor.id, usedAt: null } });
+    if (!upload) fail("INVALID_REQUEST");
+    const claimed = await tx.receiptUpload.updateMany({ where: { id: upload!.id, usedAt: null }, data: { usedAt: new Date() } });
+    if (claimed.count !== 1) fail("CONFLICT");
+
+    // Reused transfer reference, or the very same picture used on another order: keep it but flag it for the reviewer.
     const clash = await tx.payment.findFirst({ where: { method: input.method, referenceNo, orderId: { not: order.id }, rejectedReason: null } });
+    const sameImage = await tx.receiptUpload.findFirst({ where: { sha256: upload!.sha256, orderId: { not: order.id }, usedAt: { not: null } } });
+    const flagReason = clash ? "Transfer reference already used on another order" : sameImage ? "Same receipt image already used on another order" : null;
     await tx.payment.create({
       data: {
         orderId: order.id,
         method: input.method,
-        receiptKey: input.receiptKey,
+        receiptKey: upload!.storageKey,
         referenceNo,
         amountCents: order.totalCents,
-        flagged: clash !== null,
-        flagReason: clash ? "Transfer reference already used on another order" : null,
+        flagged: flagReason !== null,
+        flagReason,
       },
     });
     await setPaymentStatus(tx, order, "AWAITING_MERCHANT_CONFIRMATION", actor.id, "receipt submitted");
-    await writeAudit({ actorId: actor.id, action: "PAYMENT_SUBMITTED", entityType: "Order", entityId: order.id, after: { method: input.method, flagged: clash !== null } }, tx);
+    await writeAudit({ actorId: actor.id, action: "PAYMENT_SUBMITTED", entityType: "Order", entityId: order.id, after: { method: input.method, flagged: flagReason !== null } }, tx);
   });
 }
 

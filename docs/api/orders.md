@@ -53,12 +53,19 @@ All answer `200 {"ok":true}` on success. Common errors: `404` (not your order), 
 
 | action | who | body | notes |
 |---|---|---|---|
-| `payment` | the order's customer | `{method, referenceNo, receiptKey}` | method must be enabled (`422 PAYMENT_METHOD_DISABLED`). `receiptKey` comes from the upload service (**not built yet**). Amount is the suborder total, set by the server. Only in `AWAITING_PAYMENT` with payment `NOT_REQUIRED_YET` or `REJECTED`. |
+| `payment` | the order's customer | `{method, referenceNo, uploadId}` | method must be enabled (`422 PAYMENT_METHOD_DISABLED`). `uploadId` comes from `POST /orders/{id}/receipt` below; it must be your own unused upload for this same order (`422 INVALID_REQUEST` otherwise). A reused transfer reference or the same picture on another order is accepted but flagged for the reviewer. Amount is the suborder total, set by the server. Only in `AWAITING_PAYMENT` with payment `NOT_REQUIRED_YET` or `REJECTED`. |
 | `payment-confirm` | shop owner (or admin with `payments.review`) | `{}` | `409 DUPLICATE_TRANSFER` if the same method + reference was already confirmed on another order. Moves the order to `AWAITING_MERCHANT_APPROVAL`. |
 | `payment-reject` | shop owner (or admin with `payments.review`) | `{reason}` | order stays `AWAITING_PAYMENT`; customer can resubmit. |
 | `decision` | shop owner only | `{decision:"APPROVE"}` or `{decision:"REJECT", reason}` | needs payment `CONFIRMED` (`409 PAYMENT_NOT_CONFIRMED`). APPROVE charges `orders.stars_charge_per_party` (default 2) from the customer AND the merchant once (`409 INSUFFICIENT_STARS` if either side is below the minimum; nothing changes). REJECT opens a refund when money was confirmed. |
 | `advance` | shop owner | `{to}` | `PREPARING`, `READY`, `OUT_FOR_DELIVERY`, `DELIVERED`, in order. (Driver-driven steps arrive with the delivery phase.) |
 | `cancel` | customer (before approval only), shop owner, or admin with `payments.review` | `{reason}` | from `AWAITING_PAYMENT`, `AWAITING_MERCHANT_APPROVAL`, or `APPROVED`. After approval the exact stars charged go back to both sides once. If payment was confirmed a refund (merchant returns the money) is opened with a deadline (`refunds.deadline_hours`). |
 
+## POST /api/v1/orders/{id}/receipt — upload the transfer proof (customer)
+`multipart/form-data`, one field named `file`. JPEG, PNG or WebP only (detected from the file content, not the name), max 5 MB, up to 5 unused uploads per order, only while the suborder waits for payment. Needs the `Origin` header like other POSTs.
+`201 {"uploadId":"cl..."}` · `415 INVALID_FILE` · `413 FILE_TOO_LARGE` · `409 WRONG_STATE` · `429 TOO_MANY_UPLOADS|RATE_LIMITED` · `404`.
+
+## GET /api/v1/receipts/{uploadId} — view a proof
+The image bytes (`Cache-Control: private, no-store`). Only the order's customer, its shop owner, or an admin with `payments.review`; everyone else `404`. Every view is audited. Fetch it with the session cookie (an `<img src>` on the same site works).
+
 ## Not implemented yet (do not build UI against these)
-Receipt upload and download, refund proof/verification endpoints, cancellation after `APPROVED` stages (`CANCELLATION_REQUESTED` flow), driver endpoints, plans/offers/memberships/contest endpoints, notifications.
+Refund proof/verification endpoints, cancellation after `APPROVED` stages (`CANCELLATION_REQUESTED` flow), driver endpoints, plans/offers/memberships/contest endpoints, notifications.

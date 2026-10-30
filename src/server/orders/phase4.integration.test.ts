@@ -78,8 +78,15 @@ beforeEach(async () => {
 const cart = () => [{ productId: w.a.product.id, quantity: 2 }, { productId: w.b.product.id, quantity: 1 }];
 const place = (key = "key-12345678") => placeOrder(w.customer, { idempotencyKey: key, addressId: w.addressId, lines: cart() });
 
+let uploads = 0;
+/** A receipt upload row as the upload service would create it (the file itself is not needed for these tests). */
+async function makeUpload(orderId: string, uploaderId = w.customer.id, sha = `sha-${(uploads += 1)}`): Promise<string> {
+  const row = await db.receiptUpload.create({ data: { orderId, uploaderId, storageKey: `receipts/${orderId}/${uploads}.jpg`, contentType: "image/jpeg", sizeBytes: 100, sha256: sha } });
+  return row.id;
+}
+
 async function payAndConfirm(orderId: string, owner: Actor, ref = "REF-0001") {
-  expect((await submitPayment(w.customer, orderId, { method: "instapay", referenceNo: ref, receiptKey: `receipts/${orderId}/${ref}.jpg` })).ok).toBe(true);
+  expect((await submitPayment(w.customer, orderId, { method: "instapay", referenceNo: ref, uploadId: await makeUpload(orderId) })).ok).toBe(true);
   expect((await confirmPayment(owner, orderId)).ok).toBe(true);
 }
 
@@ -190,7 +197,7 @@ describe("order lifecycle", () => {
     const [first, second] = r.suborderIds as [string, string];
     const ownerOf = async (id: string) => ((await db.order.findUniqueOrThrow({ where: { id } })).merchantId === w.a.merchant.id ? w.ownerA : w.ownerB);
     await payAndConfirm(first, await ownerOf(first), "SAME-REF-1");
-    await submitPayment(w.customer, second, { method: "instapay", referenceNo: "SAME-REF-1", receiptKey: `receipts/${second}/x.jpg` });
+    await submitPayment(w.customer, second, { method: "instapay", referenceNo: "SAME-REF-1", uploadId: await makeUpload(second) });
     expect(await confirmPayment(await ownerOf(second), second)).toEqual({ ok: false, error: "DUPLICATE_TRANSFER" });
   });
 
@@ -201,13 +208,36 @@ describe("order lifecycle", () => {
     const owner = (await db.order.findUniqueOrThrow({ where: { id } })).merchantId === w.a.merchant.id ? w.ownerA : w.ownerB;
     const other = owner.id === w.ownerA.id ? w.ownerB : w.ownerA;
     const stranger = await user("CUSTOMER");
-    await expect(submitPayment(stranger, id, { method: "instapay", referenceNo: "REF-9999", receiptKey: "receipts/x/y.jpg" })).rejects.toBeInstanceOf(NotFoundError);
-    await submitPayment(w.customer, id, { method: "instapay", referenceNo: "REF-9999", receiptKey: "receipts/x/y.jpg" });
+    await expect(submitPayment(stranger, id, { method: "instapay", referenceNo: "REF-9999", uploadId: await makeUpload(id) })).rejects.toBeInstanceOf(NotFoundError);
+    await submitPayment(w.customer, id, { method: "instapay", referenceNo: "REF-9999", uploadId: await makeUpload(id) });
     await expect(confirmPayment(other, id)).rejects.toBeInstanceOf(NotFoundError);
     await expect(advanceOrder(other, id, "PREPARING")).rejects.toBeInstanceOf(NotFoundError);
     await db.paymentMethodConfig.update({ where: { code: "instapay" }, data: { isEnabled: false } });
     expect(await rejectPayment(owner, id, "لم يصل التحويل")).toEqual({ ok: true });
-    expect(await submitPayment(w.customer, id, { method: "instapay", referenceNo: "REF-8888", receiptKey: "receipts/x/z.jpg" })).toEqual({ ok: false, error: "PAYMENT_METHOD_DISABLED" });
+    expect(await submitPayment(w.customer, id, { method: "instapay", referenceNo: "REF-8888", uploadId: await makeUpload(id) })).toEqual({ ok: false, error: "PAYMENT_METHOD_DISABLED" });
+  });
+});
+
+describe("receipt proof", () => {
+  it("accepts only the customer's own unused upload for that order, and flags a reused picture", async () => {
+    const r = await place();
+    if (!r.ok) throw new Error("setup");
+    const [first, second] = r.suborderIds as [string, string];
+    const pay = (orderId: string, uploadId: string, ref: string) => submitPayment(w.customer, orderId, { method: "instapay", referenceNo: ref, uploadId });
+
+    const other = await makeUpload(second);
+    expect(await pay(first, other, "REF-A001")).toEqual({ ok: false, error: "INVALID_REQUEST" }); // upload belongs to another order
+    expect(await pay(first, "nonexistent-id", "REF-A002")).toEqual({ ok: false, error: "INVALID_REQUEST" });
+
+    const mine = await makeUpload(first, w.customer.id, "same-picture");
+    expect((await pay(first, mine, "REF-A003")).ok).toBe(true);
+    expect(await pay(first, mine, "REF-A004")).toEqual({ ok: false, error: "WRONG_STATE" }); // already awaiting confirmation
+
+    expect((await pay(second, await makeUpload(second, w.customer.id, "same-picture"), "REF-A005")).ok).toBe(true);
+    const flagged = await db.payment.findFirstOrThrow({ where: { orderId: second } });
+    expect(flagged.flagged).toBe(true);
+    expect(flagged.flagReason).toContain("image");
+    expect((await db.receiptUpload.findUniqueOrThrow({ where: { id: mine } })).usedAt).not.toBeNull();
   });
 });
 

@@ -522,6 +522,23 @@ model Payment {
   @@index([method, referenceNo])
 }
 
+// A receipt image stored in private storage. The content is identified by sha256 so the same picture used on
+// another order can be flagged. A payment may only reference an upload made by the same customer for the same order.
+model ReceiptUpload {
+  id          String   @id @default(cuid())
+  orderId     String
+  uploaderId  String
+  storageKey  String   @unique
+  contentType String
+  sizeBytes   Int
+  sha256      String
+  usedAt      DateTime? // set once, when a payment is submitted with it
+  createdAt   DateTime @default(now())
+
+  @@index([orderId, uploaderId])
+  @@index([sha256])
+}
+
 // ───────────── Refunds (merchant sends money, admin verifies) ─────────────
 
 model Refund {

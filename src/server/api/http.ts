@@ -31,6 +31,11 @@ export function checkMutation(request: NextRequest): NextResponse | null {
   if (!(request.headers.get("content-type") ?? "").toLowerCase().startsWith("application/json")) {
     return apiError(415, "UNSUPPORTED_MEDIA_TYPE", "Content-Type must be application/json");
   }
+  return checkOrigin(request);
+}
+
+/** Origin-only check (used by multipart uploads). */
+export function checkOrigin(request: NextRequest): NextResponse | null {
   const origin = request.headers.get("origin");
   if (!origin || origin !== new URL(getEnv().APP_URL).origin) return apiError(403, "BAD_ORIGIN");
   return null;
