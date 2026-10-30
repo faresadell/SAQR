@@ -526,7 +526,7 @@ model Payment {
 // another order can be flagged. A payment may only reference an upload made by the same customer for the same order.
 model ReceiptUpload {
   id          String   @id @default(cuid())
-  orderId     String
+  orderId     String? // null = proof for a plan purchase
   uploaderId  String
   storageKey  String   @unique
   contentType String
@@ -537,6 +537,82 @@ model ReceiptUpload {
 
   @@index([orderId, uploaderId])
   @@index([sha256])
+}
+
+// ───────────── Plans (star packages, 30-day cycle) ─────────────
+
+enum PlanAudience {
+  CUSTOMER
+  DRIVER
+  MERCHANT
+}
+
+enum PurchaseStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+// Admin-managed catalog. Purchases copy price and stars, so editing a plan never changes past purchases.
+// This is NOT the merchant membership (Basic/Premium commission tier): plans only sell stars and offer quota.
+model Plan {
+  id         String       @id @default(cuid())
+  code       String       @unique
+  audience   PlanAudience
+  nameAr     String
+  priceCents Int
+  baseStars  Int
+  bonusStars Int          @default(0)
+  offerQuota Int? // merchant offers per 30-day cycle
+  isActive   Boolean      @default(true)
+  sortOrder  Int          @default(0)
+  createdAt  DateTime     @default(now())
+  updatedAt  DateTime     @updatedAt
+
+  purchases     PlanPurchase[]
+  subscriptions Subscription[]
+}
+
+// One row per user: the current plan and when its paid time ends. Stars never expire with it.
+model Subscription {
+  id                String    @id @default(cuid())
+  userId            String    @unique
+  planId            String
+  startsAt          DateTime
+  expiresAt         DateTime
+  reminderSentAt    DateTime? // 3-day warning for the current expiry
+  expiredNotifiedAt DateTime?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  plan Plan @relation(fields: [planId], references: [id])
+
+  @@index([expiresAt])
+}
+
+model PlanPurchase {
+  id               String         @id @default(cuid())
+  userId           String
+  planId           String
+  priceCentsSnap   Int
+  baseStarsSnap    Int
+  bonusStarsSnap   Int
+  method           String
+  referenceNo      String
+  receiptUploadId  String         @unique
+  status           PurchaseStatus @default(PENDING)
+  decidedById      String?
+  decidedAt        DateTime?
+  rejectReason     String?
+  flagged          Boolean        @default(false)
+  flagReason       String?
+  createdAt        DateTime       @default(now())
+
+  plan Plan @relation(fields: [planId], references: [id])
+
+  @@index([userId, createdAt])
+  @@index([status, createdAt])
+  @@index([method, referenceNo])
 }
 
 // ───────────── Refunds (merchant sends money, admin verifies) ─────────────

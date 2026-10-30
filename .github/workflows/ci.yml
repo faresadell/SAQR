@@ -41,6 +41,7 @@ jobs:
           psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f prisma/manual/002_phase2_append_only.sql
           psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f prisma/manual/003_phase3_catalog.sql
           psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f prisma/manual/004_phase4_parent_orders.sql
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f prisma/manual/005_phase5_plans.sql
       - name: Integration tests (real PostgreSQL)
         run: npm run test:integration
         env:

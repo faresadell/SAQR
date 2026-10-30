@@ -69,3 +69,16 @@ The image bytes (`Cache-Control: private, no-store`). Only the order's customer,
 
 ## Not implemented yet (do not build UI against these)
 Refund proof/verification endpoints, cancellation after `APPROVED` stages (`CANCELLATION_REQUESTED` flow), driver endpoints, plans/offers/memberships/contest endpoints, notifications.
+
+
+# Plans API (v1) — star packages
+
+Same conventions as above (session cookie, JSON + `Origin` on POST, error shape). Implemented in `src/app/api/v1/plans/**` and `src/app/api/v1/admin/plan-purchases/**`; CI-tested at service level.
+A plan lasts 30 days from the admin's approval. Early renewal adds a new cycle after the remaining time. Stars never expire with the plan. Buying a plan only sells stars (and, for merchants, an offer quota): it is NOT the Plus/Premium commission membership.
+
+- `GET /api/v1/plans` -> `{items:[{code,nameAr,priceCents,baseStars,bonusStars,offerQuota}]}` (only your audience: customer, driver or merchant).
+- `POST /api/v1/plans/receipt` multipart `file` (same rules as the order receipt) -> `201 {uploadId}`.
+- `POST /api/v1/plans/purchases` `{planCode, method, referenceNo, uploadId}` -> `201 {purchaseId}`. Errors: `409 PLAN_NOT_AVAILABLE | PURCHASE_PENDING` (one pending purchase at a time), `422 PAYMENT_METHOD_DISABLED | INVALID_REQUEST`. Nothing is activated and no stars are granted yet.
+- `GET /api/v1/plans/me` -> `{subscription:{plan,startsAt,expiresAt,isActive}|null, purchases:[...]}`.
+- Admin (`payments.review`): `GET /api/v1/admin/plan-purchases?status=PENDING` and `POST /api/v1/admin/plan-purchases/{id}` `{decision:"APPROVE"|"REJECT", reason?}`. Approve grants base + bonus stars once; `409 DUPLICATE_TRANSFER` if the same transfer reference was already confirmed elsewhere; `409 WRONG_STATE` if already decided. Reject needs a reason (3–300 chars).
+- Receipt images are viewed with `GET /api/v1/receipts/{uploadId}` (the buyer or an admin with `payments.review`).

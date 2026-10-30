@@ -200,6 +200,7 @@ describe("order lifecycle", () => {
     await payAndConfirm(first, await ownerOf(first), "SAME-REF-1");
     await submitPayment(w.customer, second, { method: "instapay", referenceNo: "SAME-REF-1", uploadId: await makeUpload(second) });
     expect(await confirmPayment(await ownerOf(second), second)).toEqual({ ok: false, error: "DUPLICATE_TRANSFER" });
+    expect((await db.payment.findFirstOrThrow({ where: { orderId: second } })).flagged).toBe(true); // the flag survives the rollback
   });
 
   it("hides other people's orders (IDOR) and rejects disabled methods", async () => {

@@ -158,7 +158,8 @@ export async function confirmPayment(actor: Actor, orderId: string): Promise<Lif
       where: { method: payment.method, referenceNo: payment.referenceNo, confirmedAt: { not: null }, id: { not: payment.id } },
     });
     if (alreadyConfirmed) {
-      await tx.payment.update({ where: { id: payment.id }, data: { flagged: true, flagReason: "Transfer reference already confirmed on another order" } });
+      // Written outside the transaction on purpose: the abort below rolls the transaction back, the flag must survive.
+      await db.payment.update({ where: { id: payment.id }, data: { flagged: true, flagReason: "Transfer reference already confirmed on another order" } });
       fail("DUPLICATE_TRANSFER");
     }
 
