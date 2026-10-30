@@ -2,6 +2,8 @@ import { timingSafeEqual } from "node:crypto";
 import type { NextRequest, NextResponse } from "next/server";
 import { getEnv } from "@/lib/env";
 import { apiError, apiOk } from "@/server/api/http";
+import { runMembershipMaintenance } from "@/server/memberships/service";
+import { generateSettlements, previousMonthKey } from "@/server/settlements/service";
 import { escalateOverdueRefunds } from "@/server/refunds/service";
 import { runDailyStarCharge, runMonthlyRewards, runPlanReminders } from "@/server/stars/jobs";
 
@@ -25,6 +27,11 @@ export async function POST(request: NextRequest, context: { params: Promise<{ jo
   if (job === "daily-stars") return apiOk(await runDailyStarCharge());
   if (job === "monthly-rewards") return apiOk(await runMonthlyRewards());
   if (job === "refund-overdue") return apiOk(await escalateOverdueRefunds());
+  if (job === "membership-maintenance") return apiOk(await runMembershipMaintenance());
+  if (job === "settlements") {
+    const result = await generateSettlements(previousMonthKey(), null);
+    return result.ok ? apiOk(result.summary) : apiError(409, result.error);
+  }
   if (job === "plan-reminders") return apiOk(await runPlanReminders());
   return apiError(404, "NOT_FOUND");
 }

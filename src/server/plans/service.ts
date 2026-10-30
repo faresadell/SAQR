@@ -6,6 +6,7 @@ import { hasPermission, type Actor } from "@/lib/auth/permissions";
 import { computeNewExpiry, ledgerKeys, PLAN_CYCLE_DAYS } from "@/lib/stars/rules";
 import { AuthorizationError, NotFoundError } from "@/server/errors";
 import { assertPaymentMethodEnabled, PaymentMethodDisabledError } from "@/server/payments/methods";
+import { transferConfirmedElsewhere } from "@/server/payments/transfers";
 import { notifyInTx } from "@/server/notifications/service";
 import { applyStarMoves, type StarMove } from "@/server/stars/ledger";
 
@@ -144,9 +145,7 @@ export async function decidePlanPurchase(actor: Actor, purchaseId: string, decis
     }
 
     // The same transfer can never fund two approved purchases or an order payment.
-    const usedByPurchase = await tx.planPurchase.findFirst({ where: { method: purchase.method, referenceNo: purchase.referenceNo, status: "APPROVED", id: { not: purchase.id } } });
-    const usedByOrder = await tx.payment.findFirst({ where: { method: purchase.method, referenceNo: purchase.referenceNo, confirmedAt: { not: null } } });
-    if (usedByPurchase || usedByOrder) {
+    if (await transferConfirmedElsewhere(tx, purchase.method, purchase.referenceNo, { planPurchaseId: purchase.id })) {
       // Written outside the transaction on purpose: the abort below rolls the transaction back, the flag must survive.
       await db.planPurchase.update({ where: { id: purchase.id }, data: { flagged: true, flagReason: "Transfer reference already confirmed elsewhere" } });
       return fail("DUPLICATE_TRANSFER");

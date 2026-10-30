@@ -8,6 +8,7 @@ import { ledgerKeys } from "@/lib/stars/rules";
 import { getSetting } from "@/lib/settings";
 import { AuthorizationError, NotFoundError } from "@/server/errors";
 import { assertPaymentMethodEnabled, PaymentMethodDisabledError } from "@/server/payments/methods";
+import { transferConfirmedElsewhere } from "@/server/payments/transfers";
 import { notifyInTx } from "@/server/notifications/service";
 import { applyStarMoves, getStarBalance, InsufficientStarsError, type StarMove } from "@/server/stars/ledger";
 
@@ -155,10 +156,8 @@ export async function confirmPayment(actor: Actor, orderId: string): Promise<Lif
     if (order.orderStatus !== "AWAITING_PAYMENT" || order.paymentStatus !== "AWAITING_MERCHANT_CONFIRMATION") fail("WRONG_STATE");
     const payment = await latestOpenPayment(tx, order.id);
 
-    // The same transfer can never be confirmed twice, across orders.
-    const alreadyConfirmed = await tx.payment.findFirst({
-      where: { method: payment.method, referenceNo: payment.referenceNo, confirmedAt: { not: null }, id: { not: payment.id } },
-    });
+    // The same transfer can never be confirmed twice: not across orders, nor as a plan or membership purchase.
+    const alreadyConfirmed = await transferConfirmedElsewhere(tx, payment.method, payment.referenceNo ?? "", { paymentId: payment.id });
     if (alreadyConfirmed) {
       // Written outside the transaction on purpose: the abort below rolls the transaction back, the flag must survive.
       await db.payment.update({ where: { id: payment.id }, data: { flagged: true, flagReason: "Transfer reference already confirmed on another order" } });

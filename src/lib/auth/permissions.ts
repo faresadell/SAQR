@@ -8,6 +8,7 @@ export const PERMISSIONS = [
   "orders.view",
   "payments.review",
   "refunds.verify",
+  "settlements.manage",
   "audit.view",
 ] as const;
 

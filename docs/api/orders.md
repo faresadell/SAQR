@@ -104,3 +104,25 @@ Status flow: `PENDING` (merchant must pay back) -> `UNDER_REVIEW` (proof submitt
 - `POST /api/v1/admin/refunds/{id}` `{decision:"VERIFY"|"REJECT_PROOF", note?}` (admin, `refunds.verify`; `REJECT_PROOF` needs a 3–300 char note) -> `{ok:true}`; `409 WRONG_STATE` unless `UNDER_REVIEW`.
 - The customer is notified on `REFUND_COMPLETED`; the merchant on `REFUND_PROOF_REJECTED`; admins on `REFUND_OVERDUE` (job `POST /api/internal/jobs/refund-overdue`).
 - Proof images are viewed with `GET /api/v1/receipts/{uploadId}` (customer, shop owner or `payments.review` admin of that order).
+
+
+# Merchant memberships API (v1) — Plus / Premium
+
+For shop owners (`MERCHANT`). Premium grants the Premium commission tier (5%); Plus keeps the regular tier (8%): no other Plus benefit has been specified, so none exists. A membership lasts 30 days from the admin's approval; renewing early adds a cycle after the remaining time; when it ends the shop returns to the regular tier **for new orders only** (orders keep the rate stored when they were created). This is separate from the star plans.
+
+- `GET /api/v1/memberships/plans` -> `{items:[{code,nameAr,priceCents,tier,durationDays}]}`.
+- `POST /api/v1/plans/receipt` (multipart, same endpoint as for star plans) -> `{uploadId}`.
+- `POST /api/v1/memberships/purchases` `{planCode, method, referenceNo, uploadId}` -> `201 {purchaseId}`. Errors: `409 SHOP_NOT_APPROVED | PLAN_NOT_AVAILABLE | PURCHASE_PENDING | TIER_DOWNGRADE_BLOCKED` (cannot buy Plus while Premium is active), `422 PAYMENT_METHOD_DISABLED | INVALID_REQUEST`. Nothing changes until approval.
+- `GET /api/v1/memberships/me` -> `{tier, membership:{plan,tier,startsAt,expiresAt,isActive}|null, purchases:[...]}`.
+- Admin (`payments.review`): `GET /api/v1/admin/membership-purchases?status=` and `POST /api/v1/admin/membership-purchases/{id}` `{decision:"APPROVE"|"REJECT", reason?}`. Approve sets the tier (audited as `MERCHANT_TIER_CHANGED`); `409 DUPLICATE_TRANSFER` when the same transfer already funded an order payment, a star plan or another membership; `409 WRONG_STATE` when already decided.
+- Job: `POST /api/internal/jobs/membership-maintenance` (3-day reminder, expiry notice, fall back to the regular tier).
+
+# Commission settlements API (v1)
+
+Monthly statements per shop for a CLOSED Cairo calendar month. Rules: only suborders that reached `DELIVERED` in that month are charged, each once ever, at the rate stored in the order (rates and tiers changed later never touch old orders). Cancelled / rejected / fully refunded suborders owe nothing; a partly refunded one is charged on the kept value (refunds are treated as product value because no product/delivery split exists yet). A refund completed after a statement was issued becomes a negative `ADJUSTMENT` line in a later statement. Statements are frozen by database triggers; only the payment fields move (`ISSUED` -> `PAID`, once). The platform does not collect money: `PAID` records that an authorized admin confirmed receipt.
+
+- `GET /api/v1/settlements?month=YYYY-MM&status=ISSUED|PAID` -> `{items:[{id,merchantId,monthKey,orderCount,baseCents,commissionCents,adjustmentCents,netDueCents,status,issuedAt,paidAt,paymentReference}]}` (shop owner: own; admin with `settlements.manage`: all).
+- `GET /api/v1/settlements/{id}` -> the statement plus `lines:[{orderId,kind:"ORDER"|"ADJUSTMENT",baseCents,commissionBp,commissionCents}]`; another shop's id answers `404`.
+- Admin (`settlements.manage`): `POST /api/v1/admin/settlements/generate` `{month}` -> `{monthKey,created,skippedExisting,orders,adjustments}` (`409 MONTH_NOT_CLOSED`, safe to repeat) and `POST /api/v1/admin/settlements/{id}/paid` `{reference}` -> `{ok:true}` (`409 WRONG_STATE` if already paid).
+- Job: `POST /api/internal/jobs/settlements` generates the previous month.
+- Notifications: `SETTLEMENT_ISSUED`, `SETTLEMENT_PAID`, `MEMBERSHIP_APPROVED | REJECTED | EXPIRING | EXPIRED`.

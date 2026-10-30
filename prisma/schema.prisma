@@ -204,6 +204,9 @@ model Merchant {
   products        Product[]
   drivers         Driver[]
   orders          Order[]
+  membership      Membership?
+  membershipPurchases MembershipPurchase[]
+  settlements     CommissionSettlement[]
 
   @@index([status])
 }
@@ -613,6 +616,127 @@ model PlanPurchase {
   @@index([userId, createdAt])
   @@index([status, createdAt])
   @@index([method, referenceNo])
+}
+
+// ───────────── Merchant memberships (Plus / Premium) and commission settlements ─────────────
+
+// Paid monthly membership of a shop. Premium grants the BUSINESS tier (5% commission), Plus grants the REGULAR tier
+// (8%, unchanged: no Plus-specific benefit has been specified, none is invented). Admin-editable.
+model MembershipPlan {
+  id           String       @id @default(cuid())
+  code         String       @unique // "plus" | "premium"
+  nameAr       String
+  priceCents   Int
+  tier         MerchantTier
+  durationDays Int          @default(30)
+  isActive     Boolean      @default(true)
+  sortOrder    Int          @default(0)
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+
+  purchases   MembershipPurchase[]
+  memberships Membership[]
+}
+
+// One row per shop: the current membership and when its paid time ends.
+model Membership {
+  id                String       @id @default(cuid())
+  merchantId        String       @unique
+  planId            String
+  grantedTier       MerchantTier
+  startsAt          DateTime
+  expiresAt         DateTime
+  tierRevertedAt    DateTime? // set once the shop went back to REGULAR after expiry
+  reminderSentAt    DateTime?
+  expiredNotifiedAt DateTime?
+  createdAt         DateTime     @default(now())
+  updatedAt         DateTime     @updatedAt
+
+  merchant Merchant       @relation(fields: [merchantId], references: [id])
+  plan     MembershipPlan @relation(fields: [planId], references: [id])
+
+  @@index([expiresAt])
+}
+
+model MembershipPurchase {
+  id               String         @id @default(cuid())
+  merchantId       String
+  planId           String
+  priceCentsSnap   Int
+  tierSnap         MerchantTier
+  durationDaysSnap Int
+  method           String
+  referenceNo      String
+  receiptUploadId  String         @unique
+  status           PurchaseStatus @default(PENDING)
+  decidedById      String?
+  decidedAt        DateTime?
+  rejectReason     String?
+  flagged          Boolean        @default(false)
+  flagReason       String?
+  createdAt        DateTime       @default(now())
+
+  merchant Merchant       @relation(fields: [merchantId], references: [id])
+  plan     MembershipPlan @relation(fields: [planId], references: [id])
+
+  @@index([merchantId, createdAt])
+  @@index([status, createdAt])
+  @@index([method, referenceNo])
+}
+
+enum SettlementStatus {
+  ISSUED
+  PAID
+}
+
+enum SettlementLineKind {
+  ORDER
+  ADJUSTMENT
+}
+
+// Monthly commission statement of one shop (Cairo calendar month). Frozen once created: only the status / payment
+// columns may change (database trigger). One per shop per month. `netDueCents` = commissionCents + adjustmentCents.
+model CommissionSettlement {
+  id               String           @id @default(cuid())
+  merchantId       String
+  monthKey         String // "YYYY-MM"
+  periodStart      DateTime
+  periodEnd        DateTime
+  orderCount       Int
+  baseCents        Int
+  commissionCents  Int
+  adjustmentCents  Int // <= 0: commission given back for refunds that happened after an earlier statement
+  netDueCents      Int
+  status           SettlementStatus @default(ISSUED)
+  issuedAt         DateTime         @default(now())
+  issuedById       String? // null = scheduled job
+  paidAt           DateTime?
+  paidById         String?
+  paymentReference String?
+  createdAt        DateTime         @default(now())
+
+  merchant Merchant                 @relation(fields: [merchantId], references: [id])
+  lines    CommissionSettlementLine[]
+
+  @@unique([merchantId, monthKey])
+  @@index([monthKey, status])
+}
+
+// Append-only. An order appears at most once as ORDER and at most once as ADJUSTMENT, across all months.
+model CommissionSettlementLine {
+  id              String             @id @default(cuid())
+  settlementId    String
+  orderId         String
+  kind            SettlementLineKind
+  baseCents       Int
+  commissionBp    Int
+  commissionCents Int // negative for ADJUSTMENT
+  createdAt       DateTime           @default(now())
+
+  settlement CommissionSettlement @relation(fields: [settlementId], references: [id])
+
+  @@unique([orderId, kind])
+  @@index([settlementId])
 }
 
 // ───────────── Notifications (in-app inbox) ─────────────
