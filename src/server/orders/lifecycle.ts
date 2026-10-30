@@ -8,6 +8,7 @@ import { ledgerKeys } from "@/lib/stars/rules";
 import { getSetting } from "@/lib/settings";
 import { AuthorizationError, NotFoundError } from "@/server/errors";
 import { assertPaymentMethodEnabled, PaymentMethodDisabledError } from "@/server/payments/methods";
+import { notifyInTx } from "@/server/notifications/service";
 import { applyStarMoves, getStarBalance, InsufficientStarsError, type StarMove } from "@/server/stars/ledger";
 
 export type LifecycleError =
@@ -124,7 +125,7 @@ export async function submitPayment(actor: Actor, orderId: string, input: Submit
     const clash = await tx.payment.findFirst({ where: { method: input.method, referenceNo, orderId: { not: order.id }, rejectedReason: null } });
     const sameImage = await tx.receiptUpload.findFirst({ where: { sha256: upload!.sha256, orderId: { not: order.id }, usedAt: { not: null } } });
     const flagReason = clash ? "Transfer reference already used on another order" : sameImage ? "Same receipt image already used on another order" : null;
-    await tx.payment.create({
+    const created = await tx.payment.create({
       data: {
         orderId: order.id,
         method: input.method,
@@ -136,6 +137,7 @@ export async function submitPayment(actor: Actor, orderId: string, input: Submit
       },
     });
     await setPaymentStatus(tx, order, "AWAITING_MERCHANT_CONFIRMATION", actor.id, "receipt submitted");
+    await notifyInTx(tx, { userId: order.merchant.ownerId, type: "PAYMENT_SUBMITTED", title: "إيصال دفع جديد", body: `أرسل العميل إثبات تحويل للطلب رقم ${order.number}. راجعه وأكّد الدفع.`, data: { orderId: order.id }, dedupeKey: `payment-submitted:${created.id}` });
     await writeAudit({ actorId: actor.id, action: "PAYMENT_SUBMITTED", entityType: "Order", entityId: order.id, after: { method: input.method, flagged: flagReason !== null } }, tx);
   });
 }
@@ -167,6 +169,7 @@ export async function confirmPayment(actor: Actor, orderId: string): Promise<Lif
     if (done.count !== 1) fail("CONFLICT");
     await setPaymentStatus(tx, order, "CONFIRMED", actor.id, asAdmin ? "admin override" : "confirmed by merchant");
     await moveStatus(tx, { ...order, paymentStatus: "CONFIRMED" }, "AWAITING_MERCHANT_APPROVAL", actor.id, null);
+    await notifyInTx(tx, { userId: order.customerId, type: "PAYMENT_CONFIRMED", title: "تم تأكيد الدفع", body: `تم تأكيد تحويلك للطلب رقم ${order.number}. في انتظار قبول التاجر.`, data: { orderId: order.id }, dedupeKey: `payment-confirmed:${order.id}` });
     await writeAudit({ actorId: actor.id, action: "PAYMENT_CONFIRMED", entityType: "Order", entityId: order.id, after: { paymentId: payment.id, asAdmin } }, tx);
   });
 }
@@ -181,6 +184,7 @@ export async function rejectPayment(actor: Actor, orderId: string, reason: strin
     const payment = await latestOpenPayment(tx, order.id);
     await tx.payment.update({ where: { id: payment.id }, data: { rejectedReason: clean } });
     await setPaymentStatus(tx, order, "REJECTED", actor.id, clean);
+    await notifyInTx(tx, { userId: order.customerId, type: "PAYMENT_REJECTED", title: "تم رفض إثبات الدفع", body: `رُفض إثبات التحويل للطلب رقم ${order.number}: ${clean}. يمكنك إرسال إثبات جديد.`, data: { orderId: order.id }, dedupeKey: `payment-rejected:${payment.id}` });
     await writeAudit({ actorId: actor.id, action: "PAYMENT_REJECTED", entityType: "Order", entityId: order.id, after: { paymentId: payment.id, reason: clean, asAdmin } }, tx);
   });
 }
@@ -242,10 +246,12 @@ export async function decideOrder(actor: Actor, orderId: string, decision: "APPR
     if (decision === "APPROVE") {
       await chargeStars(tx, order, actor.id);
       await moveStatus(tx, order, "APPROVED", actor.id, null, { starsChargedAt: new Date(), approvedAt: new Date(), approvedById: actor.id });
+      await notifyInTx(tx, { userId: order.customerId, type: "ORDER_APPROVED", title: "تم قبول طلبك", body: `قبل التاجر الطلب رقم ${order.number} وبدأ التجهيز.`, data: { orderId: order.id }, dedupeKey: `order-approved:${order.id}` });
       await writeAudit({ actorId: actor.id, action: "ORDER_APPROVED", entityType: "Order", entityId: order.id }, tx);
     } else {
       await moveStatus(tx, order, "REJECTED", actor.id, clean, { cancelledAt: new Date(), cancelledById: actor.id, cancelReason: clean });
       await openRefundIfPaid(tx, order, actor.id);
+      await notifyInTx(tx, { userId: order.customerId, type: "ORDER_REJECTED", title: "تم رفض طلبك", body: `رفض التاجر الطلب رقم ${order.number}: ${clean}.`, data: { orderId: order.id }, dedupeKey: `order-rejected:${order.id}` });
       await writeAudit({ actorId: actor.id, action: "ORDER_REJECTED", entityType: "Order", entityId: order.id, after: { reason: clean } }, tx);
     }
   });
@@ -261,6 +267,7 @@ export async function advanceOrder(actor: Actor, orderId: string, to: "PREPARING
     const order = await loadOrder(tx, orderId);
     if (actor.role !== "MERCHANT" || order.merchant.ownerId !== actor.id) throw new NotFoundError();
     await moveStatus(tx, order, target, actor.id, null);
+    await notifyInTx(tx, { userId: order.customerId, type: `ORDER_${target}`, title: "تحديث على طلبك", body: `تغيرت حالة الطلب رقم ${order.number}.`, data: { orderId: order.id, status: target }, dedupeKey: `order-${target}:${order.id}` });
     await writeAudit({ actorId: actor.id, action: "ORDER_ADVANCED", entityType: "Order", entityId: order.id, after: { to } }, tx);
   });
 }
@@ -290,6 +297,10 @@ export async function cancelOrder(actor: Actor, orderId: string, reason: string)
       await tx.order.update({ where: { id: order.id }, data: { starsRefundedAt: new Date() } });
     }
     await openRefundIfPaid(tx, order, actor.id);
+    // Tell the other side. A customer's cancellation notifies the shop; anyone else's notifies the customer.
+    await notifyInTx(tx, isCustomer
+      ? { userId: order.merchant.ownerId, type: "ORDER_CANCELLED", title: "ألغى العميل الطلب", body: `ألغى العميل الطلب رقم ${order.number}.`, data: { orderId: order.id }, dedupeKey: `order-cancelled:${order.id}` }
+      : { userId: order.customerId, type: "ORDER_CANCELLED", title: "تم إلغاء طلبك", body: `أُلغي الطلب رقم ${order.number}: ${clean}.`, data: { orderId: order.id }, dedupeKey: `order-cancelled:${order.id}` });
     await writeAudit({ actorId: actor.id, action: "ORDER_CANCELLED", entityType: "Order", entityId: order.id, after: { reason: clean, starsRefunded: approved } }, tx);
   });
 }

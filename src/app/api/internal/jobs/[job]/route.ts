@@ -2,7 +2,7 @@ import { timingSafeEqual } from "node:crypto";
 import type { NextRequest, NextResponse } from "next/server";
 import { getEnv } from "@/lib/env";
 import { apiError, apiOk } from "@/server/api/http";
-import { runDailyStarCharge, runMonthlyRewards } from "@/server/stars/jobs";
+import { runDailyStarCharge, runMonthlyRewards, runPlanReminders } from "@/server/stars/jobs";
 
 function authorized(request: NextRequest, secret: string): boolean {
   const header = request.headers.get("authorization") ?? "";
@@ -12,7 +12,7 @@ function authorized(request: NextRequest, secret: string): boolean {
 }
 
 /**
- * POST /api/internal/jobs/daily-stars | monthly-rewards   (Authorization: Bearer $CRON_SECRET)
+ * POST /api/internal/jobs/daily-stars | monthly-rewards | plan-reminders   (Authorization: Bearer $CRON_SECRET)
  * For the scheduler only (not for browsers). Both jobs are idempotent; call them as often as you like
  * (suggested: daily-stars hourly, monthly-rewards hourly). Disabled with 503 until CRON_SECRET is set.
  */
@@ -23,5 +23,6 @@ export async function POST(request: NextRequest, context: { params: Promise<{ jo
   const { job } = await context.params;
   if (job === "daily-stars") return apiOk(await runDailyStarCharge());
   if (job === "monthly-rewards") return apiOk(await runMonthlyRewards());
+  if (job === "plan-reminders") return apiOk(await runPlanReminders());
   return apiError(404, "NOT_FOUND");
 }

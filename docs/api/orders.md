@@ -82,3 +82,12 @@ A plan lasts 30 days from the admin's approval. Early renewal adds a new cycle a
 - `GET /api/v1/plans/me` -> `{subscription:{plan,startsAt,expiresAt,isActive}|null, purchases:[...]}`.
 - Admin (`payments.review`): `GET /api/v1/admin/plan-purchases?status=PENDING` and `POST /api/v1/admin/plan-purchases/{id}` `{decision:"APPROVE"|"REJECT", reason?}`. Approve grants base + bonus stars once; `409 DUPLICATE_TRANSFER` if the same transfer reference was already confirmed elsewhere; `409 WRONG_STATE` if already decided. Reject needs a reason (3–300 chars).
 - Receipt images are viewed with `GET /api/v1/receipts/{uploadId}` (the buyer or an admin with `payments.review`).
+
+
+# Notifications API (v1) — in-app inbox
+
+Notifications are created in the same database transaction as the event (order payment submitted / confirmed / rejected, order approved / rejected / advanced / cancelled, plan approved / rejected / expiring / expired). Retries never duplicate them. **No push, SMS or email is sent**: there is no provider configured; the inbox is the only channel.
+
+- `GET /api/v1/notifications?cursor=&limit=&unread=1` -> `{items:[{id,type,title,body,data,readAt,createdAt}], nextCursor, unreadCount}` (own only, newest first). `data` carries ids such as `{orderId}` for deep links.
+- `POST /api/v1/notifications/read` `{ids:[...]}` or `{all:true}` -> `{updated}`. Ids that are not yours are ignored.
+- Scheduled jobs (scheduler only, `Authorization: Bearer $CRON_SECRET`): `POST /api/internal/jobs/daily-stars | monthly-rewards | plan-reminders`.

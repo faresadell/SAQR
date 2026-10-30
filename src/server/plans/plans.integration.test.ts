@@ -8,6 +8,8 @@ import type { Actor } from "@/lib/auth/permissions";
 import { DEFAULT_PLANS } from "@/lib/stars/rules";
 import { AuthorizationError } from "@/server/errors";
 import { decidePlanPurchase, getMyPlanState, listPlansFor, requestPlanPurchase, updatePlan } from "@/server/plans/service";
+import { listMyNotifications, markNotificationsRead } from "@/server/notifications/service";
+import { runPlanReminders } from "@/server/stars/jobs";
 import { getStarBalance } from "@/server/stars/ledger";
 
 if (!process.env.DATABASE_URL) throw new Error("DATABASE_URL is required for integration tests");
@@ -33,7 +35,7 @@ const buy = async (who: Actor, planCode: string, referenceNo = `PLAN-REF-${(ref 
   requestPlanPurchase(who, { planCode, method: "instapay", referenceNo, uploadId: await upload(who) });
 
 beforeEach(async () => {
-  await db.$executeRawUnsafe('TRUNCATE "PlanPurchase","Subscription","Plan","ReceiptUpload","StarLedgerEntry","StarAccount","PaymentMethodConfig","AuditLog","User" RESTART IDENTITY CASCADE');
+  await db.$executeRawUnsafe('TRUNCATE "PlanPurchase","Subscription","Plan","ReceiptUpload","StarLedgerEntry","StarAccount","PaymentMethodConfig","AuditLog","Notification","User" RESTART IDENTITY CASCADE');
   await db.paymentMethodConfig.create({ data: { code: "instapay", nameAr: "انستا باي", isEnabled: true } });
   for (const [i, p] of DEFAULT_PLANS.entries()) await db.plan.create({ data: { ...p, nameAr: p.code, sortOrder: i } });
 });
@@ -156,5 +158,38 @@ describe("plan catalog edits", () => {
     expect(await updatePlan(admin, "customer_bronze", { priceCents: -5 })).toEqual({ ok: false, error: "INVALID_REQUEST" });
     await expect(updatePlan(supportOnly, "customer_bronze", { priceCents: 6000 })).rejects.toBeInstanceOf(AuthorizationError);
     expect((await db.auditLog.findMany({ where: { action: "PLAN_UPDATED" } })).length).toBe(1);
+  });
+});
+
+describe("notifications and plan reminders", () => {
+  it("notifies the buyer once on approval and only the owner can read or mark them", async () => {
+    const c = await user("CUSTOMER");
+    const other = await user("CUSTOMER");
+    const r = await buy(c, "customer_bronze");
+    if (!r.ok) throw new Error("setup");
+    await decidePlanPurchase(admin, r.purchaseId, "APPROVE");
+    const mine = await listMyNotifications(c);
+    expect(mine.items.length).toBe(1);
+    expect(mine.unreadCount).toBe(1);
+    expect((await listMyNotifications(other)).items.length).toBe(0);
+    expect(await markNotificationsRead(other, [mine.items[0]!.id])).toEqual({ updated: 0 }); // someone else's id is ignored
+    expect(await markNotificationsRead(c, "all")).toEqual({ updated: 1 });
+    expect((await listMyNotifications(c)).unreadCount).toBe(0);
+  });
+
+  it("sends the 3-day reminder and the expiry notice once each, however often the job runs", async () => {
+    const c = await user("CUSTOMER");
+    const r = await buy(c, "customer_bronze");
+    if (!r.ok) throw new Error("setup");
+    await decidePlanPurchase(admin, r.purchaseId, "APPROVE");
+    await db.subscription.update({ where: { userId: c.id }, data: { expiresAt: new Date(Date.now() + 2 * 86_400_000) } });
+    await runPlanReminders();
+    await runPlanReminders();
+    expect((await db.notification.count({ where: { userId: c.id, type: "PLAN_EXPIRING" } }))).toBe(1);
+    await db.subscription.update({ where: { userId: c.id }, data: { expiresAt: new Date(Date.now() - 1000) } });
+    await runPlanReminders();
+    await runPlanReminders();
+    expect((await db.notification.count({ where: { userId: c.id, type: "PLAN_EXPIRED" } }))).toBe(1);
+    expect(await getStarBalance(db, c.id)).toBe(50);
   });
 });

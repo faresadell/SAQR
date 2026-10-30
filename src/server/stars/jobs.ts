@@ -1,6 +1,7 @@
 import "server-only";
 import { db } from "@/lib/db";
 import { cairoDayKey, cairoMonthBounds, cairoMonthKey, dailyChargeDecision, ledgerKeys, rewardsDue } from "@/lib/stars/rules";
+import { notifyInTx } from "@/server/notifications/service";
 import { applyStarMove } from "@/server/stars/ledger";
 
 const PAGE = 200;
@@ -95,6 +96,37 @@ export async function runMonthlyRewards(now = new Date()): Promise<JobSummary> {
       } catch {
         summary.failed += 1;
       }
+    }
+  }
+  return summary;
+}
+
+/**
+ * Plan reminders: a notice 3 days before the paid time ends and another when it ends. Each is sent once per expiry
+ * (dedupe key + marker columns), so the job can run as often as you like. Stars are never touched here.
+ */
+export async function runPlanReminders(now = new Date()): Promise<JobSummary> {
+  const summary: JobSummary = { processed: 0, applied: 0, skipped: 0, failed: 0 };
+  const soon = await db.subscription.findMany({ where: { reminderSentAt: null, expiresAt: { gt: now, lte: new Date(now.getTime() + 3 * 86_400_000) } }, take: 500 });
+  const ended = await db.subscription.findMany({ where: { expiredNotifiedAt: null, expiresAt: { lte: now } }, take: 500 });
+  for (const sub of [...soon.map((s) => ({ s, kind: "SOON" as const })), ...ended.map((s) => ({ s, kind: "ENDED" as const }))]) {
+    summary.processed += 1;
+    try {
+      await db.$transaction(async (tx) => {
+        const stamp = sub.s.expiresAt.toISOString();
+        if (sub.kind === "SOON") {
+          const claimed = await tx.subscription.updateMany({ where: { id: sub.s.id, reminderSentAt: null, expiresAt: sub.s.expiresAt }, data: { reminderSentAt: now } });
+          if (claimed.count !== 1) return;
+          await notifyInTx(tx, { userId: sub.s.userId, type: "PLAN_EXPIRING", title: "باقتك على وشك الانتهاء", body: `تنتهي باقتك بتاريخ ${stamp.slice(0, 10)}. جدّد مبكرًا وتُضاف المدة المتبقية.`, dedupeKey: `plan-expiring:${sub.s.userId}:${stamp}` });
+        } else {
+          const claimed = await tx.subscription.updateMany({ where: { id: sub.s.id, expiredNotifiedAt: null, expiresAt: sub.s.expiresAt }, data: { expiredNotifiedAt: now } });
+          if (claimed.count !== 1) return;
+          await notifyInTx(tx, { userId: sub.s.userId, type: "PLAN_EXPIRED", title: "انتهت باقتك", body: "انتهت مدة باقتك. نجومك المتبقية محفوظة، ويمكنك التجديد في أي وقت.", dedupeKey: `plan-expired:${sub.s.userId}:${stamp}` });
+        }
+        summary.applied += 1;
+      });
+    } catch {
+      summary.failed += 1;
     }
   }
   return summary;

@@ -6,6 +6,7 @@ import { hasPermission, type Actor } from "@/lib/auth/permissions";
 import { computeNewExpiry, ledgerKeys, PLAN_CYCLE_DAYS } from "@/lib/stars/rules";
 import { AuthorizationError, NotFoundError } from "@/server/errors";
 import { assertPaymentMethodEnabled, PaymentMethodDisabledError } from "@/server/payments/methods";
+import { notifyInTx } from "@/server/notifications/service";
 import { applyStarMoves, type StarMove } from "@/server/stars/ledger";
 
 export type PlanError = "INVALID_REQUEST" | "PLAN_NOT_AVAILABLE" | "PAYMENT_METHOD_DISABLED" | "PURCHASE_PENDING" | "WRONG_STATE" | "DUPLICATE_TRANSFER" | "CONFLICT";
@@ -137,6 +138,7 @@ export async function decidePlanPurchase(actor: Actor, purchaseId: string, decis
     if (decision === "REJECT") {
       const done = await tx.planPurchase.updateMany({ where: { id: purchase.id, status: "PENDING" }, data: { status: "REJECTED", decidedById: actor.id, decidedAt: now, rejectReason: clean } });
       if (done.count !== 1) return fail("CONFLICT");
+      await notifyInTx(tx, { userId: purchase.userId, type: "PLAN_REJECTED", title: "تم رفض طلب الباقة", body: `رُفض طلب شراء الباقة: ${clean}.`, data: { purchaseId: purchase.id }, dedupeKey: `plan-purchase-rejected:${purchase.id}` });
       await writeAudit({ actorId: actor.id, action: "PLAN_PURCHASE_REJECTED", entityType: "PlanPurchase", entityId: purchase.id, after: { reason: clean } }, tx);
       return {};
     }
@@ -166,6 +168,7 @@ export async function decidePlanPurchase(actor: Actor, purchaseId: string, decis
     if (purchase.bonusStarsSnap > 0) moves.push({ userId: purchase.userId, amount: purchase.bonusStarsSnap, reason: "PLAN_GRANT", idempotencyKey: ledgerKeys.planGrant(purchase.userId, purchase.id, "bonus"), actorId: actor.id, note: `${purchase.plan.code} bonus` });
     await applyStarMoves(tx, moves);
 
+    await notifyInTx(tx, { userId: purchase.userId, type: "PLAN_APPROVED", title: "تم تفعيل باقتك", body: `تم تفعيل الباقة وإضافة ${purchase.baseStarsSnap + purchase.bonusStarsSnap} نجمة. صالحة حتى ${expiresAt.toISOString().slice(0, 10)}.`, data: { purchaseId: purchase.id }, dedupeKey: `plan-purchase-approved:${purchase.id}` });
     await writeAudit({ actorId: actor.id, action: "PLAN_PURCHASE_APPROVED", entityType: "PlanPurchase", entityId: purchase.id, after: { plan: purchase.plan.code, expiresAt: expiresAt.toISOString(), stars: purchase.baseStarsSnap + purchase.bonusStarsSnap } }, tx);
     return {};
   });
