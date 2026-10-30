@@ -42,6 +42,12 @@ jobs:
           psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f prisma/manual/003_phase3_catalog.sql
           psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f prisma/manual/004_phase4_parent_orders.sql
           psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f prisma/manual/005_phase5_plans.sql
+      - name: Production build (next build)
+        run: npm run build
+        env:
+          APP_URL: http://localhost:3000
+          SESSION_SECRET: ci-only-session-secret-0123456789abcdef0123456789
+          DATA_ENCRYPTION_KEY: MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=
       - name: Integration tests (real PostgreSQL)
         run: npm run test:integration
         env:
