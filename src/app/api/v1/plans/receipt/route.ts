@@ -1,4 +1,4 @@
-import { NextResponse, type NextRequest } from "next/server";
+import type { NextRequest, NextResponse } from "next/server";
 import { consumeRateLimit } from "@/lib/rate-limit";
 import { MAX_RECEIPT_BYTES } from "@/lib/uploads/image-sniff";
 import { apiError, apiOk, checkOrigin, currentActor, mapThrown } from "@/server/api/http";
