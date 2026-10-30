@@ -8,9 +8,10 @@ import { db } from "@/lib/db";
 import type { Actor } from "@/lib/auth/permissions";
 import { invalidateSettingsCache } from "@/lib/settings";
 import { ledgerKeys } from "@/lib/stars/rules";
-import { NotFoundError } from "@/server/errors";
+import { AuthorizationError, NotFoundError } from "@/server/errors";
 import { placeOrder } from "@/server/orders/checkout";
 import { advanceOrder, cancelOrder, confirmPayment, decideOrder, rejectPayment, submitPayment } from "@/server/orders/lifecycle";
+import { escalateOverdueRefunds, reviewRefund, submitRefundProof } from "@/server/refunds/service";
 import { applyStarMove, getStarBalance } from "@/server/stars/ledger";
 import { runDailyStarCharge, runMonthlyRewards } from "@/server/stars/jobs";
 
@@ -243,6 +244,65 @@ describe("receipt proof", () => {
     expect(flagged.flagged).toBe(true);
     expect(flagged.flagReason).toContain("image");
     expect((await db.receiptUpload.findUniqueOrThrow({ where: { id: mine } })).usedAt).not.toBeNull();
+  });
+});
+
+describe("refunds", () => {
+  const verifier: Actor = { id: "adm-r", role: "ADMIN", isSuperAdmin: false, permissions: ["refunds.verify"] };
+  const noRights: Actor = { id: "adm-n", role: "ADMIN", isSuperAdmin: false, permissions: ["users.view"] };
+
+  async function cancelledPaidOrder() {
+    const r = await place();
+    if (!r.ok) throw new Error("setup");
+    const id = r.suborderIds[0]!;
+    const owner = (await db.order.findUniqueOrThrow({ where: { id } })).merchantId === w.a.merchant.id ? w.ownerA : w.ownerB;
+    await payAndConfirm(id, owner);
+    expect((await cancelOrder(owner, id, "نفدت الكمية")).ok).toBe(true);
+    const refund = await db.refund.findFirstOrThrow({ where: { orderId: id } });
+    return { id, owner, refund };
+  }
+  const proofFor = async (orderId: string, owner: Actor) => makeUpload(orderId, owner.id);
+
+  it("goes PENDING -> UNDER_REVIEW -> COMPLETED only through the right people", async () => {
+    const { id, owner, refund } = await cancelledPaidOrder();
+    expect(refund.status).toBe("PENDING");
+    expect(refund.amountCents).toBe((await db.order.findUniqueOrThrow({ where: { id } })).totalCents);
+    const other = owner.id === w.ownerA.id ? w.ownerB : w.ownerA;
+
+    await expect(submitRefundProof(other, refund.id, await proofFor(id, other))).rejects.toBeInstanceOf(NotFoundError);
+    await expect(submitRefundProof(w.customer, refund.id, "whatever-id")).rejects.toBeInstanceOf(AuthorizationError);
+    expect(await submitRefundProof(owner, refund.id, "does-not-exist")).toEqual({ ok: false, error: "INVALID_REQUEST" });
+    expect((await submitRefundProof(owner, refund.id, await proofFor(id, owner))).ok).toBe(true);
+    expect((await db.order.findUniqueOrThrow({ where: { id } })).refundStatus).toBe("UNDER_REVIEW");
+    expect(await submitRefundProof(owner, refund.id, await proofFor(id, owner))).toEqual({ ok: false, error: "WRONG_STATE" });
+
+    await expect(reviewRefund(noRights, refund.id, "VERIFY")).rejects.toBeInstanceOf(AuthorizationError);
+    await expect(reviewRefund(owner, refund.id, "VERIFY")).rejects.toBeInstanceOf(AuthorizationError);
+    expect((await reviewRefund(verifier, refund.id, "VERIFY")).ok).toBe(true);
+    expect((await db.order.findUniqueOrThrow({ where: { id } })).refundStatus).toBe("COMPLETED");
+    expect(await reviewRefund(verifier, refund.id, "VERIFY")).toEqual({ ok: false, error: "WRONG_STATE" });
+    expect((await db.notification.findMany({ where: { userId: w.customer.id, type: "REFUND_COMPLETED" } })).length).toBe(1);
+  });
+
+  it("a rejected proof goes back to the merchant with a reason", async () => {
+    const { id, owner, refund } = await cancelledPaidOrder();
+    await submitRefundProof(owner, refund.id, await proofFor(id, owner));
+    expect(await reviewRefund(verifier, refund.id, "REJECT_PROOF", " ")).toEqual({ ok: false, error: "INVALID_REQUEST" });
+    expect((await reviewRefund(verifier, refund.id, "REJECT_PROOF", "الصورة غير واضحة")).ok).toBe(true);
+    const again = await db.refund.findUniqueOrThrow({ where: { id: refund.id } });
+    expect(again.status).toBe("PENDING");
+    expect(again.proofKey).toBeNull();
+    expect((await submitRefundProof(owner, refund.id, await proofFor(id, owner))).ok).toBe(true);
+  });
+
+  it("escalates overdue refunds to admins once", async () => {
+    const { refund } = await cancelledPaidOrder();
+    const adminUser = await db.user.create({ data: { phone: "+201000000077", name: "Boss", passwordHash: "x", role: "ADMIN", status: "ACTIVE", isSuperAdmin: true } });
+    expect(await escalateOverdueRefunds()).toEqual({ escalated: 0 }); // not overdue yet
+    await db.refund.update({ where: { id: refund.id }, data: { dueAt: new Date(Date.now() - 1000) } });
+    expect((await escalateOverdueRefunds()).escalated).toBe(1);
+    await escalateOverdueRefunds();
+    expect(await db.notification.count({ where: { userId: adminUser.id, type: "REFUND_OVERDUE" } })).toBe(1);
   });
 });
 

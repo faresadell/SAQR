@@ -24,6 +24,18 @@ export async function uploadReceipt(actor: Actor, orderId: string, bytes: Uint8A
   return storeReceipt(actor, orderId, bytes, kind);
 }
 
+/** The shop owner uploads the picture proving the refund transfer. Only while a refund is open for that suborder. */
+export async function uploadRefundProof(actor: Actor, orderId: string, bytes: Uint8Array): Promise<UploadResult> {
+  if (actor.role !== "MERCHANT") throw new AuthorizationError();
+  const order = await db.order.findFirst({ where: { id: orderId, merchant: { ownerId: actor.id } } }); // owner-scoped
+  if (!order) throw new NotFoundError();
+  if (!(await db.refund.findFirst({ where: { orderId, status: "PENDING" } }))) return { ok: false, error: "WRONG_STATE" };
+  if (bytes.length > MAX_RECEIPT_BYTES) return { ok: false, error: "FILE_TOO_LARGE" };
+  const kind = detectImage(bytes);
+  if (!kind) return { ok: false, error: "INVALID_FILE" };
+  return storeReceipt(actor, orderId, bytes, kind);
+}
+
 /** Proof image for a plan purchase (not tied to an order). Only the buyer can later use it. */
 export async function uploadPlanReceipt(actor: Actor, bytes: Uint8Array): Promise<UploadResult> {
   if (actor.role === "ADMIN") throw new AuthorizationError();

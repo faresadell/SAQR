@@ -91,3 +91,16 @@ Notifications are created in the same database transaction as the event (order p
 - `GET /api/v1/notifications?cursor=&limit=&unread=1` -> `{items:[{id,type,title,body,data,readAt,createdAt}], nextCursor, unreadCount}` (own only, newest first). `data` carries ids such as `{orderId}` for deep links.
 - `POST /api/v1/notifications/read` `{ids:[...]}` or `{all:true}` -> `{updated}`. Ids that are not yours are ignored.
 - Scheduled jobs (scheduler only, `Authorization: Bearer $CRON_SECRET`): `POST /api/internal/jobs/daily-stars | monthly-rewards | plan-reminders`.
+
+
+# Refunds API (v1)
+
+The merchant returns the customer's money by transfer; the platform never moves money. A refund is opened automatically when a suborder whose payment was **confirmed** is cancelled or rejected (amount = what the customer paid for that suborder, deadline = `refunds.deadline_hours`, max 24).
+Status flow: `PENDING` (merchant must pay back) -> `UNDER_REVIEW` (proof submitted) -> `COMPLETED` (an admin verified the proof). A rejected proof goes back to `PENDING` with a note.
+
+- `GET /api/v1/refunds?status=` -> `{items:[{id,orderId,order:{number},amountCents,status,dueAt,hasProof,isOverdue,verifiedAt,decisionNote,createdAt}]}` (customer: refunds owed to them; shop owner: refunds they owe; admin with `refunds.verify`: all).
+- `POST /api/v1/orders/{orderId}/refund-proof` multipart `file` (shop owner; same image rules) -> `201 {uploadId}`; `409 WRONG_STATE` if no open refund.
+- `POST /api/v1/refunds/{id}/proof` `{uploadId}` (shop owner) -> `{ok:true}`; `409 WRONG_STATE` unless `PENDING`.
+- `POST /api/v1/admin/refunds/{id}` `{decision:"VERIFY"|"REJECT_PROOF", note?}` (admin, `refunds.verify`; `REJECT_PROOF` needs a 3–300 char note) -> `{ok:true}`; `409 WRONG_STATE` unless `UNDER_REVIEW`.
+- The customer is notified on `REFUND_COMPLETED`; the merchant on `REFUND_PROOF_REJECTED`; admins on `REFUND_OVERDUE` (job `POST /api/internal/jobs/refund-overdue`).
+- Proof images are viewed with `GET /api/v1/receipts/{uploadId}` (customer, shop owner or `payments.review` admin of that order).
