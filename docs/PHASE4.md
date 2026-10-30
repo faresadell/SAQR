@@ -21,8 +21,17 @@ What WAS run: the new pure modules below were type-checked with strict `tsc` and
 - `prisma/manual/004_phase4_parent_orders.sql` — CHECKs and a unique index for confirmed transfer references.
 To run locally: `npm install && npx prisma migrate dev --name phase4 --create-only` (paste 004 into it) then `npm run typecheck && npm run lint && npm test && DATABASE_URL=... npm run test:integration`.
 
+## Added later on this branch (all CI-verified with PostgreSQL)
+- Receipts: private storage, content-sniffed JPEG/PNG/WebP only, owner-scoped download, payments bound to your own single-use upload, same picture on another order is flagged.
+- Plans: catalog (seeded from the agreed table, admin-editable), purchase with proof, admin approval, 30-day cycle with early-renewal carry-over, base + bonus stars granted once, stars survive expiry. Endpoints in `docs/api/orders.md`.
+- Notifications: in-app inbox wired to orders, plans and refunds (no push/SMS/email provider exists). Jobs: `daily-stars`, `monthly-rewards`, `plan-reminders`, `refund-overdue`.
+- Refunds: merchant proof upload, admin verification (`refunds.verify`), overdue escalation to admins.
+- SQL guards `prisma/manual/005_phase5_plans.sql` (one pending purchase per user, one approved purchase per transfer).
+- Production needs: `UPLOAD_DIR` on a persistent private volume, `CRON_SECRET`, a scheduler calling the four jobs hourly, and real migrations (CI uses `db push`).
+
 ## NOT done yet (nothing here is claimed to work)
-- Receipt upload service (the `receiptKey` field expects it), refund proof/verification, cancellation after APPROVED stages.
+- Merchant offers (24h default, 1 star/hour extension, quota per plan cycle): the content of an offer (discount type, scope) was never specified, so it was not invented.
+- Merchant membership purchase (Plus/Premium), monthly commission settlements, monthly contest and payouts, driver/delivery phase, admin screens for settings (settings API exists only as server actions), `CANCELLATION_REQUESTED` flow after approval.
 - Plans tables, activation, daily-charge job, monthly reward job, offers, payments review, refunds, memberships, contest, notifications, file upload, API docs.
 - Integration tests (need PostgreSQL).
 
