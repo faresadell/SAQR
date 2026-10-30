@@ -1,6 +1,7 @@
 # Phase 4 (in progress): multi-merchant orders, stars and plans — status
 
-**Branch `phase-4-orders`. Written without being able to install npm packages, so `tsc`, ESLint, vitest, Prisma, PostgreSQL and `next build` were NOT run.** Services, routes and integration tests below are untested code.
+**Branch `phase-4-orders` (draft PR #8).** The code was written without local npm/PostgreSQL, then verified by the repository's GitHub Actions CI (real PostgreSQL 16): `prisma validate`, `tsc`, ESLint, unit tests, database guards (001–004 SQL) and ALL integration tests (Phase 3 + the Phase 4 ones below) pass. NOT verified: `next build`, and anything not covered by those tests (see "NOT done yet").
+**CI still fails only at `npm audit`** (high-severity advisories in `zod` <4.6.6, `prisma`/`@prisma/config`/`deepmerge-ts`, `next`/`postcss`). Fixing needs major upgrades (zod 4, prisma 7, next 16); Dependabot already opened those PRs. Upgrade them one at a time with a committed `package-lock.json`; the audit check was not weakened.
 What WAS run: the new pure modules below were type-checked with strict `tsc` and their tests executed with a minimal stand-in for vitest.
 
 ## Done (pure logic, tested)
@@ -10,7 +11,7 @@ What WAS run: the new pure modules below were type-checked with strict `tsc` and
 - Stars default per party per suborder changed 5 -> 2 (the newer rule). The minimum balance setting stays 5 and is separate. An existing database keeps whatever value an admin saved; only the default changed.
 - Schema: `ParentOrder` + nullable `Order.parentOrderId`. `Order` is the suborder; nothing was renamed or dropped. SQL guard in `prisma/manual/004_phase4_parent_orders.sql`. **No migration file generated or applied.**
 
-## Written but NOT run (needs your machine / CI)
+## Written and CI-verified (see status above)
 - `src/server/stars/ledger.ts` — the only code that changes a balance: row lock, idempotency key, no negative balance.
 - `src/server/orders/checkout.ts` — `placeOrder` (one transaction, idempotent, server-side prices/fees/commission snapshot).
 - `src/server/orders/lifecycle.ts` — payment submit / confirm / reject, approve (charges stars once), reject, advance, cancel (refunds stars once, opens a Refund if paid).
@@ -18,7 +19,7 @@ What WAS run: the new pure modules below were type-checked with strict `tsc` and
 - `src/server/orders/phase4.integration.test.ts` — 13 integration tests (idempotency, charge/refund once, concurrent approvals, IDOR, duplicate transfer).
 - `src/server/stars/jobs.ts` + `POST /api/internal/jobs/{daily-stars|monthly-rewards}` (Bearer `CRON_SECRET`, 503 until set): daily 1-star charge by Cairo day and monthly reward tiers; both idempotent. Needs a scheduler (e.g. hourly) calling them; new StarReason values DAILY_CHARGE / MONTHLY_REWARD / PLAN_GRANT need a migration.
 - `prisma/manual/004_phase4_parent_orders.sql` — CHECKs and a unique index for confirmed transfer references.
-To run: `npm install && npx prisma migrate dev --name phase4 --create-only` (paste 004 into it) then `npm run typecheck && npm run lint && npm test && DATABASE_URL=... npm run test:integration`.
+To run locally: `npm install && npx prisma migrate dev --name phase4 --create-only` (paste 004 into it) then `npm run typecheck && npm run lint && npm test && DATABASE_URL=... npm run test:integration`.
 
 ## NOT done yet (nothing here is claimed to work)
 - Receipt upload service (the `receiptKey` field expects it), refund proof/verification, cancellation after APPROVED stages.
