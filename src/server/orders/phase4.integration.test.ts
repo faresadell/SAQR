@@ -80,8 +80,9 @@ const place = (key = "key-12345678") => placeOrder(w.customer, { idempotencyKey:
 
 let uploads = 0;
 /** A receipt upload row as the upload service would create it (the file itself is not needed for these tests). */
-async function makeUpload(orderId: string, uploaderId = w.customer.id, sha = `sha-${(uploads += 1)}`): Promise<string> {
-  const row = await db.receiptUpload.create({ data: { orderId, uploaderId, storageKey: `receipts/${orderId}/${uploads}.jpg`, contentType: "image/jpeg", sizeBytes: 100, sha256: sha } });
+async function makeUpload(orderId: string, uploaderId = w.customer.id, sha?: string): Promise<string> {
+  uploads += 1;
+  const row = await db.receiptUpload.create({ data: { orderId, uploaderId, storageKey: `receipts/${orderId}/${uploads}.jpg`, contentType: "image/jpeg", sizeBytes: 100, sha256: sha ?? `sha-${uploads}` } });
   return row.id;
 }
 
