@@ -55,7 +55,7 @@ async function order(s: Shop, opts: { base: number; bp: number; deliveredAt: Dat
 beforeEach(async () => {
   await db.$executeRawUnsafe('TRUNCATE "CommissionSettlementLine","CommissionSettlement","Refund","OrderEvent","Order","Notification","AuditLog","Merchant","BusinessType","User" RESTART IDENTITY CASCADE');
   await db.businessType.create({ data: { code: "restaurant", nameAr: "مطعم" } });
-  customerId = (await db.user.create({ data: { phone: "+201400000001", name: "c", passwordHash: "x", role: "CUSTOMER", status: "ACTIVE" } })).id;
+  customerId = (await db.user.create({ data: { phone: "+201499999999", name: "c", passwordHash: "x", role: "CUSTOMER", status: "ACTIVE" } })).id;
 });
 
 describe("generateSettlements", () => {
