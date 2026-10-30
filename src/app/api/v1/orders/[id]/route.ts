@@ -1,4 +1,4 @@
-import { NextResponse, type NextRequest } from "next/server";
+import type { NextRequest, NextResponse } from "next/server";
 import { apiError, apiOk, currentActor, mapThrown } from "@/server/api/http";
 import { getOrderForActor } from "@/server/orders/read";
 

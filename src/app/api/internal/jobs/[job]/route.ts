@@ -1,5 +1,5 @@
 import { timingSafeEqual } from "node:crypto";
-import { NextResponse, type NextRequest } from "next/server";
+import type { NextRequest, NextResponse } from "next/server";
 import { getEnv } from "@/lib/env";
 import { apiError, apiOk } from "@/server/api/http";
 import { runDailyStarCharge, runMonthlyRewards } from "@/server/stars/jobs";
