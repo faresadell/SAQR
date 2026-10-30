@@ -19,7 +19,7 @@ import {
 import { requirePermission } from "@/server/auth/guards";
 import { scheduleCommissionRate } from "@/server/commissions/service";
 import { createZone, scheduleZoneFee, setZoneActive } from "@/server/delivery/zones";
-import { setPaymentMethodEnabled } from "@/server/payments/methods";
+import { setPaymentMethodEnabled, setPaymentReceiver } from "@/server/payments/methods";
 import { changeSetting } from "@/server/settings/service";
 import { AuthorizationError, NotFoundError } from "@/server/errors";
 
@@ -128,6 +128,24 @@ export async function togglePaymentMethodAction(formData: FormData): Promise<voi
   let notice = "done";
   try {
     await setPaymentMethodEnabled(user, parsed.data.code, parsed.data.enabled === "true");
+  } catch (error) {
+    if (error instanceof AuthorizationError) notice = "forbidden";
+    else if (error instanceof NotFoundError) notice = "missing";
+    else throw error;
+  }
+  revalidatePath("/admin/settings");
+  redirect(`/admin/settings?notice=${notice}#payments`);
+}
+
+export async function setPaymentReceiverAction(formData: FormData): Promise<void> {
+  const { user } = await requirePermission("settings.manage");
+  const parsed = z.object({ code: z.string().min(1).max(40), receiver: z.string().max(40) }).safeParse(Object.fromEntries(formData));
+  if (!parsed.success) redirect("/admin/settings?notice=invalid");
+  let notice = "done";
+  try {
+    const raw = toLatinDigits(parsed.data.receiver).trim();
+    const result = await setPaymentReceiver(user, parsed.data.code, raw === "" ? null : raw);
+    if (!result.ok) notice = "invalid";
   } catch (error) {
     if (error instanceof AuthorizationError) notice = "forbidden";
     else if (error instanceof NotFoundError) notice = "missing";

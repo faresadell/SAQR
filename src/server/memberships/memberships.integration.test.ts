@@ -37,7 +37,7 @@ const tierOf = async (merchantId: string) => (await db.merchant.findUniqueOrThro
 beforeEach(async () => {
   await db.$executeRawUnsafe('TRUNCATE "MembershipPurchase","Membership","MembershipPlan","PlanPurchase","ReceiptUpload","Payment","PaymentMethodConfig","Notification","AuditLog","Merchant","BusinessType","User" RESTART IDENTITY CASCADE');
   await db.businessType.create({ data: { code: "restaurant", nameAr: "مطعم" } });
-  await db.paymentMethodConfig.create({ data: { code: "instapay", nameAr: "انستا باي", isEnabled: true } });
+  await db.paymentMethodConfig.create({ data: { code: "instapay", nameAr: "انستا باي", isEnabled: true, receiverNumber: "01000000000" } });
   for (const [i, p] of DEFAULT_MEMBERSHIP_PLANS.entries()) await db.membershipPlan.create({ data: { ...p, sortOrder: i } });
 });
 

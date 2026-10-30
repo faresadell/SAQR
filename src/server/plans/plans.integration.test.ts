@@ -36,14 +36,16 @@ const buy = async (who: Actor, planCode: string, referenceNo = `PLAN-REF-${(ref 
 
 beforeEach(async () => {
   await db.$executeRawUnsafe('TRUNCATE "PlanPurchase","Subscription","Plan","ReceiptUpload","StarLedgerEntry","StarAccount","PaymentMethodConfig","AuditLog","Notification","User" RESTART IDENTITY CASCADE');
-  await db.paymentMethodConfig.create({ data: { code: "instapay", nameAr: "انستا باي", isEnabled: true } });
+  await db.paymentMethodConfig.create({ data: { code: "instapay", nameAr: "انستا باي", isEnabled: true, receiverNumber: "01000000000" } });
   for (const [i, p] of DEFAULT_PLANS.entries()) await db.plan.create({ data: { ...p, nameAr: p.code, sortOrder: i } });
+  // Fixture only (not sold): keeps the "base + bonus" grant path under test now that the approved packages have no bonus.
+  await db.plan.create({ data: { code: "customer_bonus_fixture", audience: "CUSTOMER", nameAr: "fixture", priceCents: 7500, baseStars: 75, bonusStars: 15, sortOrder: 99 } });
 });
 
 describe("plan purchase", () => {
   it("grants nothing until approved, then base + bonus stars exactly once and 30 days", async () => {
     const c = await user("CUSTOMER");
-    const r = await buy(c, "customer_silver");
+    const r = await buy(c, "customer_bonus_fixture");
     if (!r.ok) throw new Error("setup");
     expect(await getStarBalance(db, c.id)).toBe(0);
     expect((await getMyPlanState(c)).subscription).toBeNull();
@@ -58,25 +60,25 @@ describe("plan purchase", () => {
     expect(await getStarBalance(db, c.id)).toBe(90);
   });
 
-  it("merchant Gold gives 235 stars; driver plan gives 35", async () => {
+  it("merchant 100-star package gives 100 stars; driver 30-star package gives 30", async () => {
     const m = await user("MERCHANT");
     const d = await user("DRIVER");
-    const pm = await buy(m, "merchant_gold");
-    const pd = await buy(d, "driver_basic");
+    const pm = await buy(m, "merchant_stars_100");
+    const pd = await buy(d, "driver_stars_30");
     if (!pm.ok || !pd.ok) throw new Error("setup");
     await decidePlanPurchase(admin, pm.purchaseId, "APPROVE");
     await decidePlanPurchase(admin, pd.purchaseId, "APPROVE");
-    expect(await getStarBalance(db, m.id)).toBe(235);
-    expect(await getStarBalance(db, d.id)).toBe(35);
+    expect(await getStarBalance(db, m.id)).toBe(100);
+    expect(await getStarBalance(db, d.id)).toBe(30);
   });
 
   it("early renewal adds a new cycle after the remaining time", async () => {
     const c = await user("CUSTOMER");
-    const first = await buy(c, "customer_bronze");
+    const first = await buy(c, "customer_stars_50");
     if (!first.ok) throw new Error("setup");
     await decidePlanPurchase(admin, first.purchaseId, "APPROVE");
     const before = await db.subscription.findUniqueOrThrow({ where: { userId: c.id } });
-    const second = await buy(c, "customer_bronze");
+    const second = await buy(c, "customer_stars_50");
     if (!second.ok) throw new Error("setup");
     await decidePlanPurchase(admin, second.purchaseId, "APPROVE");
     const after = await db.subscription.findUniqueOrThrow({ where: { userId: c.id } });
@@ -86,7 +88,7 @@ describe("plan purchase", () => {
 
   it("keeps stars after the plan expires", async () => {
     const c = await user("CUSTOMER");
-    const r = await buy(c, "customer_bronze");
+    const r = await buy(c, "customer_stars_50");
     if (!r.ok) throw new Error("setup");
     await decidePlanPurchase(admin, r.purchaseId, "APPROVE");
     await db.subscription.update({ where: { userId: c.id }, data: { expiresAt: new Date(Date.now() - 1000) } });
@@ -97,18 +99,18 @@ describe("plan purchase", () => {
   it("rejects wrong audience, a second pending purchase, someone else's upload and a disabled method", async () => {
     const c = await user("CUSTOMER");
     const other = await user("CUSTOMER");
-    expect(await buy(c, "merchant_gold")).toEqual({ ok: false, error: "PLAN_NOT_AVAILABLE" });
-    expect((await buy(c, "customer_gold")).ok).toBe(true);
-    expect(await buy(c, "customer_bronze")).toEqual({ ok: false, error: "PURCHASE_PENDING" });
-    expect(await requestPlanPurchase(other, { planCode: "customer_bronze", method: "instapay", referenceNo: "REF-OTHER-1", uploadId: await upload(c) })).toEqual({ ok: false, error: "INVALID_REQUEST" });
+    expect(await buy(c, "merchant_stars_100")).toEqual({ ok: false, error: "PLAN_NOT_AVAILABLE" });
+    expect((await buy(c, "customer_stars_100")).ok).toBe(true);
+    expect(await buy(c, "customer_stars_50")).toEqual({ ok: false, error: "PURCHASE_PENDING" });
+    expect(await requestPlanPurchase(other, { planCode: "customer_stars_50", method: "instapay", referenceNo: "REF-OTHER-1", uploadId: await upload(c) })).toEqual({ ok: false, error: "INVALID_REQUEST" });
     await db.paymentMethodConfig.update({ where: { code: "instapay" }, data: { isEnabled: false } });
-    expect(await buy(other, "customer_bronze")).toEqual({ ok: false, error: "PAYMENT_METHOD_DISABLED" });
-    expect((await listPlansFor(c)).map((p) => p.code)).toEqual(["customer_bronze", "customer_silver", "customer_gold"]);
+    expect(await buy(other, "customer_stars_50")).toEqual({ ok: false, error: "PAYMENT_METHOD_DISABLED" });
+    expect((await listPlansFor(c)).map((p) => p.code)).toEqual(["customer_stars_30", "customer_stars_50", "customer_stars_100", "customer_bonus_fixture"]);
   });
 
   it("only admins with payments.review can decide", async () => {
     const c = await user("CUSTOMER");
-    const r = await buy(c, "customer_bronze");
+    const r = await buy(c, "customer_stars_50");
     if (!r.ok) throw new Error("setup");
     await expect(decidePlanPurchase(supportOnly, r.purchaseId, "APPROVE")).rejects.toBeInstanceOf(AuthorizationError);
     await expect(decidePlanPurchase(c, r.purchaseId, "APPROVE")).rejects.toBeInstanceOf(AuthorizationError);
@@ -117,18 +119,18 @@ describe("plan purchase", () => {
 
   it("two simultaneous approvals grant once", async () => {
     const c = await user("CUSTOMER");
-    const r = await buy(c, "customer_gold");
+    const r = await buy(c, "customer_stars_100");
     if (!r.ok) throw new Error("setup");
     const results = await Promise.all([decidePlanPurchase(admin, r.purchaseId, "APPROVE"), decidePlanPurchase(admin, r.purchaseId, "APPROVE")]);
     expect(results.filter((x) => x.ok).length).toBe(1);
-    expect(await getStarBalance(db, c.id)).toBe(125);
+    expect(await getStarBalance(db, c.id)).toBe(100);
   });
 
   it("refuses to approve the same transfer twice and keeps the flag", async () => {
     const a = await user("CUSTOMER");
     const b = await user("CUSTOMER");
-    const pa = await buy(a, "customer_bronze", "SAME-TRANSFER-1");
-    const pb = await buy(b, "customer_bronze", "SAME-TRANSFER-1");
+    const pa = await buy(a, "customer_stars_50", "SAME-TRANSFER-1");
+    const pb = await buy(b, "customer_stars_50", "SAME-TRANSFER-1");
     if (!pa.ok || !pb.ok) throw new Error("setup");
     expect((await decidePlanPurchase(admin, pa.purchaseId, "APPROVE")).ok).toBe(true);
     expect(await decidePlanPurchase(admin, pb.purchaseId, "APPROVE")).toEqual({ ok: false, error: "DUPLICATE_TRANSFER" });
@@ -138,25 +140,25 @@ describe("plan purchase", () => {
 
   it("rejection needs a reason, grants nothing, and lets the user try again", async () => {
     const c = await user("CUSTOMER");
-    const r = await buy(c, "customer_bronze");
+    const r = await buy(c, "customer_stars_50");
     if (!r.ok) throw new Error("setup");
     expect(await decidePlanPurchase(admin, r.purchaseId, "REJECT", " ")).toEqual({ ok: false, error: "INVALID_REQUEST" });
     expect((await decidePlanPurchase(admin, r.purchaseId, "REJECT", "التحويل غير واضح")).ok).toBe(true);
     expect(await getStarBalance(db, c.id)).toBe(0);
-    expect((await buy(c, "customer_bronze")).ok).toBe(true);
+    expect((await buy(c, "customer_stars_50")).ok).toBe(true);
   });
 });
 
 describe("plan catalog edits", () => {
   it("changes the price for future purchases only, audited, validated", async () => {
     const c = await user("CUSTOMER");
-    const r = await buy(c, "customer_bronze");
+    const r = await buy(c, "customer_stars_50");
     if (!r.ok) throw new Error("setup");
-    expect((await updatePlan(admin, "customer_bronze", { priceCents: 6000, baseStars: 60 })).ok).toBe(true);
+    expect((await updatePlan(admin, "customer_stars_50", { priceCents: 6000, baseStars: 60 })).ok).toBe(true);
     await decidePlanPurchase(admin, r.purchaseId, "APPROVE");
     expect(await getStarBalance(db, c.id)).toBe(50); // the purchase kept its own snapshot
-    expect(await updatePlan(admin, "customer_bronze", { priceCents: -5 })).toEqual({ ok: false, error: "INVALID_REQUEST" });
-    await expect(updatePlan(supportOnly, "customer_bronze", { priceCents: 6000 })).rejects.toBeInstanceOf(AuthorizationError);
+    expect(await updatePlan(admin, "customer_stars_50", { priceCents: -5 })).toEqual({ ok: false, error: "INVALID_REQUEST" });
+    await expect(updatePlan(supportOnly, "customer_stars_50", { priceCents: 6000 })).rejects.toBeInstanceOf(AuthorizationError);
     expect((await db.auditLog.findMany({ where: { action: "PLAN_UPDATED" } })).length).toBe(1);
   });
 });
@@ -165,7 +167,7 @@ describe("notifications and plan reminders", () => {
   it("notifies the buyer once on approval and only the owner can read or mark them", async () => {
     const c = await user("CUSTOMER");
     const other = await user("CUSTOMER");
-    const r = await buy(c, "customer_bronze");
+    const r = await buy(c, "customer_stars_50");
     if (!r.ok) throw new Error("setup");
     await decidePlanPurchase(admin, r.purchaseId, "APPROVE");
     const mine = await listMyNotifications(c);
@@ -179,7 +181,7 @@ describe("notifications and plan reminders", () => {
 
   it("sends the 3-day reminder and the expiry notice once each, however often the job runs", async () => {
     const c = await user("CUSTOMER");
-    const r = await buy(c, "customer_bronze");
+    const r = await buy(c, "customer_stars_50");
     if (!r.ok) throw new Error("setup");
     await decidePlanPurchase(admin, r.purchaseId, "APPROVE");
     await db.subscription.update({ where: { userId: c.id }, data: { expiresAt: new Date(Date.now() + 2 * 86_400_000) } });

@@ -16,7 +16,7 @@ import { listSettingStates, type SettingState } from "@/server/settings/service"
 import { CommissionForm } from "./commission-form";
 import { SettingsForm, type SettingFieldView } from "./settings-form";
 import { CreateZoneForm, ZoneFeeForm } from "./zone-forms";
-import { setZoneActiveAction, togglePaymentMethodAction } from "./actions";
+import { setPaymentReceiverAction, setZoneActiveAction, togglePaymentMethodAction } from "./actions";
 
 export const metadata: Metadata = { title: "إعدادات المنصة" };
 
@@ -139,7 +139,15 @@ export default async function AdminSettingsPage({ searchParams }: { searchParams
               <div className="flex items-center gap-3">
                 <span className="font-semibold">{m.nameAr}</span>
                 <Badge tone={m.isEnabled ? "success" : "neutral"}>{m.isEnabled ? "مفعّلة" : "معطّلة"}</Badge>
+                {m.isEnabled && !m.receiverNumber ? <Badge tone="warning">بدون رقم استلام: لن تُقبل طلبات الدفع</Badge> : null}
               </div>
+              {canEdit ? (
+                <form action={setPaymentReceiverAction} className="flex items-center gap-2">
+                  <input type="hidden" name="code" value={m.code} />
+                  <input name="receiver" defaultValue={m.receiverNumber ?? ""} inputMode="tel" dir="ltr" placeholder="رقم الاستلام" aria-label={`رقم استلام ${m.nameAr}`} className="w-44 rounded-control border border-line px-3 py-2 text-sm" />
+                  <Button type="submit" size="sm" variant="secondary">حفظ الرقم</Button>
+                </form>
+              ) : m.receiverNumber ? <span dir="ltr" className="text-sm">{m.receiverNumber}</span> : null}
               {canEdit ? (
                 <form action={togglePaymentMethodAction}>
                   <input type="hidden" name="code" value={m.code} />

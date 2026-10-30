@@ -10,7 +10,7 @@ import { transferConfirmedElsewhere } from "@/server/payments/transfers";
 import { notifyInTx } from "@/server/notifications/service";
 import { applyStarMoves, type StarMove } from "@/server/stars/ledger";
 
-export type PlanError = "INVALID_REQUEST" | "PLAN_NOT_AVAILABLE" | "PAYMENT_METHOD_DISABLED" | "PURCHASE_PENDING" | "WRONG_STATE" | "DUPLICATE_TRANSFER" | "CONFLICT";
+export type PlanError = "INVALID_REQUEST" | "PLAN_NOT_AVAILABLE" | "PAYMENT_METHOD_DISABLED" | "PAYMENT_RECEIVER_NOT_SET" | "PURCHASE_PENDING" | "WRONG_STATE" | "DUPLICATE_TRANSFER" | "CONFLICT";
 export type PlanResult<T = object> = ({ ok: true } & T) | { ok: false; error: PlanError };
 
 const REFERENCE_PATTERN = /^[A-Za-z0-9\-_/ ]{4,64}$/;
@@ -82,7 +82,7 @@ export async function requestPlanPurchase(actor: Actor, input: PurchaseInput): P
   try {
     await assertPaymentMethodEnabled(String(input.method));
   } catch (error) {
-    if (error instanceof PaymentMethodDisabledError) return { ok: false, error: "PAYMENT_METHOD_DISABLED" };
+    if (error instanceof PaymentMethodDisabledError) return { ok: false, error: error.reason === "NO_RECEIVER" ? "PAYMENT_RECEIVER_NOT_SET" : "PAYMENT_METHOD_DISABLED" };
     throw error;
   }
   try {

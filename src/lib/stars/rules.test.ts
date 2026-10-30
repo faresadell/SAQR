@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { cairoDayKey, cairoMonthBounds, cairoMonthKey, computeNewExpiry, DEFAULT_PLANS, DEFAULT_REWARD_TIERS, dailyChargeDecision, ledgerKeys, meetsMinimumBalance, renewalReminderAt, rewardsDue, totalStars } from "./rules";
+import { cairoDayKey, cairoMonthBounds, cairoMonthKey, computeNewExpiry, DEFAULT_PLANS, DEFAULT_REWARD_TIERS, dailyChargeDecision, ledgerKeys, meetsMinimumBalance, renewalReminderAt, RETIRED_PLAN_CODES, rewardsDue, totalStars } from "./rules";
 
 describe("Cairo day and month keys", () => {
   it("uses the Cairo calendar, not UTC", () => {
@@ -44,17 +44,19 @@ describe("monthly rewards", () => {
 });
 
 describe("plans", () => {
-  it("match the spec totals", () => {
-    const by = Object.fromEntries(DEFAULT_PLANS.map((x) => [x.code, x]));
-    expect(totalStars(by["customer_bronze"]!)).toBe(50);
-    expect(totalStars(by["customer_silver"]!)).toBe(90);
-    expect(totalStars(by["customer_gold"]!)).toBe(125);
-    expect(totalStars(by["driver_basic"]!)).toBe(35);
-    expect(totalStars(by["merchant_bronze"]!)).toBe(115);
-    expect(totalStars(by["merchant_silver"]!)).toBe(175);
-    expect(totalStars(by["merchant_gold"]!)).toBe(235);
-    expect(by["merchant_gold"]!.offerQuota).toBe(8);
-    expect(by["customer_gold"]!.priceCents).toBe(10000);
+  it("are the approved 30/50/100 packages at one EGP per star for every audience", () => {
+    expect(DEFAULT_PLANS.length).toBe(9);
+    for (const audience of ["CUSTOMER", "DRIVER", "MERCHANT"] as const) {
+      const mine = DEFAULT_PLANS.filter((x) => x.audience === audience);
+      expect(mine.map((x) => totalStars(x))).toEqual([30, 50, 100]);
+      for (const p of mine) {
+        expect(p.priceCents).toBe(p.baseStars * 100);
+        expect(p.bonusStars).toBe(0);
+        expect(p.offerQuota).toBeNull();
+      }
+    }
+    expect(new Set(DEFAULT_PLANS.map((x) => x.code)).size).toBe(9);
+    for (const code of RETIRED_PLAN_CODES) expect(DEFAULT_PLANS.some((x) => x.code === code)).toBe(false);
   });
   it("early renewal keeps remaining time; lapsed starts now", () => {
     const now = new Date("2026-10-29T10:00:00Z");

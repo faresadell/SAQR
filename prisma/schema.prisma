@@ -344,6 +344,8 @@ model PaymentMethodConfig {
   code      String   @id // "vodafone_cash" | "instapay"
   nameAr    String
   isEnabled Boolean  @default(false)
+  // Where customers send the money. Admin-set; empty = the method cannot take payment requests (no placeholder numbers).
+  receiverNumber String?
   sortOrder Int      @default(0)
   updatedAt DateTime @updatedAt
 }

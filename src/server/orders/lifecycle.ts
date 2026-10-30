@@ -15,7 +15,7 @@ import { applyStarMoves, getStarBalance, InsufficientStarsError, type StarMove }
 export type LifecycleError =
   | "INVALID_REQUEST"
   | "WRONG_STATE"
-  | "PAYMENT_METHOD_DISABLED"
+  | "PAYMENT_METHOD_DISABLED" | "PAYMENT_RECEIVER_NOT_SET"
   | "DUPLICATE_TRANSFER"
   | "PAYMENT_NOT_CONFIRMED"
   | "INSUFFICIENT_STARS"
@@ -109,7 +109,7 @@ export async function submitPayment(actor: Actor, orderId: string, input: Submit
   try {
     await assertPaymentMethodEnabled(String(input.method));
   } catch (error) {
-    if (error instanceof PaymentMethodDisabledError) return { ok: false, error: "PAYMENT_METHOD_DISABLED" };
+    if (error instanceof PaymentMethodDisabledError) return { ok: false, error: error.reason === "NO_RECEIVER" ? "PAYMENT_RECEIVER_NOT_SET" : "PAYMENT_METHOD_DISABLED" };
     throw error;
   }
   return run(async (tx) => {

@@ -39,12 +39,9 @@ async function main() {
     await db.businessType.upsert({ where: { code: type.code }, update: {}, create: type });
   }
   // Star plans: created once from the agreed table; prices and stars are then edited by admins (never overwritten here).
-  const planNames: Record<string, string> = {
-    customer_bronze: "عميل برونزي", customer_silver: "عميل فضي", customer_gold: "عميل ذهبي",
-    driver_basic: "سائق", merchant_bronze: "تاجر برونزي", merchant_silver: "تاجر فضي", merchant_gold: "تاجر ذهبي",
-  };
+  const audienceNames = { CUSTOMER: "عميل", DRIVER: "سائق", MERCHANT: "تاجر" } as const;
   for (const [index, plan] of DEFAULT_PLANS.entries()) {
-    await db.plan.upsert({ where: { code: plan.code }, update: {}, create: { ...plan, nameAr: planNames[plan.code] ?? plan.code, sortOrder: index } });
+    await db.plan.upsert({ where: { code: plan.code }, update: {}, create: { ...plan, nameAr: `${audienceNames[plan.audience]} ${plan.baseStars} نجمة`, sortOrder: index } });
   }
   // Merchant memberships (Plus / Premium): created once; prices are then edited by admins.
   for (const [index, plan] of DEFAULT_MEMBERSHIP_PLANS.entries()) {

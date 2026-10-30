@@ -55,7 +55,7 @@ async function world(): Promise<World> {
   await db.businessType.create({ data: { code: "restaurant", nameAr: "مطعم" } });
   await db.category.create({ data: { nameAr: "عام" } });
   await db.commissionRate.createMany({ data: [{ tier: "REGULAR", basisPoints: 800, effectiveFrom: past, createdById: "t" }, { tier: "BUSINESS", basisPoints: 500, effectiveFrom: past, createdById: "t" }] });
-  await db.paymentMethodConfig.create({ data: { code: "instapay", nameAr: "انستا باي", isEnabled: true } });
+  await db.paymentMethodConfig.create({ data: { code: "instapay", nameAr: "انستا باي", isEnabled: true, receiverNumber: "01000000000" } });
   await setting("orders.merchant_response_minutes", 30);
   const zone = await db.deliveryZone.create({ data: { name: "المعادي" } });
   await db.deliveryFeeVersion.create({ data: { zoneId: zone.id, feeCents: 2000, effectiveFrom: past, createdById: "t" } });

@@ -79,15 +79,26 @@ export interface PlanDefinition {
   offerQuota: number | null;
 }
 
-export const DEFAULT_PLANS: readonly PlanDefinition[] = [
-  { code: "customer_bronze", audience: "CUSTOMER", priceCents: 5000, baseStars: 50, bonusStars: 0, offerQuota: null },
-  { code: "customer_silver", audience: "CUSTOMER", priceCents: 7500, baseStars: 75, bonusStars: 15, offerQuota: null },
-  { code: "customer_gold", audience: "CUSTOMER", priceCents: 10000, baseStars: 100, bonusStars: 25, offerQuota: null },
-  { code: "driver_basic", audience: "DRIVER", priceCents: 3000, baseStars: 35, bonusStars: 0, offerQuota: null },
-  { code: "merchant_bronze", audience: "MERCHANT", priceCents: 10000, baseStars: 100, bonusStars: 15, offerQuota: 4 },
-  { code: "merchant_silver", audience: "MERCHANT", priceCents: 15000, baseStars: 150, bonusStars: 25, offerQuota: 6 },
-  { code: "merchant_gold", audience: "MERCHANT", priceCents: 20000, baseStars: 200, bonusStars: 35, offerQuota: 8 },
-];
+/**
+ * The ONE source of truth for star packages: 30, 50 and 100 stars, one star = 1 EGP, no bonus (nothing else is specified).
+ * Every audience (customer, driver, merchant) buys from the same three sizes. Admins can edit prices/stars afterwards;
+ * purchases keep their own snapshot. offerQuota is null: the offer quota per package has not been decided.
+ * Older plans (customer_bronze ... merchant_gold) are deactivated by a migration, never deleted.
+ */
+export const STAR_PACKAGE_SIZES = [30, 50, 100] as const;
+const AUDIENCES: readonly PlanAudience[] = ["CUSTOMER", "DRIVER", "MERCHANT"];
+export const DEFAULT_PLANS: readonly PlanDefinition[] = AUDIENCES.flatMap((audience) =>
+  STAR_PACKAGE_SIZES.map((stars) => ({
+    code: `${audience.toLowerCase()}_stars_${stars}`,
+    audience,
+    priceCents: stars * 100,
+    baseStars: stars,
+    bonusStars: 0,
+    offerQuota: null,
+  })),
+);
+/** Codes of the retired star plans: kept in the database (history) but not sold. */
+export const RETIRED_PLAN_CODES = ["customer_bronze", "customer_silver", "customer_gold", "driver_basic", "merchant_bronze", "merchant_silver", "merchant_gold"] as const;
 
 export const PLAN_CYCLE_DAYS = 30;
 const DAY_MS = 24 * 60 * 60 * 1000;
