@@ -46,3 +46,10 @@ To run locally: `npm install && npx prisma migrate dev --name phase4 --create-on
 6. After approval only the shop owner or an admin with `payments.review` can cancel (customer cannot); only from `APPROVED`.
 7. Orders are refused (`TRADING_NOT_CONFIGURED`) until an admin sets `orders.merchant_response_minutes` (from the Phase 2 doc).
 8. A shop must be approved, open now (Cairo hours), owner ACTIVE and hold the minimum stars for its products to be orderable.
+
+
+## Memberships and settlements: assumptions
+
+- Memberships are for merchants (Plus 30 EGP, Premium 60 EGP, 30 days). Premium -> commission tier BUSINESS (5%); Plus has no specified benefit, so the shop stays on the regular 8%. Rates were not changed.
+- Settlements charge a suborder once, in the month it reached DELIVERED (Cairo), at the rate stored in the order. A partial refund reduces the base (no product/delivery split exists yet); a refund completed after issuing creates a negative adjustment in a later statement.
+- Open questions for the owner: what Plus should give; how and when merchants pay the commission (the system only records that an admin confirmed receipt); whether delivery fees should be excluded from the commission base; offers (discount type/scope) are NOT implemented until defined.
