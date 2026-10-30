@@ -114,7 +114,7 @@ describe("placeOrder", () => {
   });
 
   it("stays closed until the response window is configured, and needs the minimum star balance", async () => {
-    await db.platformSettingVersion.deleteMany({ where: { key: "orders.merchant_response_minutes" } });
+    await db.$executeRawUnsafe('TRUNCATE "PlatformSettingVersion"'); // settings history is append-only (DELETE is blocked by trigger)
     invalidateSettingsCache();
     expect((await place("key-bbbbbbbb"))).toEqual({ ok: false, error: "TRADING_NOT_CONFIGURED" });
     await setting("orders.merchant_response_minutes", 30);
