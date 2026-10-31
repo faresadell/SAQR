@@ -24,7 +24,7 @@ let n = 0;
 
 async function user(role: "CUSTOMER" | "MERCHANT", opts: { password?: string; verified?: boolean } = {}) {
   n += 1;
-  const phone = `+2017${String(n).padStart(8, "0")}`;
+  const phone = `+2010${String(n).padStart(8, "0")}`;
   const u = await db.user.create({ data: { phone, name: `U${n}`, passwordHash: await hashPassword(opts.password ?? "Old-pass-12345"), role, status: "ACTIVE", phoneVerifiedAt: opts.verified === false ? null : new Date() } });
   return { u, phone, actor: { id: u.id, role, isSuperAdmin: false, permissions: [] } as Actor };
 }
