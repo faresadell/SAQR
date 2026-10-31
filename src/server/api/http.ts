@@ -78,6 +78,8 @@ const STATUS_BY_CODE: Record<string, number> = {
   ACCOUNT_NOT_ACTIVE: 403,
   PAYMENT_METHOD_DISABLED: 422,
   PAYMENT_RECEIVER_NOT_SET: 422,
+  WEAK_PASSWORD: 422,
+  DRIVER_NOT_AVAILABLE: 422,
   RATE_LIMITED: 429,
 };
 export const statusForCode = (code: string): number => STATUS_BY_CODE[code] ?? 409;

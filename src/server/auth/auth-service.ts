@@ -96,7 +96,7 @@ export async function completePhoneVerification(phone: string, code: string, ip:
 
   await db.$transaction(async (tx) => {
     await tx.user.update({ where: { id: user.id }, data: { status: "ACTIVE", phoneVerifiedAt: user.phoneVerifiedAt ?? new Date() } });
-    if (user.role === "CUSTOMER" || user.role === "MERCHANT") {
+    if (user.role === "CUSTOMER" || user.role === "MERCHANT" || user.role === "DRIVER") {
       await tx.starAccount.upsert({ where: { userId: user.id }, update: {}, create: { userId: user.id } });
     }
     await writeAudit({ actorId: user.id, action: "USER_PHONE_VERIFIED", entityType: "User", entityId: user.id, ip }, tx);

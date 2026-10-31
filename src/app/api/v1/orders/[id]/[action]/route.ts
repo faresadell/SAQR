@@ -2,7 +2,8 @@ import type { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { consumeRateLimit } from "@/lib/rate-limit";
 import { apiError, apiOk, checkMutation, currentActor, mapThrown, readJson, statusForCode } from "@/server/api/http";
-import { advanceOrder, cancelOrder, confirmPayment, decideOrder, rejectPayment, submitPayment, type LifecycleResult } from "@/server/orders/lifecycle";
+import { assignDriver } from "@/server/orders/delivery";
+import { advanceOrder, cancelOrder, confirmPayment, decideOrder, rejectPayment, requestCancellation, resolveCancellation, submitPayment, type LifecycleResult } from "@/server/orders/lifecycle";
 
 const schemas = {
   payment: z.object({ method: z.string().min(1).max(40), referenceNo: z.string().min(1).max(64), uploadId: z.string().min(8).max(64) }).strict(),
@@ -11,6 +12,9 @@ const schemas = {
   decision: z.object({ decision: z.enum(["APPROVE", "REJECT"]), reason: z.string().min(3).max(300).optional() }).strict(),
   advance: z.object({ to: z.enum(["PREPARING", "READY", "OUT_FOR_DELIVERY", "DELIVERED"]) }).strict(),
   cancel: z.object({ reason: z.string().min(3).max(300) }).strict(),
+  "cancel-request": z.object({ reason: z.string().min(3).max(300) }).strict(),
+  "cancel-decision": z.object({ decision: z.enum(["ACCEPT", "DECLINE"]), reason: z.string().min(3).max(300).optional() }).strict(),
+  "assign-driver": z.object({ driverId: z.string().min(8).max(64) }).strict(),
 } as const;
 type Action = keyof typeof schemas;
 const isAction = (value: string): value is Action => Object.hasOwn(schemas, value);
@@ -23,6 +27,9 @@ const isAction = (value: string): value is Action => Object.hasOwn(schemas, valu
  *   decision         seller     {decision: APPROVE|REJECT, reason?}  approve (charges stars once) or reject
  *   advance          seller     {to}                                 PREPARING | READY | OUT_FOR_DELIVERY | DELIVERED
  *   cancel           any party  {reason}                             see docs/api/orders.md for who may cancel when
+ *   cancel-request   customer   {reason}                             ask to cancel an order the shop already accepted
+ *   cancel-decision  seller     {decision: ACCEPT|DECLINE, reason?}  answer a cancellation request (DECLINE needs a reason)
+ *   assign-driver    seller     {driverId}                           give the order to one of the shop's own drivers
  * "seller" = the shop owner, or an admin holding payments.review for the payment actions.
  */
 export async function POST(request: NextRequest, context: { params: Promise<{ id: string; action: string }> }): Promise<NextResponse> {
@@ -58,6 +65,17 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
         break;
       case "cancel":
         result = await cancelOrder(actor, id, (body.data as z.infer<typeof schemas.cancel>).reason);
+        break;
+      case "cancel-request":
+        result = await requestCancellation(actor, id, (body.data as z.infer<typeof schemas["cancel-request"]>).reason);
+        break;
+      case "cancel-decision": {
+        const c = body.data as z.infer<typeof schemas["cancel-decision"]>;
+        result = await resolveCancellation(actor, id, c.decision, c.reason);
+        break;
+      }
+      case "assign-driver":
+        result = await assignDriver(actor, id, (body.data as z.infer<typeof schemas["assign-driver"]>).driverId);
         break;
     }
     if (!result.ok) return apiError(statusForCode(result.error), result.error);
