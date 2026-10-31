@@ -901,3 +901,33 @@ model ContestAward {
   @@index([monthKey, status])
   @@index([userId])
 }
+
+
+// ───────────── Complaints ─────────────
+
+enum ComplaintStatus {
+  OPEN
+  IN_REVIEW
+  RESOLVED
+  DISMISSED
+}
+
+// A customer's complaint about one of their own suborders. Admins review it; refunds still follow the refund flow.
+model Complaint {
+  id           String          @id @default(cuid())
+  orderId      String
+  customerId   String
+  merchantId   String
+  subject      String
+  details      String
+  status       ComplaintStatus @default(OPEN)
+  adminResponse String?
+  handledById  String?
+  handledAt    DateTime?
+  createdAt    DateTime        @default(now())
+  updatedAt    DateTime        @updatedAt
+
+  @@index([status, createdAt])
+  @@index([customerId, createdAt])
+  @@index([orderId])
+}

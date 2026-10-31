@@ -11,6 +11,7 @@ export const PERMISSIONS = [
   "settlements.manage",
   "offers.manage",
   "contest.manage",
+  "complaints.manage",
   "audit.view",
 ] as const;
 
