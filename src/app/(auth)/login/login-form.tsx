@@ -3,6 +3,7 @@
 import { useActionState } from "react";
 import { Button } from "@/components/ui/button";
 import { Field } from "@/components/ui/field";
+import { Notice } from "@/components/ui/states";
 import { loginAction, type FormState } from "../actions";
 
 const initial: FormState = {};
@@ -23,7 +24,7 @@ export function LoginForm() {
         dir="ltr"
         placeholder="123456"
       />
-      {state.error ? <p role="alert" className="rounded-control bg-danger-soft p-3 text-sm font-medium text-danger-ink">{state.error}</p> : null}
+      {state.error ? <Notice tone="danger">{state.error}</Notice> : null}
       <Button type="submit" loading={pending}>دخول</Button>
     </form>
   );

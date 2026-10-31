@@ -109,14 +109,14 @@ export async function updateProductAction(_prev: FormState, formData: FormData):
 async function productCommand(formData: FormData, run: (userId: Awaited<ReturnType<typeof requireRole>>["user"], id: string) => Promise<void>): Promise<void> {
   const { user } = await requireRole("MERCHANT");
   const id = idSchema.safeParse(formData.get("productId"));
-  if (!id.success) redirect("/merchant");
+  if (!id.success) redirect("/merchant/products");
   try {
     await run(user, id.data);
   } catch (error) {
     if (!(error instanceof AuthorizationError || error instanceof NotFoundError)) throw error;
   }
-  revalidatePath("/merchant");
-  redirect("/merchant");
+  revalidatePath("/merchant/products");
+  redirect("/merchant/products");
 }
 
 export async function toggleAvailabilityAction(formData: FormData): Promise<void> {

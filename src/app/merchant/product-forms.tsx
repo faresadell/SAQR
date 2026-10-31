@@ -3,6 +3,8 @@
 import { useActionState } from "react";
 import { Button } from "@/components/ui/button";
 import { Field } from "@/components/ui/field";
+import { FileUpload } from "@/components/ui/file-upload";
+import { Notice } from "@/components/ui/states";
 import { Select } from "@/components/ui/select";
 import type { FormState } from "@/lib/form-state";
 import { createProductAction, updateProductAction } from "./actions";
@@ -36,12 +38,16 @@ export function ProductForm({ categories, defaults, mode }: { categories: { id: 
           ))}
         </Select>
       </div>
+      <div className="flex flex-col gap-2">
+        <FileUpload label="صورة المنتج (اختياري)" name="image" disabled />
+        <Notice tone="info">رفع صور المنتجات غير مفعّل بعد (يحتاج تخزيناً للملفات على الخادم).</Notice>
+      </div>
       <label className="flex items-center gap-2 text-sm">
         <input type="checkbox" name="isAvailable" defaultChecked={defaults.isAvailable} />
         متاح للطلب
       </label>
-      {state.error ? <p role="alert" className="text-sm font-medium text-danger-ink">{state.error}</p> : null}
-      {state.message ? <p role="status" className="text-sm font-medium text-success-ink">{state.message}</p> : null}
+      {state.error ? <Notice tone="danger">{state.error}</Notice> : null}
+      {state.message ? <Notice tone="success">{state.message}</Notice> : null}
       <Button type="submit" size="sm" loading={pending}>{mode === "create" ? "إضافة المنتج" : "حفظ التعديل"}</Button>
     </form>
   );

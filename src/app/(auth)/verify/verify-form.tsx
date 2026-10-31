@@ -3,6 +3,7 @@
 import { useActionState } from "react";
 import { Button } from "@/components/ui/button";
 import { Field } from "@/components/ui/field";
+import { Notice } from "@/components/ui/states";
 import { resendCodeAction, verifyAction, type FormState } from "../actions";
 
 const initial: FormState = {};
@@ -24,7 +25,7 @@ export function VerifyForm() {
           required
           error={state.fieldErrors?.code}
         />
-        {state.error ? <p role="alert" className="rounded-control bg-danger-soft p-3 text-sm font-medium text-danger-ink">{state.error}</p> : null}
+        {state.error ? <Notice tone="danger">{state.error}</Notice> : null}
         <Button type="submit" loading={pending}>تأكيد</Button>
       </form>
 

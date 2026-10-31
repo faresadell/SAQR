@@ -1,136 +1,98 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { logoutAction } from "@/app/(auth)/actions";
-import { canEditOwnProfile } from "@/lib/catalog/catalog-policy";
-import { emptyWeek, validateOpeningHours, type OpeningHours } from "@/lib/catalog/opening-hours";
-import { formatEgp } from "@/lib/money";
+import { Icon, type IconName } from "@/components/ui/icon";
+import { LinkButton } from "@/components/ui/link-button";
+import { Notice } from "@/components/ui/states";
+import { SectionTitle } from "@/components/ui/page-header";
+import { StatCard } from "@/components/ui/stat-card";
+import { loadMerchantOffers, loadMerchantOrders, loadMerchantPackages } from "@/features/merchant/data";
+import { SectionGate } from "@/features/shared/section-gate";
+import { MERCHANT_STATUS } from "@/features/shared/status";
+import { formatNumber } from "@/lib/format";
 import { requireRole } from "@/server/auth/guards";
-import { listBusinessTypes } from "@/server/catalog/categories";
-import { listOwnProducts, listUsableCategories } from "@/server/catalog/products";
+import { listOwnProducts } from "@/server/catalog/products";
 import { getOwnMerchant } from "@/server/merchants/service";
-import { archiveProductAction, resubmitMerchantAction, toggleAvailabilityAction } from "./actions";
-import { ProductForm } from "./product-forms";
-import { ProfileForm, type ProfileDefaults } from "./profile-form";
+import { resubmitMerchantAction } from "./actions";
 
-export const metadata: Metadata = { title: "لوحة التاجر" };
+export const metadata: Metadata = { title: "ملخص النشاط" };
 
-const statusInfo = {
-  PENDING_REVIEW: { tone: "warning", label: "قيد المراجعة", text: "نراجع بيانات نشاطك. يمكنك تعديلها حتى يتم الاعتماد." },
-  APPROVED: { tone: "success", label: "معتمد", text: "نشاطك معتمد ويمكنك إدارة منتجاتك." },
-  REJECTED: { tone: "danger", label: "مرفوض", text: "تم رفض الطلب." },
-  SUSPENDED: { tone: "danger", label: "موقوف", text: "تم إيقاف نشاطك. تواصل مع الدعم." },
+const statusText = {
+  PENDING_REVIEW: "نراجع بيانات نشاطك. يمكنك تعديلها حتى يتم الاعتماد.",
+  APPROVED: "نشاطك معتمد ويظهر للعملاء.",
+  REJECTED: "تم رفض الطلب. عدّل البيانات ثم أعد الإرسال.",
+  SUSPENDED: "تم إيقاف نشاطك. تواصل مع الدعم.",
 } as const;
 
-function weekFrom(json: unknown): OpeningHours {
-  if (json === null || json === undefined) return emptyWeek();
-  const parsed = validateOpeningHours(json);
-  return parsed.ok ? parsed.value : emptyWeek();
-}
+const SHORTCUTS: { href: string; label: string; icon: IconName }[] = [
+  { href: "/merchant/products/new", label: "إضافة منتج", icon: "plus" },
+  { href: "/merchant/products", label: "إدارة المنتجات", icon: "store" },
+  { href: "/merchant/profile", label: "بيانات النشاط وساعات العمل", icon: "settings" },
+];
 
-export default async function MerchantPage() {
+export default async function MerchantOverviewPage() {
   const { user } = await requireRole("MERCHANT");
-  const [shop, businessTypes] = await Promise.all([getOwnMerchant(user), listBusinessTypes(true)]);
-  const canEdit = !shop || canEditOwnProfile(user, shop);
+  const shop = await getOwnMerchant(user);
+  const products = shop?.status === "APPROVED" ? await listOwnProducts(user) : [];
+  const [orders, offers, packages] = await Promise.all([loadMerchantOrders(user), loadMerchantOffers(user), loadMerchantPackages(user)]);
 
-  const defaults: ProfileDefaults = {
-    name: shop?.name ?? "",
-    description: shop?.description ?? "",
-    businessType: shop?.businessType ?? "",
-    phone: shop?.phone ?? "",
-    address: shop?.address ?? "",
-    lat: shop?.lat?.toString() ?? "",
-    lng: shop?.lng?.toString() ?? "",
-    hours: weekFrom(shop?.openingHours),
-  };
+  if (!shop) {
+    return (
+      <div className="flex flex-col gap-4">
+        <h1 className="text-2xl font-bold">مرحباً {user.name}</h1>
+        <Card className="flex flex-col items-start gap-3">
+          <h2 className="text-lg font-bold">أكمل بيانات نشاطك</h2>
+          <p className="text-sm text-ink-muted">أضف اسم النشاط ونوعه وساعات العمل، وسنراجعها قبل ظهوره للعملاء.</p>
+          <LinkButton href="/merchant/profile">ابدأ الآن</LinkButton>
+        </Card>
+      </div>
+    );
+  }
 
-  const [products, categories] = shop?.status === "APPROVED" ? await Promise.all([listOwnProducts(user), listUsableCategories()]) : [[], []];
+  const info = MERCHANT_STATUS[shop.status];
+  const available = products.filter((p) => p.isAvailable).length;
 
   return (
-    <main className="mx-auto flex w-full max-w-3xl flex-col gap-5 px-5 py-8">
-      <div className="flex items-center justify-between gap-3">
-        <h1 className="text-2xl font-bold">لوحة التاجر</h1>
-        <form action={logoutAction}>
-          <Button type="submit" variant="ghost" size="sm">خروج</Button>
-        </form>
+    <div className="flex flex-col gap-6">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-bold">{shop.name}</h1>
+          <p className="text-sm text-ink-muted">{statusText[shop.status]}</p>
+        </div>
+        <Badge tone={info.tone}>{info.label}</Badge>
       </div>
 
-      {shop ? (
+      {shop.status === "REJECTED" ? (
         <Card className="flex flex-col gap-3">
-          <div className="flex items-center justify-between gap-3">
-            <h2 className="text-lg font-bold">{shop.name}</h2>
-            <Badge tone={statusInfo[shop.status].tone}>{statusInfo[shop.status].label}</Badge>
-          </div>
-          <p className="text-sm text-ink-muted">{statusInfo[shop.status].text}</p>
-          {shop.status === "REJECTED" ? (
-            <>
-              {shop.rejectionReason ? <p className="rounded-control bg-danger-soft p-3 text-sm text-danger-ink">السبب: {shop.rejectionReason}</p> : null}
-              <form action={resubmitMerchantAction}>
-                <Button type="submit" size="sm">إعادة إرسال للمراجعة</Button>
-              </form>
-            </>
-          ) : null}
-        </Card>
-      ) : (
-        <Card>
-          <p className="text-ink-muted">أكمل بيانات نشاطك وسنراجعها قبل ظهوره للعملاء.</p>
-        </Card>
-      )}
-
-      <Card className="flex flex-col gap-4">
-        <h2 className="text-lg font-bold">بيانات النشاط</h2>
-        <ProfileForm defaults={defaults} businessTypes={businessTypes.map((t) => ({ code: t.code, nameAr: t.nameAr }))} canEdit={canEdit} />
-      </Card>
-
-      {shop?.status === "APPROVED" ? (
-        <Card className="flex flex-col gap-4">
-          <h2 className="text-lg font-bold">المنتجات</h2>
-          {categories.length === 0 ? (
-            <p className="rounded-control bg-warning-soft p-3 text-sm font-medium text-warning-ink">لا توجد تصنيفات متاحة بعد. ستظهر هنا عندما تضيفها الإدارة.</p>
-          ) : (
-            <details>
-              <summary className="cursor-pointer text-sm font-semibold text-brand">إضافة منتج جديد</summary>
-              <div className="mt-3"><ProductForm mode="create" categories={categories} defaults={{ name: "", description: "", price: "", categoryId: "", isAvailable: true }} /></div>
-            </details>
-          )}
-
-          <div className="flex flex-col gap-3">
-            {products.map((p) => (
-              <div key={p.id} className="flex flex-col gap-3 rounded-control border border-line p-4">
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <div>
-                    <p className="font-semibold">{p.nameAr}</p>
-                    <p className="text-sm text-ink-muted">{p.category.nameAr}</p>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span className="font-bold">{formatEgp(p.priceCents)}</span>
-                    <Badge tone={p.isAvailable ? "success" : "neutral"}>{p.isAvailable ? "متاح" : "غير متاح"}</Badge>
-                  </div>
-                </div>
-                <div className="flex flex-wrap gap-2">
-                  <form action={toggleAvailabilityAction}>
-                    <input type="hidden" name="productId" value={p.id} />
-                    <input type="hidden" name="available" value={p.isAvailable ? "false" : "true"} />
-                    <Button type="submit" size="sm" variant="secondary">{p.isAvailable ? "إيقاف مؤقت" : "إتاحة"}</Button>
-                  </form>
-                  <form action={archiveProductAction}>
-                    <input type="hidden" name="productId" value={p.id} />
-                    <Button type="submit" size="sm" variant="ghost">أرشفة</Button>
-                  </form>
-                </div>
-                <details>
-                  <summary className="cursor-pointer text-sm font-semibold text-brand">تعديل</summary>
-                  <div className="mt-3">
-                    <ProductForm mode="edit" categories={categories} defaults={{ id: p.id, name: p.nameAr, description: p.description ?? "", price: (p.priceCents / 100).toFixed(2), categoryId: p.categoryId, isAvailable: p.isAvailable }} />
-                  </div>
-                </details>
-              </div>
-            ))}
-            {products.length === 0 ? <p className="text-ink-muted">لا توجد منتجات بعد.</p> : null}
-          </div>
+          {shop.rejectionReason ? <Notice tone="danger">السبب: {shop.rejectionReason}</Notice> : null}
+          <form action={resubmitMerchantAction}>
+            <Button type="submit" size="sm">إعادة إرسال للمراجعة</Button>
+          </form>
         </Card>
       ) : null}
-    </main>
+
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <StatCard label="المنتجات" icon="store" value={formatNumber(products.length)} note={shop.status === "APPROVED" ? `${formatNumber(available)} متاح للطلب` : "تُدار بعد اعتماد النشاط"} />
+        <SectionGate result={orders}>{(d) => <StatCard label="طلبات تحتاج إجراء" icon="box" tone="warning" value={formatNumber(d.filter((o) => o.allowed.accept || o.allowed.advance).length)} />}</SectionGate>
+        <SectionGate result={offers}>{(d) => <StatCard label="المتبقي من حصة العروض" icon="tag" tone="success" value={formatNumber(Math.max(0, d.quota.total - d.quota.used))} />}</SectionGate>
+        <SectionGate result={packages}>{(d) => <StatCard label="رصيد النجوم" icon="star" tone="warning" value={formatNumber(d.stars.balance)} />}</SectionGate>
+      </div>
+
+      {shop.status === "APPROVED" ? (
+        <section className="flex flex-col gap-3">
+          <SectionTitle>اختصارات</SectionTitle>
+          <div className="grid gap-3 sm:grid-cols-3">
+            {SHORTCUTS.map((s) => (
+              <Link key={s.href} href={s.href} className="flex items-center gap-3 rounded-card border border-line bg-surface p-4 font-semibold shadow-card hover:border-brand">
+                <span className="flex size-10 items-center justify-center rounded-control bg-brand-soft text-navy-700"><Icon name={s.icon} /></span>
+                {s.label}
+              </Link>
+            ))}
+          </div>
+        </section>
+      ) : null}
+    </div>
   );
 }

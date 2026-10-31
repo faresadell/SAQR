@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { SiteShell } from "@/components/layout/site-shell";
 
 export const metadata: Metadata = { title: "سياسة الخصوصية" };
 
@@ -6,7 +7,8 @@ export const metadata: Metadata = { title: "سياسة الخصوصية" };
 // Protection Law (No. 151 of 2020) before public launch.
 export default function PrivacyPage() {
   return (
-    <main className="mx-auto flex w-full max-w-2xl flex-col gap-5 px-5 py-10 leading-8">
+    <SiteShell>
+    <div className="mx-auto flex w-full max-w-2xl flex-col gap-5 px-5 py-10 leading-8">
       <h1 className="text-2xl font-bold">سياسة الخصوصية</h1>
 
       <section className="flex flex-col gap-2">
@@ -33,6 +35,7 @@ export default function PrivacyPage() {
         <h2 className="text-lg font-bold">حقوقك</h2>
         <p>يمكنك طلب الاطلاع على بياناتك أو تصحيحها أو حذف حسابك عبر الدعم، وسنرد في المدة القانونية.</p>
       </section>
-    </main>
+    </div>
+    </SiteShell>
   );
 }
