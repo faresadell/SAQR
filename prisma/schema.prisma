@@ -132,6 +132,8 @@ model User {
   driverProfile  Driver?
   starAccount    StarAccount?
   orders         Order[]           @relation("CustomerOrders")
+  emailCodes     EmailCode[]
+  recoveryCodes  AdminRecoveryCode[]
 }
 
 model OtpCode {
@@ -930,4 +932,53 @@ model Complaint {
   @@index([status, createdAt])
   @@index([customerId, createdAt])
   @@index([orderId])
+}
+
+enum EmailCodePurpose {
+  VERIFY_EMAIL
+  PASSWORD_RESET
+}
+
+// One-time codes sent by email (Resend). Stored only as keyed hashes; the address is part of the hash so a code
+// for one address cannot confirm another.
+model EmailCode {
+  id         String           @id @default(cuid())
+  userId     String
+  email      String
+  purpose    EmailCodePurpose
+  codeHash   String
+  attempts   Int              @default(0)
+  expiresAt  DateTime
+  consumedAt DateTime?
+  createdAt  DateTime         @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, purpose, createdAt])
+}
+
+// Single-use backup codes for administrators who lost their authenticator. Only hashes are stored.
+model AdminRecoveryCode {
+  id        String    @id @default(cuid())
+  userId    String
+  codeHash  String    @unique
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, usedAt])
+}
+
+// Editable legal / support pages. They are drafts until an administrator approves them after legal review;
+// any edit removes the approval.
+model LegalPage {
+  slug         String    @id
+  title        String
+  body         String
+  version      Int       @default(1)
+  approvedAt   DateTime?
+  approvedById String?
+  updatedAt    DateTime  @updatedAt
+  updatedById  String?
 }
