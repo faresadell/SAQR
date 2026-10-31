@@ -1,4 +1,3 @@
-import "server-only";
 import { amzDateFor, sha256Hex, signSigV4 } from "@/lib/storage/sigv4";
 import { STORAGE_KEY_PATTERN } from "@/lib/uploads/image-sniff";
 import type { PrivateStorage } from "./storage";
