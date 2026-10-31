@@ -27,8 +27,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      # package-lock.json was missing from the repo import; use `npm ci` once the lockfile is committed.
-      - run: if [ -f package-lock.json ]; then npm ci; else npm install --no-audit --no-fund; fi
+      - run: npm ci
       - run: npx prisma generate
       - run: npm run db:validate
       - run: npm run typecheck
