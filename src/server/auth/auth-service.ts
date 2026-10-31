@@ -9,6 +9,7 @@ import { burnPasswordCheck, hashPassword, verifyPassword } from "@/lib/auth/pass
 import { decryptSecret, parseEncryptionKey } from "@/lib/auth/secret-box";
 import { verifyTotp } from "@/lib/auth/totp";
 import { requestOtp, verifyOtp } from "./otp-service";
+import { useRecoveryCode } from "./admin-recovery";
 
 export const CONSENT_VERSION = "2026-10-v1";
 
@@ -110,6 +111,8 @@ export interface LoginInput {
   phone: string; // normalized
   password: string;
   totp?: string;
+  /** Administrators who lost their authenticator may present ONE backup code instead of the authenticator code. */
+  recoveryCode?: string;
 }
 
 export type LoginResult =
@@ -158,24 +161,32 @@ export async function authenticate(input: LoginInput, ip: string): Promise<Login
 
   // Administrators must also present a valid authenticator code (replay-protected).
   if (user.role === "ADMIN") {
-    if (!user.totpSecretEnc || !input.totp) return { ok: false, error: "INVALID" };
-    let secret: Buffer;
-    try {
-      secret = decryptSecret(parseEncryptionKey(getEnv().DATA_ENCRYPTION_KEY), user.totpSecretEnc);
-    } catch {
-      return { ok: false, error: "INVALID" };
+    if (!user.totpSecretEnc) return { ok: false, error: "INVALID" };
+    if (!input.totp && input.recoveryCode) {
+      if (!(await useRecoveryCode(user.id, input.recoveryCode, ip))) {
+        await registerFailedLogin(user.id, ip);
+        return { ok: false, error: "INVALID" };
+      }
+    } else {
+      if (!input.totp) return { ok: false, error: "INVALID" };
+      let secret: Buffer;
+      try {
+        secret = decryptSecret(parseEncryptionKey(getEnv().DATA_ENCRYPTION_KEY), user.totpSecretEnc);
+      } catch {
+        return { ok: false, error: "INVALID" };
+      }
+      const step = verifyTotp(secret, input.totp.trim(), Date.now(), user.lastTotpStep);
+      if (step === null) {
+        await registerFailedLogin(user.id, ip);
+        return { ok: false, error: "INVALID" };
+      }
+      // Atomic: only one request can consume a given time step.
+      const claimed = await db.user.updateMany({
+        where: { id: user.id, OR: [{ lastTotpStep: null }, { lastTotpStep: { lt: step } }] },
+        data: { lastTotpStep: step },
+      });
+      if (claimed.count !== 1) return { ok: false, error: "INVALID" };
     }
-    const step = verifyTotp(secret, input.totp.trim(), Date.now(), user.lastTotpStep);
-    if (step === null) {
-      await registerFailedLogin(user.id, ip);
-      return { ok: false, error: "INVALID" };
-    }
-    // Atomic: only one request can consume a given time step.
-    const claimed = await db.user.updateMany({
-      where: { id: user.id, OR: [{ lastTotpStep: null }, { lastTotpStep: { lt: step } }] },
-      data: { lastTotpStep: step },
-    });
-    if (claimed.count !== 1) return { ok: false, error: "INVALID" };
     await writeAudit({ actorId: user.id, action: "ADMIN_LOGIN", entityType: "User", entityId: user.id, ip });
   }
 

@@ -13,6 +13,7 @@ export const PERMISSIONS = [
   "contest.manage",
   "complaints.manage",
   "audit.view",
+  "content.manage",
 ] as const;
 
 export type Permission = (typeof PERMISSIONS)[number];
