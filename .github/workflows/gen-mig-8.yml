@@ -1,0 +1,29 @@
+name: Draft migration
+on:
+  push:
+    branches: [gen-mig-8]
+permissions:
+  contents: write
+jobs:
+  gen:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env: { POSTGRES_USER: ci, POSTGRES_PASSWORD: ci, POSTGRES_DB: ci }
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U ci" --health-interval 5s --health-timeout 5s --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22 }
+      - run: npm ci
+      - name: Diff migrations -> schema
+        run: |
+          mkdir -p draft
+          npx prisma migrate diff --from-migrations prisma/migrations --to-schema-datamodel prisma/schema.prisma --shadow-database-url postgresql://ci:ci@localhost:5432/ci --script > draft/migration.sql
+          cat draft/migration.sql
+      - run: |
+          git config user.name "ci-bot"; git config user.email "ci-bot@users.noreply.github.com"
+          git add draft && git commit -m "Draft migration" && git push origin HEAD:gen-mig-8
