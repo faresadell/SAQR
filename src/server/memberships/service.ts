@@ -249,3 +249,9 @@ export async function runMembershipMaintenance(now = new Date()): Promise<Mainte
   }
   return summary;
 }
+
+
+export async function listAllMembershipPlans(actor: Actor) {
+  if (!hasPermission(actor, "settings.view") && !hasPermission(actor, "settings.manage")) throw new AuthorizationError();
+  return db.membershipPlan.findMany({ orderBy: { sortOrder: "asc" }, select: { code: true, nameAr: true, priceCents: true, tier: true, durationDays: true, isActive: true } });
+}

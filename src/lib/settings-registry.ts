@@ -2,7 +2,7 @@
 // Values are always whole numbers. Ranges are enforced on the server for every write AND every read;
 // an invalid stored value is ignored and the default is used, so a bad edit cannot weaken security.
 
-export type SettingGroup = "orders" | "security";
+export type SettingGroup = "orders" | "offers" | "contest" | "security";
 
 export interface IntSettingDefinition {
   label: string;
@@ -40,6 +40,22 @@ export const SETTING_DEFINITIONS = {
     help: "غير محددة بعد. يجب تحديدها قبل تشغيل الطلبات، وبعدها يُنبَّه الأدمن لمتابعة الطلب.",
     group: "orders", unit: "دقيقة", min: 1, max: 10080, nullable: true, default: null,
   },
+
+  // ───── offers (lifecycle only; discount rules are NOT defined) ─────
+  "offers.base_duration_hours": {
+    label: "مدة العرض الأساسية",
+    help: "المدة التي يبدأ بها كل عرض جديد دون أي تكلفة إضافية.",
+    group: "offers", unit: "ساعة", min: 1, max: 720, default: 24,
+  },
+  "offers.extension_stars_per_hour": {
+    label: "تكلفة تمديد العرض لكل ساعة إضافية",
+    group: "offers", unit: "نجمة", min: 0, max: 100, default: 1,
+  },
+
+  // ───── monthly contest prizes ─────
+  "contest.prize_first_egp": { label: "جائزة المركز الأول", group: "contest", unit: "جنيه", min: 0, max: 1000000, default: 1000 },
+  "contest.prize_second_egp": { label: "جائزة المركز الثاني", group: "contest", unit: "جنيه", min: 0, max: 1000000, default: 500 },
+  "contest.prize_third_egp": { label: "جائزة المركز الثالث", group: "contest", unit: "جنيه", min: 0, max: 1000000, default: 250 },
 
   // ───── security ─────
   "auth.otp.ttl_seconds": { label: "صلاحية رمز التحقق", group: "security", unit: "ثانية", min: 60, max: 900, default: 300 },

@@ -196,3 +196,10 @@ export async function updatePlan(actor: Actor, code: string, change: { priceCent
     return {};
   });
 }
+
+
+/** Admin view of every plan, including those taken off sale (older plans stay for history). Needs settings.view or settings.manage. */
+export async function listAllPlans(actor: Actor) {
+  if (!hasPermission(actor, "settings.view") && !hasPermission(actor, "settings.manage")) throw new AuthorizationError();
+  return db.plan.findMany({ orderBy: [{ audience: "asc" }, { sortOrder: "asc" }], select: { code: true, audience: true, nameAr: true, priceCents: true, baseStars: true, bonusStars: true, offerQuota: true, isActive: true } });
+}
