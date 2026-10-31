@@ -1,7 +1,7 @@
 import "server-only";
 import type { SessionUser } from "@/server/auth/session";
 import { failed, ready, unavailable, type Loaded } from "@/features/shared/loaded";
-import { listOrdersForActor, mapNotifications, mapPackages, mapStars, merchantNames } from "@/features/shared/server-mappers";
+import { listOrdersForActor, mapNotifications, mapPackages, mapStars } from "@/features/shared/server-mappers";
 import type { CurrentPackage, NotificationItem, PackageOption, PaymentInstruction, StarsOverview } from "@/features/shared/types";
 import type { MerchantOffersData, MerchantOrderRow, MerchantReport } from "./types";
 

@@ -4,7 +4,7 @@ import type { Actor } from "@/lib/auth/permissions";
 import { listPlansFor, getMyPlanState } from "@/server/plans/service";
 import { listMyNotifications } from "@/server/notifications/service";
 import { getEnabledPaymentMethods } from "@/server/payments/methods";
-import { listOrdersForActor, getOrderForActor } from "@/server/orders/read";
+import { listOrdersForActor, type getOrderForActor } from "@/server/orders/read";
 import type { OrderStatus } from "./status";
 import type { CurrentPackage, MainOrderView, NotificationItem, PackageOption, PaymentInstruction, StarsOverview, SubOrderView } from "./types";
 
