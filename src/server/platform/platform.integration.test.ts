@@ -16,6 +16,10 @@ import { AuthorizationError, NotFoundError } from "@/server/errors";
 import { merchantSalesReport, platformSalesReport } from "@/server/reports/service";
 import { setStorageForTests, type PrivateStorage } from "@/server/uploads/storage";
 
+process.env.APP_URL ??= "http://localhost:3000";
+process.env.SESSION_SECRET ??= "s".repeat(48);
+process.env.DATA_ENCRYPTION_KEY ??= Buffer.alloc(32, 7).toString("base64");
+
 if (!process.env.DATABASE_URL) throw new Error("DATABASE_URL is required for integration tests");
 
 const admin: Actor = { id: "admin-1", role: "ADMIN", isSuperAdmin: true, permissions: [] };
