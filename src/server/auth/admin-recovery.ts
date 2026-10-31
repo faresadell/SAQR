@@ -35,7 +35,7 @@ export async function countUnusedRecoveryCodes(actor: Actor): Promise<number> {
 }
 
 /** Consumes one code exactly once (atomic). Used by the login flow after the password was already verified. */
-export async function useRecoveryCode(userId: string, rawCode: string, ip: string): Promise<boolean> {
+export async function redeemRecoveryCode(userId: string, rawCode: string, ip: string): Promise<boolean> {
   const code = normalizeRecoveryCode(rawCode);
   if (!code) return false;
   const claimed = await db.adminRecoveryCode.updateMany({

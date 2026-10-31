@@ -9,7 +9,7 @@ import { burnPasswordCheck, hashPassword, verifyPassword } from "@/lib/auth/pass
 import { decryptSecret, parseEncryptionKey } from "@/lib/auth/secret-box";
 import { verifyTotp } from "@/lib/auth/totp";
 import { requestOtp, verifyOtp } from "./otp-service";
-import { useRecoveryCode } from "./admin-recovery";
+import { redeemRecoveryCode } from "./admin-recovery";
 
 export const CONSENT_VERSION = "2026-10-v1";
 
@@ -163,7 +163,7 @@ export async function authenticate(input: LoginInput, ip: string): Promise<Login
   if (user.role === "ADMIN") {
     if (!user.totpSecretEnc) return { ok: false, error: "INVALID" };
     if (!input.totp && input.recoveryCode) {
-      if (!(await useRecoveryCode(user.id, input.recoveryCode, ip))) {
+      if (!(await redeemRecoveryCode(user.id, input.recoveryCode, ip))) {
         await registerFailedLogin(user.id, ip);
         return { ok: false, error: "INVALID" };
       }
