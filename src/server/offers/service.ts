@@ -97,7 +97,7 @@ export async function createOffer(actor: Actor, input: OfferInput): Promise<Offe
         ...(discount ? { discountType: discount.type, discountValue: discount.value, products: { create: productIds.map((productId) => ({ productId })) } } : {}),
       },
     });
-    await writeAudit({ actorId: actor.id, action: "OFFER_CREATED", entityType: "Offer", entityId: created.id, after: { title, hours, ...(discount ? { discount, productIds } : {}) } }, tx);
+    await writeAudit({ actorId: actor.id, action: "OFFER_CREATED", entityType: "Offer", entityId: created.id, after: { title, hours, ...(discount ? { discountType: discount.type, discountValue: discount.value, productIds } : {}) } }, tx);
     return { ok: true, offerId: created.id, endsAt: created.endsAt };
   });
 }
