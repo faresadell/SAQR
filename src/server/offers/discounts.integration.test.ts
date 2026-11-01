@@ -125,7 +125,7 @@ describe("offer discounts", () => {
     await setting("offers.discount.enabled", 0);
     expect(await price("key-price-0002")).toBe(10_000);
     await setting("offers.discount.enabled", 1);
-    await db.offer.update({ where: { id: created.offerId }, data: { endsAt: new Date(Date.now() - 1000) } });
+    await db.offer.update({ where: { id: created.offerId }, data: { startsAt: new Date(Date.now() - 7_200_000), endsAt: new Date(Date.now() - 1000) } });
     expect(await price("key-price-0003")).toBe(10_000);
     await db.offer.update({ where: { id: created.offerId }, data: { endsAt: new Date(Date.now() + 3_600_000) } });
     expect(await price("key-price-0004")).toBe(9_000);
