@@ -276,6 +276,7 @@ model Product {
   merchant Merchant    @relation(fields: [merchantId], references: [id])
   category Category    @relation(fields: [categoryId], references: [id])
   items    OrderItem[]
+  offerProducts OfferProduct[]
 
   @@index([merchantId, isAvailable])
   @@index([categoryId])
@@ -489,8 +490,10 @@ model OrderItem {
   nameSnapshot   String
   unitPriceCents Int
   quantity       Int
-  discountCents  Int     @default(0)
-  lineTotalCents Int
+  discountCents  Int     @default(0) // whole line: unitDiscountCents x quantity
+  lineTotalCents Int // (unitPriceCents - unitDiscountCents) x quantity: what is charged and what the commission is computed on
+  offerId        String? // the offer that discounted this item (snapshot, no foreign key)
+  unitDiscountCents Int  @default(0)
   order          Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
   product        Product? @relation(fields: [productId], references: [id], onDelete: SetNull)
 }
@@ -836,6 +839,23 @@ enum OfferStatus {
 
 // A shop's announced offer. Base duration is a setting (24 h); each extra hour costs stars from the shop (a setting, 1).
 // Whether an offer discounts anything, and what, has NOT been decided: nothing here touches prices or order totals.
+enum OfferDiscountType {
+  PERCENT
+  FIXED
+}
+
+// Products a discounted offer applies to (all of them must belong to the offer's shop).
+model OfferProduct {
+  offerId   String
+  productId String
+
+  offer   Offer   @relation(fields: [offerId], references: [id])
+  product Product @relation(fields: [productId], references: [id])
+
+  @@id([offerId, productId])
+  @@index([productId])
+}
+
 model Offer {
   id          String      @id @default(cuid())
   merchantId  String
@@ -847,11 +867,15 @@ model Offer {
   stoppedAt   DateTime?
   stoppedById String?
   stopReason  String?
+  // Optional discount. null = announcement only. PERCENT: value in basis points (1500 = 15%). FIXED: piasters off each unit.
+  discountType  OfferDiscountType?
+  discountValue Int?
   createdAt   DateTime    @default(now())
   updatedAt   DateTime    @updatedAt
 
   merchant   Merchant         @relation(fields: [merchantId], references: [id])
   extensions OfferExtension[]
+  products   OfferProduct[]
 
   @@index([merchantId, status, endsAt])
   @@index([status, endsAt])
@@ -981,4 +1005,16 @@ model LegalPage {
   approvedById String?
   updatedAt    DateTime  @updatedAt
   updatedById  String?
+}
+
+// An administrator removes a person from a month's contest (manipulation, fraud, rule breach). Never deleted: audited.
+model ContestExclusion {
+  id           String   @id @default(cuid())
+  monthKey     String
+  userId       String
+  reason       String
+  excludedById String
+  createdAt    DateTime @default(now())
+
+  @@unique([monthKey, userId])
 }

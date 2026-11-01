@@ -1,13 +1,27 @@
 import "server-only";
+import type { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
 import { writeAudit } from "@/lib/audit";
 import { hasPermission, type Actor } from "@/lib/auth/permissions";
+import { appliedUnitDiscountCents, checkDiscount, type Discount } from "@/lib/offers/discount";
 import { getSetting } from "@/lib/settings";
 import { AuthorizationError, NotFoundError } from "@/server/errors";
 import { notifyInTx } from "@/server/notifications/service";
 import { applyStarMove, InsufficientStarsError } from "@/server/stars/ledger";
 
-export type OfferError = "INVALID_REQUEST" | "SHOP_NOT_APPROVED" | "OFFER_NOT_ACTIVE" | "INSUFFICIENT_STARS" | "WRONG_STATE" | "CONFLICT";
+export type OfferError =
+  | "INVALID_REQUEST"
+  | "SHOP_NOT_APPROVED"
+  | "OFFER_NOT_ACTIVE"
+  | "INSUFFICIENT_STARS"
+  | "WRONG_STATE"
+  | "CONFLICT"
+  | "DISCOUNTS_DISABLED"
+  | "DISCOUNT_INVALID"
+  | "DISCOUNT_ABOVE_LIMIT"
+  | "FINAL_PRICE_NOT_POSITIVE"
+  | "TOO_MANY_DISCOUNTED_OFFERS"
+  | "PRODUCT_ALREADY_IN_OFFER";
 export type OfferResult<T = object> = ({ ok: true } & T) | { ok: false; error: OfferError };
 
 const HOUR_MS = 3_600_000;
@@ -37,24 +51,79 @@ async function ownShop(actor: Actor) {
 export interface OfferInput {
   title: string;
   description?: string | null;
+  /** Optional. A discounted offer needs `discount` AND `productIds` (products of this shop). Off until an administrator enables discounts. */
+  discount?: { type: "PERCENT" | "FIXED"; value: number } | null;
+  productIds?: string[];
 }
 
-/** Creates an offer that lasts the configured base duration (24 h by default). Free: only extensions cost stars. */
+const MAX_PRODUCTS_PER_OFFER = 50;
+const ACTIVE_DISCOUNTED = (now: Date): Prisma.OfferWhereInput => ({ status: "ACTIVE", startsAt: { lte: now }, endsAt: { gt: now }, discountType: { not: null } });
+
+/**
+ * Creates an offer that lasts the configured base duration (24 h by default). Free: only extensions cost stars.
+ * A discount (percent or fixed per unit) is checked against the administrator's limits and every product's price:
+ * it can never make a final price zero or negative, one product is in at most one running discounted offer, and nothing
+ * is accepted while discounts are switched off.
+ */
 export async function createOffer(actor: Actor, input: OfferInput): Promise<OfferResult<{ offerId: string; endsAt: Date }>> {
   const shop = await ownShop(actor);
   if (shop.status !== "APPROVED") return { ok: false, error: "SHOP_NOT_APPROVED" };
   const title = cleanText(input.title, 3, 80);
   const description = input.description == null || input.description === "" ? null : cleanText(input.description, 1, 500);
   if (!title || (input.description != null && input.description !== "" && !description)) return { ok: false, error: "INVALID_REQUEST" };
+  const discount: Discount | null = input.discount ? { type: input.discount.type, value: input.discount.value } : null;
+  const productIds = [...new Set(input.productIds ?? [])];
+  if (discount ? productIds.length < 1 || productIds.length > MAX_PRODUCTS_PER_OFFER || (discount.type !== "PERCENT" && discount.type !== "FIXED") : productIds.length > 0) return { ok: false, error: "INVALID_REQUEST" };
+  if (productIds.some((id) => typeof id !== "string" || id.length < 8 || id.length > 64)) return { ok: false, error: "INVALID_REQUEST" };
+  if (discount && (await getSetting("offers.discount.enabled")) !== 1) return { ok: false, error: "DISCOUNTS_DISABLED" };
   const hours = await getSetting("offers.base_duration_hours");
   const startsAt = new Date();
   const endsAt = new Date(startsAt.getTime() + hours * HOUR_MS);
-  const offer = await db.$transaction(async (tx) => {
-    const created = await tx.offer.create({ data: { merchantId: shop.id, title, description, startsAt, endsAt } });
-    await writeAudit({ actorId: actor.id, action: "OFFER_CREATED", entityType: "Offer", entityId: created.id, after: { title, hours } }, tx);
-    return created;
+  const limits = discount ? { maxPercent: await getSetting("offers.discount.max_percent"), maxFixedCents: (await getSetting("offers.discount.max_fixed_egp")) * 100 } : null;
+  const maxActive = discount ? await getSetting("offers.discount.max_active_per_shop") : 0;
+  return db.$transaction(async (tx): Promise<OfferResult<{ offerId: string; endsAt: Date }>> => {
+    if (discount) {
+      await tx.$queryRaw`SELECT "id" FROM "Merchant" WHERE "id" = ${shop.id} FOR UPDATE`; // one discounted offer is created per shop at a time
+      const products = await tx.product.findMany({ where: { id: { in: productIds }, merchantId: shop.id, archivedAt: null }, select: { id: true, priceCents: true } });
+      if (products.length !== productIds.length) return { ok: false, error: "INVALID_REQUEST" };
+      const problem = checkDiscount(discount, products.map((p) => p.priceCents), limits!);
+      if (problem) return { ok: false, error: problem === "ABOVE_LIMIT" ? "DISCOUNT_ABOVE_LIMIT" : problem === "INVALID_VALUE" ? "DISCOUNT_INVALID" : "FINAL_PRICE_NOT_POSITIVE" };
+      if ((await tx.offer.count({ where: { merchantId: shop.id, ...ACTIVE_DISCOUNTED(startsAt) } })) >= maxActive) return { ok: false, error: "TOO_MANY_DISCOUNTED_OFFERS" };
+      if ((await tx.offerProduct.count({ where: { productId: { in: productIds }, offer: ACTIVE_DISCOUNTED(startsAt) } })) > 0) return { ok: false, error: "PRODUCT_ALREADY_IN_OFFER" };
+    }
+    const created = await tx.offer.create({
+      data: {
+        merchantId: shop.id, title, description, startsAt, endsAt,
+        ...(discount ? { discountType: discount.type, discountValue: discount.value, products: { create: productIds.map((productId) => ({ productId })) } } : {}),
+      },
+    });
+    await writeAudit({ actorId: actor.id, action: "OFFER_CREATED", entityType: "Offer", entityId: created.id, after: { title, hours, ...(discount ? { discount, productIds } : {}) } }, tx);
+    return { ok: true, offerId: created.id, endsAt: created.endsAt };
   });
-  return { ok: true, offerId: offer.id, endsAt: offer.endsAt };
+}
+
+/**
+ * Discounts that apply right now, per product (used INSIDE the checkout transaction with fresh prices).
+ * Nothing applies while discounts are switched off. When two running offers somehow cover a product, the one that
+ * is better for the customer wins (no stacking).
+ */
+export async function resolveOfferDiscounts(client: Prisma.TransactionClient | typeof db, products: readonly { id: string; priceCents: number }[], now: Date): Promise<Map<string, { offerId: string; unitDiscountCents: number }>> {
+  const result = new Map<string, { offerId: string; unitDiscountCents: number }>();
+  if (products.length === 0 || (await getSetting("offers.discount.enabled")) !== 1) return result;
+  const price = new Map(products.map((p) => [p.id, p.priceCents]));
+  const rows = await client.offerProduct.findMany({
+    where: { productId: { in: [...price.keys()] }, offer: { ...ACTIVE_DISCOUNTED(now), merchant: { status: "APPROVED" } } },
+    select: { productId: true, offer: { select: { id: true, discountType: true, discountValue: true } } },
+  });
+  for (const row of rows) {
+    const { discountType, discountValue } = row.offer;
+    if (!discountType || discountValue === null) continue;
+    const unitDiscountCents = appliedUnitDiscountCents({ type: discountType, value: discountValue }, price.get(row.productId)!);
+    if (unitDiscountCents <= 0) continue; // would not leave a positive price: sold at the normal price
+    const best = result.get(row.productId);
+    if (!best || unitDiscountCents > best.unitDiscountCents || (unitDiscountCents === best.unitDiscountCents && row.offer.id < best.offerId)) result.set(row.productId, { offerId: row.offer.id, unitDiscountCents });
+  }
+  return result;
 }
 
 /** Text of a running offer can be corrected. Dates and prices are not editable here (time changes only by paid extension). */
@@ -140,7 +209,7 @@ export async function extendOffer(actor: Actor, offerId: string, input: { hours:
 
 class ConflictAbort extends Error {}
 
-const offerSelect = { id: true, title: true, description: true, startsAt: true, endsAt: true, status: true, stoppedAt: true, stopReason: true, createdAt: true } as const;
+const offerSelect = { id: true, title: true, description: true, startsAt: true, endsAt: true, status: true, stoppedAt: true, stopReason: true, createdAt: true, discountType: true, discountValue: true } as const;
 
 export async function listMyOffers(actor: Actor) {
   const shop = await ownShop(actor);
@@ -149,16 +218,33 @@ export async function listMyOffers(actor: Actor) {
   return rows.map((o) => ({ ...o, state: offerState(o, now) }));
 }
 
-/** What shoppers see: running offers of approved shops. No prices or discounts, because none are defined. */
+/** What shoppers see: running offers of approved shops. Discount details appear only while discounts are switched on. */
 export async function listPublicOffers() {
   const now = new Date();
+  const discountsOn = (await getSetting("offers.discount.enabled")) === 1;
   const rows = await db.offer.findMany({
     where: { status: "ACTIVE", endsAt: { gt: now }, merchant: { status: "APPROVED" } },
     orderBy: { endsAt: "asc" },
     take: 100,
-    select: { id: true, title: true, description: true, endsAt: true, merchant: { select: { id: true, name: true } } },
+    select: {
+      id: true, title: true, description: true, endsAt: true, discountType: true, discountValue: true,
+      merchant: { select: { id: true, name: true } },
+      products: { select: { product: { select: { id: true, nameAr: true, priceCents: true, archivedAt: true } } } },
+    },
   });
-  return rows.map((o) => ({ id: o.id, title: o.title, description: o.description, endsAt: o.endsAt, shop: o.merchant }));
+  return rows.map((o) => {
+    const discount = discountsOn && o.discountType && o.discountValue !== null ? { type: o.discountType, value: o.discountValue } : null;
+    return {
+      id: o.id, title: o.title, description: o.description, endsAt: o.endsAt, shop: o.merchant,
+      discount,
+      products: discount
+        ? o.products.filter((p) => p.product.archivedAt === null).map((p) => {
+            const unit = appliedUnitDiscountCents(discount, p.product.priceCents);
+            return { id: p.product.id, name: p.product.nameAr, priceCents: p.product.priceCents, finalPriceCents: p.product.priceCents - unit };
+          })
+        : [],
+    };
+  });
 }
 
 export async function listOffersForAdmin(actor: Actor, filter: "ALL" | OfferState = "ALL") {

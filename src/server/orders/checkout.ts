@@ -9,6 +9,7 @@ import { getSetting } from "@/lib/settings";
 import { AuthorizationError } from "@/server/errors";
 import { buildCommissionSnapshot } from "@/server/commissions/service";
 import { resolveZoneFee, ZoneUnavailableError } from "@/server/delivery/zones";
+import { resolveOfferDiscounts } from "@/server/offers/service";
 import { getStarBalance } from "@/server/stars/ledger";
 
 export type PlaceOrderError =
@@ -126,6 +127,13 @@ export async function placeOrder(actor: Actor, input: PlaceOrderInput): Promise<
         });
       }
 
+      // Running offers: the discount is decided here, on the server, from fresh prices inside this transaction.
+      const discounts = await resolveOfferDiscounts(tx, rows.map((r) => ({ id: r.id, priceCents: r.priceCents })), now);
+      for (const [id, d] of discounts) {
+        const priced = products.get(id);
+        if (priced) products.set(id, { ...priced, unitDiscountCents: d.unitDiscountCents, offerId: d.offerId });
+      }
+
       // Distinguish "shop cannot trade now" from a merely paused product for a clearer message.
       for (const line of input.lines) {
         const p = products.get(line.productId);
@@ -170,6 +178,9 @@ export async function placeOrder(actor: Actor, input: PlaceOrderInput): Promise<
                 productId: i.productId,
                 nameSnapshot: i.nameSnapshot,
                 unitPriceCents: i.unitPriceCents,
+                unitDiscountCents: i.unitDiscountCents,
+                discountCents: i.discountCents,
+                offerId: i.offerId,
                 quantity: i.quantity,
                 lineTotalCents: i.lineTotalCents,
               })),

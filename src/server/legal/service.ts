@@ -4,7 +4,7 @@ import { writeAudit } from "@/lib/audit";
 import { hasPermission, type Actor } from "@/lib/auth/permissions";
 import { AuthorizationError, NotFoundError } from "@/server/errors";
 
-export const LEGAL_SLUGS = ["terms", "privacy", "cancellation", "refund", "support"] as const;
+export const LEGAL_SLUGS = ["terms", "privacy", "cancellation", "refund", "support", "contest"] as const;
 export type LegalSlug = (typeof LEGAL_SLUGS)[number];
 
 export interface LegalPageView {

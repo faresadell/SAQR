@@ -41,7 +41,7 @@ export const SETTING_DEFINITIONS = {
     group: "orders", unit: "دقيقة", min: 1, max: 10080, nullable: true, default: null,
   },
 
-  // ───── offers (lifecycle only; discount rules are NOT defined) ─────
+  // ───── offers ─────
   "offers.base_duration_hours": {
     label: "مدة العرض الأساسية",
     help: "المدة التي يبدأ بها كل عرض جديد دون أي تكلفة إضافية.",
@@ -50,6 +50,45 @@ export const SETTING_DEFINITIONS = {
   "offers.extension_stars_per_hour": {
     label: "تكلفة تمديد العرض لكل ساعة إضافية",
     group: "offers", unit: "نجمة", min: 0, max: 100, default: 1,
+  },
+
+  // ───── offer discounts (OFF until an administrator reviews and enables them; the numbers are SUGGESTED defaults) ─────
+  "offers.discount.enabled": {
+    label: "تفعيل خصومات العروض",
+    help: "0 = متوقفة (الافتراضي)، 1 = مفعّلة. لا تُفعَّل في الإنتاج قبل اعتماد الحدود التالية.",
+    group: "offers", unit: "0 أو 1", min: 0, max: 1, default: 0,
+  },
+  "offers.discount.max_percent": {
+    label: "أقصى نسبة خصم مسموحة",
+    help: "قيمة مقترحة، تحتاج اعتماد الإدارة قبل التفعيل.",
+    group: "offers", unit: "%", min: 1, max: 90, default: 30,
+  },
+  "offers.discount.max_fixed_egp": {
+    label: "أقصى خصم ثابت على الوحدة الواحدة",
+    help: "قيمة مقترحة، تحتاج اعتماد الإدارة قبل التفعيل.",
+    group: "offers", unit: "جنيه", min: 1, max: 10000, default: 100,
+  },
+  "offers.discount.max_active_per_shop": {
+    label: "أقصى عدد عروض خصم فعّالة لكل متجر",
+    help: "قيمة مقترحة، تحتاج اعتماد الإدارة قبل التفعيل.",
+    group: "offers", unit: "عرض", min: 1, max: 50, default: 3,
+  },
+
+  // ───── monthly contest eligibility (the contest does not run until contest.enabled = 1 AND its rules page is approved) ─────
+  "contest.enabled": {
+    label: "تشغيل المسابقة الشهرية",
+    help: "0 = متوقفة (الافتراضي). لا تُشغَّل قبل نشر صفحة القواعد واعتماد هذه الإعدادات.",
+    group: "contest", unit: "0 أو 1", min: 0, max: 1, default: 0,
+  },
+  "contest.min_order_subtotal_egp": {
+    label: "الحد الأدنى لقيمة منتجات الطلب ليُحتسب في المسابقة",
+    help: "0 = بلا حد أدنى.",
+    group: "contest", unit: "جنيه", min: 0, max: 100000, default: 0,
+  },
+  "contest.max_orders_per_shop_per_customer": {
+    label: "أقصى عدد طلبات تُحتسب للعميل من نفس المتجر في الشهر",
+    help: "يمنع تكرار الطلب من متجر واحد لرفع العدد. 0 = بلا حد.",
+    group: "contest", unit: "طلب", min: 0, max: 100, default: 0,
   },
 
   // ───── monthly contest prizes ─────

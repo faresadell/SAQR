@@ -3,10 +3,18 @@ import { z } from "zod";
 import { apiError, apiOk, checkMutation, currentActor, mapThrown, readJson, statusForCode } from "@/server/api/http";
 import { createOffer, listMyOffers, listPublicOffers } from "@/server/offers/service";
 
-const schema = z.object({ title: z.string().min(3).max(80), description: z.string().max(500).nullable().optional() }).strict();
+const schema = z
+  .object({
+    title: z.string().min(3).max(80),
+    description: z.string().max(500).nullable().optional(),
+    // PERCENT: value in basis points (1500 = 15%). FIXED: piasters off each unit. Needs productIds.
+    discount: z.object({ type: z.enum(["PERCENT", "FIXED"]), value: z.number().int().min(1).max(10_000_000) }).strict().nullable().optional(),
+    productIds: z.array(z.string().min(8).max(64)).max(50).optional(),
+  })
+  .strict();
 
 /**
- * GET /api/v1/offers            running offers of approved shops (public, no sign-in). No prices or discounts: none are defined.
+ * GET /api/v1/offers            running offers of approved shops (public, no sign-in). `discount` and `products` (price / finalPrice) are filled only while discounts are switched on.
  * GET /api/v1/offers?mine=1     the signed-in shop's own offers with their state (ACTIVE | EXPIRED | STOPPED)
  */
 export async function GET(request: NextRequest): Promise<NextResponse> {
@@ -22,7 +30,11 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   }
 }
 
-/** POST /api/v1/offers {title, description?} — shop creates an offer lasting the base duration (24 h by default). */
+/**
+ * POST /api/v1/offers {title, description?, discount?: {type: PERCENT|FIXED, value}, productIds?} — shop creates an offer lasting the base duration (24 h by default).
+ * A discount needs productIds of this shop. Errors: DISCOUNTS_DISABLED, DISCOUNT_INVALID, DISCOUNT_ABOVE_LIMIT, FINAL_PRICE_NOT_POSITIVE,
+ * TOO_MANY_DISCOUNTED_OFFERS, PRODUCT_ALREADY_IN_OFFER (all 409), INVALID_REQUEST (422).
+ */
 export async function POST(request: NextRequest): Promise<NextResponse> {
   try {
     const bad = checkMutation(request);
