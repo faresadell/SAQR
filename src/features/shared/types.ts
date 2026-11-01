@@ -94,6 +94,8 @@ export interface SubOrderView {
   merchantName: string;
   items: OrderLine[];
   subtotalCents: number;
+  /** What this sub-order costs the customer including its delivery fee (the amount to transfer to the shop). */
+  totalCents?: number;
   orderStatus: OrderStatus;
   paymentStatus: PaymentStatus;
   deliveryStatus: DeliveryStatus;

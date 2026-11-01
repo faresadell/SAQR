@@ -13,6 +13,8 @@ import type { Loaded } from "@/features/shared/loaded";
 import { PACKAGE_STATE } from "@/features/shared/status";
 import type { AddressItem, CurrentPackage, MainOrderView, NotificationItem, RewardsOverview, StarsOverview } from "@/features/shared/types";
 import { formatDate, formatNumber } from "@/lib/format";
+import { deleteAddressAction } from "./actions";
+import { AddressForm, type ZoneOption } from "./address-form";
 
 const ACTIVE_STATES = new Set(["AWAITING_PAYMENT", "AWAITING_MERCHANT_APPROVAL", "APPROVED", "PREPARING", "READY", "OUT_FOR_DELIVERY", "CANCELLATION_REQUESTED"]);
 
@@ -144,20 +146,30 @@ export function RewardsView({ data }: { data: RewardsOverview }) {
   );
 }
 
-export function AddressesView({ items }: { items: AddressItem[] }) {
-  if (items.length === 0) return <EmptyState icon="pin" title="لا توجد عناوين محفوظة">ستظهر عناوين التوصيل هنا.</EmptyState>;
+export function AddressesView({ items, zones = [] }: { items: AddressItem[]; zones?: ZoneOption[] }) {
   return (
-    <ul className="grid gap-3 sm:grid-cols-2">
-      {items.map((a) => (
-        <li key={a.id}>
-          <Card className="flex flex-col gap-1">
-            <p className="flex items-center gap-2 font-bold"><Icon name="pin" className="size-4 text-ink-muted" />{a.label}</p>
-            <p className="text-sm text-ink-muted">{a.line}</p>
-            {a.zoneName ? <Badge className="w-fit">{a.zoneName}</Badge> : null}
-          </Card>
-        </li>
-      ))}
-    </ul>
+    <div className="flex flex-col gap-5">
+      {items.length === 0 ? (
+        <EmptyState icon="pin" title="لا توجد عناوين محفوظة">أضف عنواناً ومنطقته ليُحسب رسم التوصيل عند الطلب.</EmptyState>
+      ) : (
+        <ul className="grid gap-3 sm:grid-cols-2">
+          {items.map((a) => (
+            <li key={a.id}>
+              <Card className="flex flex-col gap-1">
+                <p className="flex items-center gap-2 font-bold"><Icon name="pin" className="size-4 text-ink-muted" />{a.label}</p>
+                <p className="text-sm text-ink-muted">{a.line}</p>
+                {a.zoneName ? <Badge className="w-fit">{a.zoneName}</Badge> : null}
+                <form action={deleteAddressAction} className="mt-1">
+                  <input type="hidden" name="addressId" value={a.id} />
+                  <button type="submit" className="text-sm font-semibold text-danger-ink underline">حذف</button>
+                </form>
+              </Card>
+            </li>
+          ))}
+        </ul>
+      )}
+      <AddressForm zones={zones} />
+    </div>
   );
 }
 

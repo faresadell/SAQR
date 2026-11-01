@@ -3,6 +3,7 @@ import { SiteShell } from "@/components/layout/site-shell";
 import { PageHeader } from "@/components/ui/page-header";
 import { CheckoutView } from "@/features/public/checkout-view";
 import { getSetting } from "@/lib/settings";
+import { listMyAddresses } from "@/server/addresses/service";
 import { getCurrentSession } from "@/server/auth/session";
 
 /** Star rules come from admin settings; null when they cannot be read (we then show no numbers rather than guess). */
@@ -19,14 +20,16 @@ export const metadata: Metadata = { title: "تأكيد الطلب" };
 
 export default async function CheckoutPage() {
   const [session, starRules] = await Promise.all([getCurrentSession(), loadStarRules()]);
+  const customer = session?.user.role === "CUSTOMER" ? session.user : null;
+  const addresses = customer ? (await listMyAddresses(customer)).map((a) => ({ id: a.id, label: a.label ?? "عنوان", line: a.line, zoneName: a.zone?.name })) : [];
   return (
     <SiteShell>
       <div className="mx-auto flex w-full max-w-page flex-col gap-6 px-4 py-8 sm:px-6">
         <PageHeader title="تأكيد الطلب" description="راجع طلباتك لكل نشاط قبل التأكيد." />
         <CheckoutView
           starRules={starRules}
-          signedIn={session?.user.role === "CUSTOMER"}
-          unavailableNote="تأكيد الطلب غير مفعّل بعد على الخادم، لذلك لن يُرسل أي طلب من هذه الصفحة. سلتك تبقى محفوظة على هذا الجهاز."
+          signedIn={customer !== null}
+          addresses={addresses}
         />
       </div>
     </SiteShell>

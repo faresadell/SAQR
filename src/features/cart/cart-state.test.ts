@@ -62,4 +62,10 @@ describe("parseStoredCart", () => {
     expect(parseStoredCart(JSON.stringify({ lines: [{ ...burger, priceCents: 1.5, quantity: 1 }] })).lines).toEqual([]);
     expect(parseStoredCart(JSON.stringify({ lines: [{ ...burger, quantity: 1 }, { ...burger, quantity: 1 }] })).lines).toEqual([]);
   });
+
+  it("reprice updates only known products and keeps quantities", () => {
+    const base = { lines: [{ productId: "a", merchantId: "m", merchantName: "M", name: "A", priceCents: 1000, quantity: 2 }, { productId: "b", merchantId: "m", merchantName: "M", name: "B", priceCents: 500, quantity: 1 }] };
+    const next = cartReducer(base, { type: "reprice", prices: { a: 900 } });
+    expect(next.lines.map((l) => [l.productId, l.priceCents, l.quantity])).toEqual([["a", 900, 2], ["b", 500, 1]]);
+  });
 });

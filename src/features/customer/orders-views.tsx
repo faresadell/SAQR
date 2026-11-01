@@ -2,8 +2,6 @@ import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { EmptyState, Notice } from "@/components/ui/states";
-import { FileUpload } from "@/components/ui/file-upload";
-import { Button } from "@/components/ui/button";
 import { OrderTimeline } from "@/components/saqr/order-timeline";
 import { StatusBadge } from "@/components/saqr/status-badge";
 import { DELIVERY_STATUS, ORDER_STATUS, PAYMENT_STATUS, REFUND_STATUS } from "@/features/shared/status";
@@ -11,6 +9,7 @@ import type { MainOrderView, SubOrderView } from "@/features/shared/types";
 import { formatDateTime, formatNumber } from "@/lib/format";
 import { formatEgp } from "@/lib/money";
 import { Icon } from "@/components/ui/icon";
+import { CancelControl, PayForm, type PayMethod } from "./order-actions";
 
 export function OrdersListView({ orders, base }: { orders: MainOrderView[]; base: string }) {
   if (orders.length === 0) {
@@ -47,7 +46,7 @@ export function OrdersListView({ orders, base }: { orders: MainOrderView[]; base
   );
 }
 
-function SubOrderCard({ s }: { s: SubOrderView }) {
+function SubOrderCard({ s, methods }: { s: SubOrderView; methods: PayMethod[] }) {
   const needsReceipt = s.paymentStatus === "NOT_REQUIRED_YET" || s.paymentStatus === "REJECTED";
   return (
     <Card className="flex flex-col gap-4">
@@ -85,24 +84,22 @@ function SubOrderCard({ s }: { s: SubOrderView }) {
               <span className="num text-xs">أُرسل {formatDateTime(s.payment.submittedAt)}</span>
             </p>
           ) : null}
-          {needsReceipt ? (
-            <form className="flex flex-col gap-3" aria-label={`رفع إيصال ${s.merchantName}`}>
-              <FileUpload label="صورة إيصال هذا النشاط" name="receipt" disabled />
-              <Notice tone="info">رفع الإيصال غير مفعّل بعد على الخادم.</Notice>
-              <Button type="button" disabled>إرسال الإيصال</Button>
-            </form>
-          ) : null}
+          {needsReceipt && s.orderStatus === "AWAITING_PAYMENT" ? <PayForm orderId={s.id} merchantName={s.merchantName} amountCents={s.totalCents ?? s.subtotalCents} methods={methods} /> : null}
+          {s.paymentStatus === "REJECTED" ? <Notice tone="danger">رفض النشاط الإيصال السابق. أرسل إيصالاً صحيحاً.</Notice> : null}
         </div>
         <div className="flex flex-col gap-3">
           <h4 className="font-bold">مسار الطلب</h4>
           <OrderTimeline steps={s.events} label={`مسار طلب ${s.merchantName}`} />
+          {s.orderStatus === "AWAITING_PAYMENT" || s.orderStatus === "AWAITING_MERCHANT_APPROVAL" ? <CancelControl orderId={s.id} mode="direct" /> : null}
+          {s.orderStatus === "APPROVED" || s.orderStatus === "PREPARING" || s.orderStatus === "READY" ? <CancelControl orderId={s.id} mode="request" /> : null}
+          {s.orderStatus === "CANCELLATION_REQUESTED" ? <Notice tone="info">طلب الإلغاء بانتظار رد النشاط.</Notice> : null}
         </div>
       </div>
     </Card>
   );
 }
 
-export function OrderDetailView({ order, base }: { order: MainOrderView; base: string }) {
+export function OrderDetailView({ order, base, methods = [] }: { order: MainOrderView; base: string; methods?: PayMethod[] }) {
   const productsTotal = order.subOrders.reduce((n, s) => n + s.subtotalCents, 0);
   return (
     <div className="flex flex-col gap-5">
@@ -116,7 +113,7 @@ export function OrderDetailView({ order, base }: { order: MainOrderView; base: s
       </div>
       <p className="text-sm text-ink-muted">التوصيل إلى: {order.addressLine}</p>
 
-      {order.subOrders.map((s) => <SubOrderCard key={s.id} s={s} />)}
+      {order.subOrders.map((s) => <SubOrderCard key={s.id} s={s} methods={methods} />)}
 
       <Card className="flex flex-col gap-2 text-sm">
         <h2 className="text-lg font-bold">الحساب</h2>

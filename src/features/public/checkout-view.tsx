@@ -1,33 +1,65 @@
 "use client";
 
 import Link from "next/link";
-import type { ReactNode } from "react";
+import { useRouter } from "next/navigation";
+import { useState, useTransition } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { EmptyState, Notice } from "@/components/ui/states";
 import { LinkButton } from "@/components/ui/link-button";
+import { Select } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
+import { placeOrderAction } from "@/features/customer/actions";
 import { useCart } from "@/features/cart/cart-provider";
 import { groupByMerchant } from "@/features/cart/cart-state";
 import { formatNumber } from "@/lib/format";
 import { formatEgp } from "@/lib/money";
 
+export interface CheckoutAddress {
+  id: string;
+  label: string;
+  line: string;
+  zoneName?: string | undefined;
+}
+
 interface CheckoutViewProps {
   signedIn: boolean;
   /** Current admin-configured star rules (minimum balance to start vs. cost per order). Null = unknown, show no numbers. */
   starRules?: { minBalance: number; chargePerOrder: number } | null;
-  /** Rendered in place of the confirm button's explanation when the server cannot create orders yet. */
-  unavailableNote: ReactNode;
-  /** When the backend exists, a server action is passed here and the confirm button submits it. */
-  confirmAction?: () => Promise<void>;
+  /** The signed-in customer's saved addresses (empty for guests). */
+  addresses?: CheckoutAddress[];
 }
 
 /**
- * Checkout review. It shows exactly what would be sent (items per merchant) and keeps delivery fees separate.
- * It never computes final totals or confirms anything locally: confirmation depends on the server response.
+ * Checkout review. It shows what will be sent (items per merchant) and keeps delivery fees separate.
+ * Totals and the delivery fee are decided by the server; the order only exists once the server accepts it.
  */
-export function CheckoutView({ signedIn, starRules, unavailableNote, confirmAction }: CheckoutViewProps) {
-  const { lines, hydrated } = useCart();
+export function CheckoutView({ signedIn, starRules, addresses = [] }: CheckoutViewProps) {
+  const { lines, hydrated, dispatch } = useCart();
+  const router = useRouter();
+  const [addressId, setAddressId] = useState(addresses[0]?.id ?? "");
+  const [error, setError] = useState<string | null>(null);
+  const [pending, startTransition] = useTransition();
+  // One key per attempt-set: retrying after a network error must not create a second order.
+  const [idempotencyKey] = useState(() => crypto.randomUUID());
+
+  function confirm() {
+    setError(null);
+    startTransition(async () => {
+      const result = await placeOrderAction({
+        idempotencyKey,
+        addressId,
+        lines: lines.map((l) => ({ productId: l.productId, quantity: l.quantity, expectedUnitPriceCents: l.priceCents })),
+      });
+      if (result.ok) {
+        dispatch({ type: "clear" });
+        router.push(`/account/orders/${result.parentOrderId}`);
+        return;
+      }
+      if (result.prices) dispatch({ type: "reprice", prices: result.prices });
+      setError(result.error);
+    });
+  }
 
   if (!hydrated) return <Skeleton className="h-64" />;
   if (lines.length === 0) {
@@ -44,7 +76,21 @@ export function CheckoutView({ signedIn, starRules, unavailableNote, confirmActi
       <div className="flex flex-col gap-4">
         <Card className="flex flex-col gap-2">
           <h2 className="text-lg font-bold">عنوان التوصيل</h2>
-          <p className="text-sm text-ink-muted">اختيار العنوان وحساب رسوم التوصيل حسب المنطقة تتمّان عند تفعيل خدمة العناوين. لن نضع رسماً من عندنا.</p>
+          {!signedIn ? (
+            <p className="text-sm text-ink-muted">سجّل الدخول لاختيار عنوان التوصيل.</p>
+          ) : addresses.length === 0 ? (
+            <>
+              <Notice tone="warning">لا يوجد عنوان محفوظ. أضف عنواناً لتتمكن من تأكيد الطلب.</Notice>
+              <LinkButton href="/account/addresses" variant="outline" className="w-fit">إضافة عنوان</LinkButton>
+            </>
+          ) : (
+            <>
+              <Select label="اختر العنوان" name="addressId" value={addressId} onChange={(e) => setAddressId(e.target.value)}>
+                {addresses.map((a) => <option key={a.id} value={a.id}>{a.label}{a.zoneName ? ` — ${a.zoneName}` : ""} — {a.line}</option>)}
+              </Select>
+              <p className="text-xs text-ink-muted">رسوم التوصيل تُحسب على الخادم حسب المنطقة وتظهر في صفحة الطلب بعد التأكيد.</p>
+            </>
+          )}
         </Card>
 
         {groups.map((g) => (
@@ -99,14 +145,10 @@ export function CheckoutView({ signedIn, starRules, unavailableNote, confirmActi
               ليس لديك حساب؟ <Link href="/register" className="font-semibold text-brand underline">إنشاء حساب</Link>
             </p>
           </>
-        ) : confirmAction ? (
-          <form action={confirmAction}>
-            <Button type="submit" size="lg" className="w-full">تأكيد الطلب</Button>
-          </form>
         ) : (
           <>
-            <Notice tone="info">{unavailableNote}</Notice>
-            <Button size="lg" disabled className="w-full">تأكيد الطلب</Button>
+            {error ? <Notice tone="danger">{error}</Notice> : null}
+            <Button size="lg" className="w-full" loading={pending} disabled={!addressId} onClick={confirm}>تأكيد الطلب</Button>
           </>
         )}
       </aside>

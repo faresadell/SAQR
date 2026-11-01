@@ -27,6 +27,7 @@ export type CartAction =
   | { type: "remove"; productId: string }
   | { type: "removeMerchant"; merchantId: string }
   | { type: "clear" }
+  | { type: "reprice"; prices: Record<string, number> }
   | { type: "replace"; state: CartState };
 
 export const emptyCart: CartState = { lines: [] };
@@ -57,6 +58,9 @@ export function cartReducer(state: CartState, action: CartAction): CartState {
       return { lines: state.lines.filter((l) => l.productId !== action.productId) };
     case "removeMerchant":
       return { lines: state.lines.filter((l) => l.merchantId !== action.merchantId) };
+    case "reprice":
+      // Only lines whose current price is known are updated; unknown (removed/archived) products keep their old price and fail at checkout.
+      return { lines: state.lines.map((l) => (Number.isSafeInteger(action.prices[l.productId]) && action.prices[l.productId]! >= 0 ? { ...l, priceCents: action.prices[l.productId]! } : l)) };
     case "clear":
       return emptyCart;
     case "replace":
