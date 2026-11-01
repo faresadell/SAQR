@@ -53,3 +53,42 @@ export const PLAN_MESSAGES: Record<string, string> = {
   PURCHASE_PENDING: "لديك طلب شراء قيد المراجعة بالفعل.",
   CONFLICT: "تم استخدام هذا الإيصال من قبل. ارفع صورة جديدة.",
 };
+
+export const OFFER_MESSAGES: Record<string, string> = {
+  INVALID_REQUEST: "راجع بيانات العرض: العنوان من 3 أحرف، ولا يُقبل خصم بدون منتجات.",
+  SHOP_NOT_APPROVED: "لا يمكن نشر عروض قبل اعتماد النشاط.",
+  OFFER_NOT_ACTIVE: "هذا العرض لم يعد ساري المدة.",
+  INSUFFICIENT_STARS: "رصيد النجوم لا يكفي للتمديد.",
+  WRONG_STATE: "تغيّرت حالة العرض. حدّث الصفحة.",
+  CONFLICT: "تغيّر العرض للتو. حدّث الصفحة وحاول مرة أخرى.",
+  DISCOUNTS_DISABLED: "الخصومات غير مفعّلة حالياً من الإدارة.",
+  DISCOUNT_INVALID: "قيمة الخصم غير صحيحة.",
+  DISCOUNT_ABOVE_LIMIT: "قيمة الخصم أعلى من الحد الذي تسمح به الإدارة.",
+  FINAL_PRICE_NOT_POSITIVE: "الخصم يجعل سعر أحد المنتجات صفراً أو أقل.",
+  TOO_MANY_DISCOUNTED_OFFERS: "وصلت للحد الأقصى من العروض بخصم الجارية في نفس الوقت.",
+  PRODUCT_ALREADY_IN_OFFER: "أحد المنتجات داخل عرض بخصم جارٍ بالفعل.",
+};
+
+export const DRIVER_MESSAGES: Record<string, string> = {
+  INVALID_REQUEST: "اكتب اسماً ورقم موبايل مصرياً صحيحاً.",
+  PHONE_IN_USE: "رقم الموبايل مسجّل بحساب آخر.",
+  SHOP_NOT_APPROVED: "لا يمكن إضافة سائقين قبل اعتماد النشاط.",
+  WEAK_PASSWORD: "كلمة المرور المؤقتة ضعيفة. استخدم 8 أحرف على الأقل بحروف وأرقام.",
+};
+
+export const ADMIN_MESSAGES: Record<string, string> = {
+  INVALID_REQUEST: "راجع البيانات. الأسباب والملاحظات لا تقل عن 3 أحرف.",
+  WRONG_STATE: "تغيّرت الحالة. حدّث الصفحة.",
+  CONFLICT: "تم تنفيذ إجراء آخر على هذا العنصر للتو. حدّث الصفحة.",
+  DUPLICATE_TRANSFER: "رقم التحويل هذا مؤكَّد على عملية أخرى، وتم وضع علامة مراجعة عليه.",
+  RATE_LIMITED: "محاولات كثيرة. حاول لاحقاً.",
+  OFFER_NOT_ACTIVE: "العرض لم يعد جارياً.",
+  MONTH_NOT_CLOSED: "الشهر لم ينتهِ بعد.",
+  USER_NOT_ELIGIBLE: "هذا المستخدم غير مؤهل.",
+  RANK_TAKEN: "هذا المركز محجوز.",
+  ALREADY_RANKED: "هذا المستخدم لديه مركز بالفعل.",
+  CONTEST_NOT_ENABLED: "المسابقة مغلقة. فعّلها من الإعدادات بعد اعتماد القواعد.",
+  RULES_NOT_APPROVED: "صفحة قواعد المسابقة غير معتمدة بعد.",
+  AWARDS_EXIST: "توجد جوائز مقترحة أو معتمدة لهذا الشهر.",
+  NOT_ENOUGH_PARTICIPANTS: "لا يوجد مشاركون مؤهلون في هذا الشهر.",
+};

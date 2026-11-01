@@ -19,7 +19,7 @@ export interface SettingFieldView {
 
 const initial: FormState = {};
 
-export function SettingsForm({ group, fields, canEdit }: { group: "orders" | "security"; fields: SettingFieldView[]; canEdit: boolean }) {
+export function SettingsForm({ group, fields, canEdit }: { group: "orders" | "security" | "offers" | "contest"; fields: SettingFieldView[]; canEdit: boolean }) {
   const [state, formAction, pending] = useActionState(saveSettingsAction, initial);
   const errors = state.fieldErrors ?? {};
 

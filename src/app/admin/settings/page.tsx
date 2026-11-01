@@ -47,9 +47,11 @@ export default async function AdminSettingsPage({ searchParams }: { searchParams
   const { notice } = await searchParams;
   const now = new Date();
 
-  const [orders, security, history, methods, zones] = await Promise.all([
+  const [orders, security, offers, contest, history, methods, zones] = await Promise.all([
     listSettingStates(user, "orders"),
     listSettingStates(user, "security"),
+    listSettingStates(user, "offers"),
+    listSettingStates(user, "contest"),
     listCommissionHistory(user),
     listPaymentMethods(user),
     listZones(user),
@@ -120,6 +122,24 @@ export default async function AdminSettingsPage({ searchParams }: { searchParams
           </p>
         ) : null}
         <SettingsForm group="orders" fields={toFields(orders)} canEdit={canEdit} />
+      </Card>
+
+      {/* ───────── Offers ───────── */}
+      <Card className="flex flex-col gap-4" id="offers">
+        <h2 className="text-lg font-bold">العروض والخصومات</h2>
+        <p className="text-sm text-ink-muted">
+          الخصومات مغلقة افتراضياً (0). عند التفعيل تُطبَّق الحدود على العروض الجديدة فقط، ولا يتغير أي طلب سابق لأن خصم كل طلب يُنسخ داخله عند إنشائه.
+        </p>
+        <SettingsForm group="offers" fields={toFields(offers)} canEdit={canEdit} />
+      </Card>
+
+      {/* ───────── Contest ───────── */}
+      <Card className="flex flex-col gap-4" id="contest">
+        <h2 className="text-lg font-bold">المسابقة الشهرية</h2>
+        <p className="text-sm text-ink-muted">
+          تبقى المسابقة مغلقة (0) حتى تراجع صفحة القواعد وتعتمدها من إدارة المحتوى، ثم تفعّلها هنا.
+        </p>
+        <SettingsForm group="contest" fields={toFields(contest)} canEdit={canEdit} />
       </Card>
 
       {/* ───────── Payment methods ───────── */}

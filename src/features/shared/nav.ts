@@ -47,7 +47,7 @@ export function merchantNav(base = "/merchant"): { groups: NavGroup[]; mobile: N
   const offers = { href: `${base}/offers`, label: "العروض", icon: "tag" } as const;
   return {
     groups: [
-      { items: [home, orders] },
+      { items: [home, orders, { href: `${base}/drivers`, label: "السائقون", icon: "truck" }] },
       { title: "الكتالوج", items: [products, offers] },
       {
         title: "المال",
@@ -70,9 +70,9 @@ export function merchantNav(base = "/merchant"): { groups: NavGroup[]; mobile: N
 
 export function driverNav(base = "/driver"): { groups: NavGroup[]; mobile: NavItem[] } {
   const home = { href: base, label: "الرئيسية", icon: "home" } as const;
-  const tasks = { href: `${base}/tasks`, label: "المهام المتاحة", icon: "list" } as const;
-  const trip = { href: `${base}/trip`, label: "الرحلة النشطة", icon: "navigation" } as const;
-  const history = { href: `${base}/history`, label: "سجل الرحلات", icon: "clock" } as const;
+  const tasks = { href: `${base}/tasks`, label: "الطلبات المسندة", icon: "list" } as const;
+  const trip = { href: `${base}/trip`, label: "قيد التوصيل", icon: "navigation" } as const;
+  const history = { href: `${base}/history`, label: "سجل التوصيل", icon: "clock" } as const;
   return {
     groups: [
       { items: [home, tasks, trip, history] },
@@ -119,7 +119,8 @@ export function adminNav(base = "/admin"): { groups: NavGroup[]; mobile: NavItem
         title: "المحتوى والنظام",
         items: [
           { href: `${base}/catalog`, label: "التصنيفات وأنواع النشاط", icon: "grid", permission: "catalog.manage" },
-          { href: `${base}/offers`, label: "العروض", icon: "tag", permission: "orders.view" },
+          { href: `${base}/offers`, label: "العروض", icon: "tag", permission: "offers.manage" },
+          { href: `${base}/contest`, label: "المسابقة الشهرية", icon: "gift", permission: "contest.manage" },
           { href: `${base}/settings`, label: "الإعدادات العامة", icon: "settings", permission: "settings.view" },
           { href: `${base}/notifications`, label: "الإشعارات", icon: "bell", permission: "settings.view" },
           { href: `${base}/audit`, label: "سجل العمليات", icon: "shield", permission: "audit.view" },
