@@ -2,7 +2,8 @@ import "server-only";
 import { listBusinessTypes } from "@/server/catalog/categories";
 import { listUsableCategories } from "@/server/catalog/products";
 import { getPublicMenu, listPublicMerchants } from "@/server/catalog/public";
-import { unavailable, type Loaded } from "@/features/shared/loaded";
+import { listPublicOffers } from "@/server/offers/service";
+import { failed, ready, type Loaded } from "@/features/shared/loaded";
 import type { BusinessTypeOption, CategoryOption, MenuProduct, ShopSummary } from "./types";
 
 /**
@@ -47,7 +48,33 @@ export async function loadShopPage(merchantId: string, filter: { q?: string; cat
   return { shop, products: menu.products };
 }
 
-/** Active offers: there is no offers model or service yet. */
-export async function loadOffers(): Promise<Loaded<never>> {
-  return unavailable("public.offers");
+export interface PublicOfferView {
+  id: string;
+  title: string;
+  description: string | null;
+  endsAt: string;
+  shop: { id: string; name: string };
+  /** Human label such as "خصم 20%" — null when the offer is informational only (discounts off or none set). */
+  discountLabel: string | null;
+  products: { id: string; name: string; priceCents: number; finalPriceCents: number }[];
+}
+
+/** Running offers from the real offers service. Discounted products appear only while the admin has discounts enabled. */
+export async function loadOffers(): Promise<Loaded<PublicOfferView[]>> {
+  try {
+    const rows = await listPublicOffers();
+    return ready(
+      rows.map((o) => ({
+        id: o.id,
+        title: o.title,
+        description: o.description,
+        endsAt: o.endsAt.toISOString(),
+        shop: o.shop,
+        discountLabel: o.discount ? (o.discount.type === "PERCENT" ? `خصم ${o.discount.value / 100}%` : `خصم ${o.discount.value / 100} جنيه للوحدة`) : null,
+        products: o.products,
+      })),
+    );
+  } catch {
+    return failed("تعذر تحميل العروض. حاول مرة أخرى.");
+  }
 }

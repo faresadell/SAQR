@@ -86,7 +86,6 @@ export function PurchasePanel({ options, current, instructions, action }: Purcha
             <FileUpload label="صورة الإيصال" name="receipt" required disabled={blocked} error={errors.receipt} />
             {state.error ? <Notice tone="danger">{state.error}</Notice> : null}
             {state.message ? <Notice tone="success">{state.message}</Notice> : null}
-            {action ? null : <Notice tone="info">إرسال طلب الشراء غير مفعّل بعد على الخادم.</Notice>}
             <Button type="submit" loading={pending} disabled={!action || blocked || !selected || !instruction?.accountValue}>إرسال للمراجعة</Button>
             <p className="text-xs text-ink-muted">بعد الإرسال تظهر الحالة «قيد المراجعة» حتى يعتمد النظام الدفع. الصورة وحدها ليست دليلاً نهائياً على نجاح الدفع.</p>
           </form>

@@ -1,7 +1,8 @@
 import "server-only";
 import type { SessionUser } from "@/server/auth/session";
+import { getMyRewards } from "@/server/stars/rewards";
 import { listMyAddresses } from "@/server/addresses/service";
-import { failed, ready, unavailable, type Loaded } from "@/features/shared/loaded";
+import { failed, ready, type Loaded } from "@/features/shared/loaded";
 import { mapCustomerOrder, mapCustomerOrders, mapNotifications, mapPackages, mapStars } from "@/features/shared/server-mappers";
 import type {
   AddressItem,
@@ -16,8 +17,7 @@ import type {
 
 /**
  * Customer data loaders. Stars, packages, orders and notifications read the phase-4 services via shared/server-mappers.
- * Rewards and addresses still return "unavailable" (no read service yet, see BACKEND_GAPS). When a service is added, map its
- * result to the view-model type and return `ready(...)`. The pages and views need no change.
+ * Every loader here reads a real service and maps its result to the view-model types.
  * Every loader receives the signed-in user and must read only that user's data.
  */
 type U = SessionUser["user"];
@@ -51,8 +51,16 @@ export async function loadOrder(user: U, orderId: string): Promise<Loaded<MainOr
   return load(() => mapCustomerOrder(user, orderId));
 }
 
-export async function loadRewards(_user: U): Promise<Loaded<RewardsOverview>> {
-  return unavailable("customer.rewards");
+export async function loadRewards(user: U): Promise<Loaded<RewardsOverview>> {
+  return load(async () => {
+    const r = await getMyRewards(user);
+    return {
+      monthLabel: new Intl.DateTimeFormat("ar-EG", { month: "long", year: "numeric", timeZone: "Africa/Cairo" }).format(r.monthStart),
+      completedOrders: r.completedOrders,
+      tiers: r.tiers,
+      totalRewardStars: r.totalGrantedStars,
+    };
+  });
 }
 
 export async function loadAddresses(user: U): Promise<Loaded<AddressItem[]>> {
