@@ -1,26 +1,22 @@
 import type { Metadata } from "next";
-import { EmptyState } from "@/components/ui/states";
-import { LinkButton } from "@/components/ui/link-button";
 import { PageHeader } from "@/components/ui/page-header";
-import { loadActiveTrip } from "@/features/driver/data";
-import { ActiveTripView } from "@/features/driver/views";
+import { loadMyDeliveries } from "@/features/driver/data";
+import { DeliveryList } from "@/features/driver/views";
 import { ResultState } from "@/features/shared/result-state";
 import { requireRole } from "@/server/auth/guards";
 
-export const metadata: Metadata = { title: "الرحلة النشطة" };
+export const metadata: Metadata = { title: "قيد التوصيل" };
 
 export default async function DriverTripPage() {
   const { user } = await requireRole("DRIVER");
-  const result = await loadActiveTrip(user);
+  const result = await loadMyDeliveries(user, "ACTIVE");
   return (
     <>
-      <PageHeader title="الرحلة النشطة" description="نقاط الاستلام والتسليم بالترتيب." />
-      {result.status !== "ready" ? (
-        <ResultState result={result} />
-      ) : result.data ? (
-        <ActiveTripView trip={result.data} />
+      <PageHeader title="قيد التوصيل" description="طلبات استلمتها وفي الطريق للعميل." />
+      {result.status === "ready" ? (
+        <DeliveryList rows={result.data.filter((r) => r.deliveryStatus !== "DRIVER_ASSIGNED")} actionable emptyTitle="لا يوجد طلب قيد التوصيل" emptyText="بعد استلام الطلب من النشاط يظهر هنا." />
       ) : (
-        <EmptyState icon="navigation" title="لا توجد رحلة جارية" action={<LinkButton href="/driver/tasks">المهام المتاحة</LinkButton>} />
+        <ResultState result={result} />
       )}
     </>
   );

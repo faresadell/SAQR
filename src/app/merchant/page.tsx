@@ -75,7 +75,7 @@ export default async function MerchantOverviewPage() {
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <StatCard label="المنتجات" icon="store" value={formatNumber(products.length)} note={shop.status === "APPROVED" ? `${formatNumber(available)} متاح للطلب` : "تُدار بعد اعتماد النشاط"} />
-        <SectionGate result={orders}>{(d) => <StatCard label="طلبات تحتاج إجراء" icon="box" tone="warning" value={formatNumber(d.filter((o) => o.allowed.accept || o.allowed.advance).length)} />}</SectionGate>
+        <SectionGate result={orders}>{(d) => <StatCard label="طلبات تحتاج إجراء" icon="box" tone="warning" value={formatNumber(d.filter((o) => o.actions.approve || o.actions.confirmPayment || o.actions.advanceTo !== null || o.actions.resolveCancellation).length)} />}</SectionGate>
         <SectionGate result={offers}>{(d) => <StatCard label="المتبقي من حصة العروض" icon="tag" tone="success" value={formatNumber(Math.max(0, d.quota.total - d.quota.used))} />}</SectionGate>
         <SectionGate result={packages}>{(d) => <StatCard label="رصيد النجوم" icon="star" tone="warning" value={formatNumber(d.stars.balance)} />}</SectionGate>
       </div>

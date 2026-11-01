@@ -6,7 +6,11 @@ import { merchantSalesReport } from "@/server/reports/service";
 import { failed, ready, unavailable, type Loaded } from "@/features/shared/loaded";
 import { listOrdersForActor, mapNotifications, mapPackages, mapStars } from "@/features/shared/server-mappers";
 import type { CurrentPackage, NotificationItem, PackageOption, PaymentInstruction, StarsOverview } from "@/features/shared/types";
-import type { MerchantOffersData, MerchantOrderRow, MerchantReport } from "./types";
+import { getSetting } from "@/lib/settings";
+import { listOwnProducts } from "@/server/catalog/products";
+import { listMyOffers } from "@/server/offers/service";
+import { listMyDrivers } from "@/server/drivers/service";
+import type { MerchantDriverOption, MerchantOffersData, MerchantOrderActions, MerchantOrderRow, MerchantReport } from "./types";
 
 /**
  * Merchant loaders for screens with no server support yet. HOOK-UP POINT for the backend developer:
@@ -24,28 +28,90 @@ async function load<T>(work: () => Promise<T>): Promise<Loaded<T>> {
 }
 
 
-/**
- * Real orders for the signed-in shop (the service scopes them to the owner). Action buttons stay disabled:
- * the order actions exist only as REST routes, and this view does not call them yet.
- */
+const NEXT_STEP: Record<string, MerchantOrderActions["advanceTo"]> = { APPROVED: "PREPARING", PREPARING: "READY", READY: "OUT_FOR_DELIVERY", OUT_FOR_DELIVERY: "DELIVERED" };
+const DRIVER_ON_THE_WAY = ["DRIVER_ASSIGNED", "PICKED_UP", "OUT_FOR_DELIVERY"];
+const REASSIGNABLE = ["NOT_STARTED", "AWAITING_DRIVER", "DRIVER_ASSIGNED", "FAILED"];
+
+export function merchantActionsFor(o: { orderStatus: string; paymentStatus: string; deliveryStatus: string }): MerchantOrderActions {
+  const awaitingTransfer = o.orderStatus === "AWAITING_PAYMENT" && o.paymentStatus === "AWAITING_MERCHANT_CONFIRMATION";
+  const advanceTo = NEXT_STEP[o.orderStatus] ?? null;
+  return {
+    confirmPayment: awaitingTransfer,
+    rejectPayment: awaitingTransfer,
+    approve: o.orderStatus === "AWAITING_MERCHANT_APPROVAL" && o.paymentStatus === "CONFIRMED",
+    reject: o.orderStatus === "AWAITING_MERCHANT_APPROVAL" && o.paymentStatus === "CONFIRMED",
+    // With a driver on the way, the driver confirms pickup and delivery; the shop cannot skip that.
+    advanceTo: advanceTo && !((advanceTo === "OUT_FOR_DELIVERY" || advanceTo === "DELIVERED") && DRIVER_ON_THE_WAY.includes(o.deliveryStatus)) ? advanceTo : null,
+    assignDriver: ["APPROVED", "PREPARING", "READY", "OUT_FOR_DELIVERY"].includes(o.orderStatus) && o.paymentStatus === "CONFIRMED" && REASSIGNABLE.includes(o.deliveryStatus),
+    cancel: o.orderStatus === "APPROVED",
+    resolveCancellation: o.orderStatus === "CANCELLATION_REQUESTED",
+  };
+}
+
+/** Real orders for the signed-in shop (the service scopes them to the owner), with the actions the shop may use now. */
 export async function loadMerchantOrders(user: U): Promise<Loaded<MerchantOrderRow[]>> {
   return load(async () => {
     const page = await listOrdersForActor(user, { limit: 50 });
-    return page.items.map((o) => ({
-      id: o.id,
-      number: o.number,
-      createdAt: o.createdAt.toISOString(),
-      items: o.items.map((i) => ({ id: i.productId ?? `${o.id}:${i.nameSnapshot}`, name: i.nameSnapshot, quantity: i.quantity, unitPriceCents: i.unitPriceCents, lineTotalCents: i.lineTotalCents })),
-      subtotalCents: o.subtotalCents,
-      orderStatus: o.orderStatus,
-      paymentStatus: o.paymentStatus,
-      deliveryStatus: o.deliveryStatus,
-      allowed: { accept: false, reject: false, advance: false, confirmPayment: false },
-    }));
+    const ids = page.items.map((o) => o.id);
+    const [uploads, customers] = await Promise.all([
+      db.receiptUpload.findMany({ where: { orderId: { in: ids }, usedAt: { not: null } }, orderBy: { createdAt: "desc" }, select: { id: true, orderId: true } }),
+      db.order.findMany({ where: { id: { in: ids } }, select: { id: true, customer: { select: { name: true } } } }),
+    ]);
+    const uploadByOrder = new Map<string, string>();
+    for (const u of uploads) if (u.orderId && !uploadByOrder.has(u.orderId)) uploadByOrder.set(u.orderId, u.id);
+    const nameByOrder = new Map(customers.map((c) => [c.id, c.customer.name]));
+    return page.items.map((o) => {
+      const pay = o.payments[0];
+      const receiptUploadId = uploadByOrder.get(o.id);
+      return {
+        id: o.id,
+        number: o.number,
+        createdAt: o.createdAt.toISOString(),
+        items: o.items.map((i) => ({ id: i.productId ?? `${o.id}:${i.nameSnapshot}`, name: i.nameSnapshot, quantity: i.quantity, unitPriceCents: i.unitPriceCents, lineTotalCents: i.lineTotalCents })),
+        subtotalCents: o.subtotalCents,
+        orderStatus: o.orderStatus,
+        paymentStatus: o.paymentStatus,
+        deliveryStatus: o.deliveryStatus,
+        ...(nameByOrder.get(o.id) ? { customerName: nameByOrder.get(o.id)! } : {}),
+        ...(pay ? { payment: { methodLabel: pay.method, amountCents: pay.amountCents, ...(pay.referenceNo ? { referenceNo: pay.referenceNo } : {}), ...(receiptUploadId ? { receiptUploadId } : {}), ...(pay.rejectedReason ? { rejectedReason: pay.rejectedReason } : {}) } } : {}),
+        actions: merchantActionsFor(o),
+      };
+    });
   });
 }
-export async function loadMerchantOffers(_user: U): Promise<Loaded<MerchantOffersData>> {
-  return unavailable("merchant.offers");
+
+export async function loadMerchantDriverOptions(user: U): Promise<MerchantDriverOption[]> {
+  return (await listMyDrivers(user)).filter((d) => d.isActive && d.accountStatus === "ACTIVE").map((d) => ({ id: d.id, name: d.name }));
+}
+
+export async function loadMerchantOffers(user: U): Promise<Loaded<MerchantOffersData>> {
+  return load(async () => {
+    const [offers, products, enabled, maxPercent, maxFixedEgp, maxActive, baseHours, perHour] = await Promise.all([
+      listMyOffers(user),
+      listOwnProducts(user),
+      getSetting("offers.discount.enabled"),
+      getSetting("offers.discount.max_percent"),
+      getSetting("offers.discount.max_fixed_egp"),
+      getSetting("offers.discount.max_active_per_shop"),
+      getSetting("offers.base_duration_hours"),
+      getSetting("offers.extension_stars_per_hour"),
+    ]);
+    return {
+      discounts: { enabled: enabled === 1, maxPercent, maxFixedEgp, maxActive },
+      baseHours,
+      extensionStarsPerHour: perHour,
+      offers: offers.map((o) => ({
+        id: o.id,
+        title: o.title,
+        description: o.description,
+        startsAt: o.startsAt.toISOString(),
+        endsAt: o.endsAt.toISOString(),
+        state: o.state,
+        discountLabel: o.discountType && o.discountValue !== null ? (o.discountType === "PERCENT" ? `خصم ${o.discountValue / 100}%` : `خصم ${o.discountValue / 100} جنيه للوحدة`) : null,
+      })),
+      products: products.filter((p) => p.isAvailable).map((p) => ({ id: p.id, name: p.nameAr, priceCents: p.priceCents })),
+    };
+  });
 }
 export interface MerchantPackagesData {
   options: PackageOption[];

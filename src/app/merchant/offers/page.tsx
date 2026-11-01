@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { PageHeader } from "@/components/ui/page-header";
 import { loadMerchantOffers } from "@/features/merchant/data";
-import { MerchantOffersView } from "@/features/merchant/views";
+import { MerchantOffersPanel } from "@/features/merchant/offers-panel";
 import { ResultState } from "@/features/shared/result-state";
 import { requireRole } from "@/server/auth/guards";
 
@@ -13,7 +13,7 @@ export default async function MerchantOffersPage() {
   return (
     <>
       <PageHeader title="العروض" description="انشر عروضاً لمدة ٢٤ ساعة أو أكثر، وتابع حصتك وسجل العروض." />
-      {result.status === "ready" ? <MerchantOffersView data={result.data} /> : <ResultState result={result} />}
+      {result.status === "ready" ? <MerchantOffersPanel data={result.data} /> : <ResultState result={result} />}
     </>
   );
 }
