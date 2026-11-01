@@ -48,7 +48,7 @@ function toRow(r: Awaited<ReturnType<typeof listMyDeliveries>>[number]): DriverD
     addressLine: typeof line === "string" ? line : "",
     customerName: r.customer.name,
     customerPhone: r.customer.phone,
-    assignedAt: r.assignedAt.toISOString(),
+    assignedAt: (r.assignedAt ?? new Date(0)).toISOString(),
     deliveredAt: r.deliveredAt ? r.deliveredAt.toISOString() : null,
   };
 }

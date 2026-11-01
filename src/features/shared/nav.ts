@@ -119,7 +119,8 @@ export function adminNav(base = "/admin"): { groups: NavGroup[]; mobile: NavItem
         title: "المحتوى والنظام",
         items: [
           { href: `${base}/catalog`, label: "التصنيفات وأنواع النشاط", icon: "grid", permission: "catalog.manage" },
-          { href: `${base}/offers`, label: "العروض", icon: "tag", permission: "orders.view" },
+          { href: `${base}/offers`, label: "العروض", icon: "tag", permission: "offers.manage" },
+          { href: `${base}/contest`, label: "المسابقة الشهرية", icon: "gift", permission: "contest.manage" },
           { href: `${base}/settings`, label: "الإعدادات العامة", icon: "settings", permission: "settings.view" },
           { href: `${base}/notifications`, label: "الإشعارات", icon: "bell", permission: "settings.view" },
           { href: `${base}/audit`, label: "سجل العمليات", icon: "shield", permission: "audit.view" },

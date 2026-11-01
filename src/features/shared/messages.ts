@@ -75,3 +75,20 @@ export const DRIVER_MESSAGES: Record<string, string> = {
   SHOP_NOT_APPROVED: "لا يمكن إضافة سائقين قبل اعتماد النشاط.",
   WEAK_PASSWORD: "كلمة المرور المؤقتة ضعيفة. استخدم 8 أحرف على الأقل بحروف وأرقام.",
 };
+
+export const ADMIN_MESSAGES: Record<string, string> = {
+  INVALID_REQUEST: "راجع البيانات. الأسباب والملاحظات لا تقل عن 3 أحرف.",
+  WRONG_STATE: "تغيّرت الحالة. حدّث الصفحة.",
+  CONFLICT: "تم تنفيذ إجراء آخر على هذا العنصر للتو. حدّث الصفحة.",
+  DUPLICATE_TRANSFER: "رقم التحويل هذا مؤكَّد على عملية أخرى، وتم وضع علامة مراجعة عليه.",
+  RATE_LIMITED: "محاولات كثيرة. حاول لاحقاً.",
+  OFFER_NOT_ACTIVE: "العرض لم يعد جارياً.",
+  MONTH_NOT_CLOSED: "الشهر لم ينتهِ بعد.",
+  USER_NOT_ELIGIBLE: "هذا المستخدم غير مؤهل.",
+  RANK_TAKEN: "هذا المركز محجوز.",
+  ALREADY_RANKED: "هذا المستخدم لديه مركز بالفعل.",
+  CONTEST_NOT_ENABLED: "المسابقة مغلقة. فعّلها من الإعدادات بعد اعتماد القواعد.",
+  RULES_NOT_APPROVED: "صفحة قواعد المسابقة غير معتمدة بعد.",
+  AWARDS_EXIST: "توجد جوائز مقترحة أو معتمدة لهذا الشهر.",
+  NOT_ENOUGH_PARTICIPANTS: "لا يوجد مشاركون مؤهلون في هذا الشهر.",
+};

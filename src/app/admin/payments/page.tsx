@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { PageHeader } from "@/components/ui/page-header";
-import { loadReceiptReviews } from "@/features/admin/data";
-import { PaymentsReviewView } from "@/features/admin/views";
+import { loadPurchaseReviews } from "@/features/admin/data";
+import { PurchaseReviewPanel } from "@/features/admin/panels";
 import { ResultState } from "@/features/shared/result-state";
 import { requirePermission } from "@/server/auth/guards";
 
@@ -9,11 +9,11 @@ export const metadata: Metadata = { title: "التحويلات والإيصال�
 
 export default async function Page() {
   const { user } = await requirePermission("payments.review");
-  const result = await loadReceiptReviews(user);
+  const result = await loadPurchaseReviews(user);
   return (
     <>
-      <PageHeader title="مراجعة التحويلات والإيصالات" description="اعتمد أو ارفض التحويلات اليدوية بعد مراجعة الإيصال." />
-      {result.status === "ready" ? <PaymentsReviewView rows={result.data} /> : <ResultState result={result} />}
+      <PageHeader title="مراجعة طلبات شراء الباقات" description="اعتمد أو ارفض التحويلات اليدوية بعد مراجعة الإيصال. تحويلات الطلبات يؤكدها كل تاجر لنفسه." />
+      {result.status === "ready" ? <PurchaseReviewPanel rows={result.data} /> : <ResultState result={result} />}
     </>
   );
 }
