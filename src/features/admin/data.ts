@@ -1,6 +1,7 @@
 import "server-only";
 import type { SessionUser } from "@/server/auth/session";
 import { db } from "@/lib/db";
+import { listAuditLog } from "@/server/audit/read";
 import { failed, ready, unavailable, type Loaded } from "@/features/shared/loaded";
 import { listOrdersForActor, merchantNames } from "@/features/shared/server-mappers";
 import type { ReceiptReviewRow } from "@/features/shared/types";
@@ -46,8 +47,17 @@ export async function loadPackageAdmin(_user: U): Promise<Loaded<PackageAdminRow
 export async function loadComplaints(_user: U): Promise<Loaded<ComplaintRow[]>> {
   return unavailable("admin.complaints");
 }
-export async function loadAudit(_user: U): Promise<Loaded<AuditRow[]>> {
-  return unavailable("admin.audit");
+/** The service checks `audit.view`; an admin without it gets an error state, never rows. */
+export async function loadAudit(user: U): Promise<Loaded<AuditRow[]>> {
+  try {
+    const page = await listAuditLog(user, { limit: 100 });
+    const ids = [...new Set(page.items.map((r) => r.actorId).filter((x): x is string => !!x))];
+    const users = ids.length ? await db.user.findMany({ where: { id: { in: ids } }, select: { id: true, name: true } }) : [];
+    const names = new Map<string, string>(users.map((u): [string, string] => [u.id, u.name]));
+    return ready(page.items.map((r) => ({ id: r.id, createdAt: r.createdAt.toISOString(), actorName: r.actorId ? (names.get(r.actorId) ?? "مستخدم") : "النظام", action: r.action, entityType: r.entityType, entityId: r.entityId })));
+  } catch {
+    return failed("تعذر تحميل السجل. تأكد من صلاحية عرض سجل العمليات.");
+  }
 }
 export async function loadAdminOffers(_user: U): Promise<Loaded<never>> {
   return unavailable("admin.offers");

@@ -1,5 +1,6 @@
 import "server-only";
 import type { SessionUser } from "@/server/auth/session";
+import { listMyAddresses } from "@/server/addresses/service";
 import { failed, ready, unavailable, type Loaded } from "@/features/shared/loaded";
 import { mapCustomerOrder, mapCustomerOrders, mapNotifications, mapPackages, mapStars } from "@/features/shared/server-mappers";
 import type {
@@ -54,8 +55,8 @@ export async function loadRewards(_user: U): Promise<Loaded<RewardsOverview>> {
   return unavailable("customer.rewards");
 }
 
-export async function loadAddresses(_user: U): Promise<Loaded<AddressItem[]>> {
-  return unavailable("customer.addresses");
+export async function loadAddresses(user: U): Promise<Loaded<AddressItem[]>> {
+  return load(async () => (await listMyAddresses(user)).map((a) => ({ id: a.id, label: a.label ?? "عنوان", line: a.line, zoneName: a.zone?.name })));
 }
 
 export async function loadNotifications(user: U): Promise<Loaded<NotificationItem[]>> {

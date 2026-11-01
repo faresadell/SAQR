@@ -1,5 +1,8 @@
 import "server-only";
 import type { SessionUser } from "@/server/auth/session";
+import { db } from "@/lib/db";
+import { cairoMonthKey } from "@/lib/stars/rules";
+import { merchantSalesReport } from "@/server/reports/service";
 import { failed, ready, unavailable, type Loaded } from "@/features/shared/loaded";
 import { listOrdersForActor, mapNotifications, mapPackages, mapStars } from "@/features/shared/server-mappers";
 import type { CurrentPackage, NotificationItem, PackageOption, PaymentInstruction, StarsOverview } from "@/features/shared/types";
@@ -56,8 +59,30 @@ export async function loadMerchantPackages(user: U): Promise<Loaded<MerchantPack
     return { ...pkg, stars };
   });
 }
-export async function loadMerchantReport(_user: U): Promise<Loaded<MerchantReport>> {
-  return unavailable("merchant.reports");
+/** Real numbers: this month's sales/commission (Cairo month), the last six months for the chart, and the latest delivered orders. */
+export async function loadMerchantReport(user: U): Promise<Loaded<MerchantReport>> {
+  return load(async () => {
+    const now = new Date();
+    const keys: string[] = [];
+    for (let back = 5; back >= 0; back -= 1) keys.push(cairoMonthKey(new Date(now.getTime() - back * 30 * 86_400_000)));
+    const months = [...new Set(keys)]; // consecutive 30-day probes can repeat a month near month ends
+    const reports = await Promise.all(months.map((m) => merchantSalesReport(user, m)));
+    const current = reports[reports.length - 1];
+    const orders = await db.order.findMany({
+      where: { merchant: { ownerId: user.id }, orderStatus: "DELIVERED" },
+      orderBy: { createdAt: "desc" },
+      take: 30,
+      select: { number: true, createdAt: true, subtotalCents: true, commissionBp: true, commissionCents: true },
+    });
+    return {
+      periodLabel: months[months.length - 1]!,
+      salesCents: current?.productSalesCents ?? 0,
+      commissionCents: current?.commissionCents ?? 0,
+      settlementCents: current?.netAfterCommissionCents ?? 0,
+      monthly: months.map((label, i) => ({ label, value: reports[i]?.productSalesCents ?? 0 })),
+      rows: orders.map((o) => ({ orderNumber: o.number, date: o.createdAt.toISOString().slice(0, 10), subtotalCents: o.subtotalCents, commissionBp: o.commissionBp, commissionCents: o.commissionCents })),
+    };
+  });
 }
 export async function loadMerchantNotifications(user: U): Promise<Loaded<NotificationItem[]>> {
   return load(() => mapNotifications(user));
