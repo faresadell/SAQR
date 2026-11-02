@@ -166,3 +166,81 @@ describe("statement protection", () => {
     expect((await listSettlements(supportOnly)).length).toBe(0);
   });
 });
+
+describe("tamper resistance", () => {
+  it("the commission, totals, owner and shop of an order cannot be rewritten after creation (even with raw SQL), but status can move", async () => {
+    const a = await shop();
+    const b = await shop();
+    const o = await order(a, { base: 10_000, bp: 800, deliveredAt: SEPT });
+    for (const [col, value] of [["commissionBp", 1], ["commissionBaseCents", 1], ["commissionCents", 1], ["totalCents", 1], ["subtotalCents", 1], ["deliveryFeeCents", 1], ["discountCents", 5]] as const) {
+      await expect(db.$executeRawUnsafe(`UPDATE "Order" SET "${col}" = ${value} WHERE "id" = '${o.id}'`)).rejects.toThrow();
+    }
+    await expect(db.$executeRawUnsafe(`UPDATE "Order" SET "merchantId" = '${b.merchantId}' WHERE "id" = '${o.id}'`)).rejects.toThrow();
+    await expect(db.order.update({ where: { id: o.id }, data: { commissionBp: 100 } })).rejects.toThrow();
+    const row = await db.order.findUniqueOrThrow({ where: { id: o.id } });
+    expect(row).toMatchObject({ commissionBp: 800, commissionBaseCents: 10_000, totalCents: 12_000, merchantId: a.merchantId });
+    await db.order.update({ where: { id: o.id }, data: { orderStatus: "DELIVERED" } }); // status is not money
+  });
+
+  it("an issued statement keeps the rate it was charged at when it is generated again later", async () => {
+    const a = await shop();
+    await order(a, { base: 10_000, bp: 800, deliveredAt: SEPT });
+    await generateSettlements("2026-09", admin, NOW);
+    const s = await db.commissionSettlement.findFirstOrThrow();
+    expect(s.commissionCents).toBe(800);
+    await generateSettlements("2026-09", admin, NOW);
+    expect((await db.commissionSettlement.findFirstOrThrow()).commissionCents).toBe(800);
+  });
+
+  it("a refund that is only requested or rejected changes nothing; only COMPLETED refunds count", async () => {
+    const a = await shop();
+    const o = await order(a, { base: 10_000, bp: 800, deliveredAt: SEPT });
+    await db.refund.create({ data: { orderId: o.id, amountCents: 12_000, status: "PENDING", dueAt: SEPT } });
+    await generateSettlements("2026-09", admin, NOW);
+    expect((await db.commissionSettlement.findFirstOrThrow()).commissionCents).toBe(800);
+  });
+
+  it("a refund larger than what was paid, or a partial one, never produces a negative or oversized commission", async () => {
+    const a = await shop();
+    const huge = await order(a, { base: 10_000, bp: 800, deliveredAt: SEPT });
+    const tiny = await order(a, { base: 10_000, bp: 800, deliveredAt: SEPT });
+    await db.refund.create({ data: { orderId: huge.id, amountCents: 99_999_999, status: "COMPLETED", dueAt: SEPT } });
+    await db.refund.create({ data: { orderId: tiny.id, amountCents: 1, status: "COMPLETED", dueAt: SEPT } });
+    await generateSettlements("2026-09", admin, NOW);
+    const s = await db.commissionSettlement.findFirstOrThrow();
+    expect(s.commissionCents).toBeGreaterThanOrEqual(0);
+    expect(s.commissionCents).toBeLessThanOrEqual(1_600);
+    expect(s.commissionCents).toBe(800); // 0 for the fully refunded + 8% of 9,999 rounded
+  });
+
+  it("a delivery event repeated for the same order (or a delivered order seen by both runs) is charged once", async () => {
+    const a = await shop();
+    const o = await order(a, { base: 10_000, bp: 800, deliveredAt: SEPT });
+    await db.orderEvent.create({ data: { orderId: o.id, field: "orderStatus", toValue: "DELIVERED", createdAt: new Date("2026-09-20T10:00:00Z") } });
+    await Promise.all([generateSettlements("2026-09", null, NOW), generateSettlements("2026-09", admin, NOW), generateSettlements("2026-09", null, NOW)]);
+    expect(await db.commissionSettlementLine.count({ where: { orderId: o.id } })).toBe(1);
+    expect((await db.commissionSettlement.findFirstOrThrow()).commissionCents).toBe(800);
+  });
+
+  it("an order delivered in a later month is not charged in an earlier statement, and not twice across months", async () => {
+    const a = await shop();
+    const o = await order(a, { base: 10_000, bp: 800, deliveredAt: OCT });
+    await generateSettlements("2026-09", admin, NOW);
+    expect(await db.commissionSettlement.count()).toBe(0);
+    const NOV = new Date("2026-11-05T10:00:00Z");
+    await generateSettlements("2026-10", admin, NOV);
+    await generateSettlements("2026-10", admin, NOV);
+    expect(await db.commissionSettlementLine.count({ where: { orderId: o.id } })).toBe(1);
+  });
+
+  it("a shop cannot generate, pay or read another shop's statement", async () => {
+    const a = await shop();
+    const b = await shop();
+    await order(a, { base: 10_000, bp: 800, deliveredAt: SEPT });
+    await expect(generateSettlements("2026-09", a.actor, NOW)).rejects.toBeInstanceOf(AuthorizationError);
+    await generateSettlements("2026-09", admin, NOW);
+    const s = await db.commissionSettlement.findFirstOrThrow();
+    await expect(markSettlementPaid(b.actor, s.id, "TRX-5555")).rejects.toBeInstanceOf(AuthorizationError);
+    await expect(getSettlement(b.actor, s.id)).rejects.toBeInstanceOf(NotFoundError);
+  });
+});
