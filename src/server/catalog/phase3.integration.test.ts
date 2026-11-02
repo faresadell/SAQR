@@ -97,7 +97,8 @@ describe("merchant profile and review", () => {
     expect(await reviewMerchant(admin, shop.id, "APPROVE")).toEqual({ ok: false, error: "INVALID_TRANSITION" });
     expect((await reviewMerchant(admin, shop.id, "SUSPEND", "شكاوى")).ok).toBe(true);
     expect((await reviewMerchant(admin, shop.id, "REACTIVATE")).ok).toBe(true);
-    expect((await auditFor("MERCHANT_APPROVE")).length).toBe(2);
+    expect((await auditFor("MERCHANT_APPROVE")).length).toBe(1); // the second APPROVE was an invalid transition
+    expect((await auditFor("MERCHANT_REACTIVATE")).length).toBe(1);
     expect((await auditFor("MERCHANT_SUSPEND")).length).toBe(1);
   });
 

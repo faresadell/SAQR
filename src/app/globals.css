@@ -20,7 +20,20 @@
     outline-offset: 2px;
   }
 
+  /* Native <dialog> modals: dim the page behind them. */
+  dialog::backdrop {
+    background: rgba(7, 11, 26, 0.55);
+  }
+  dialog:not([open]) {
+    display: none;
+  }
+
   /* Latin digits and codes stay left-to-right inside RTL text. */
+  /* Tabular figures keep stats, balances and counters from jittering as they change. */
+  .num {
+    font-variant-numeric: tabular-nums;
+  }
+
   .ltr-isolate {
     direction: ltr;
     unicode-bidi: isolate;

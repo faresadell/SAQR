@@ -27,21 +27,29 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-          cache: npm
       - run: npm ci
       - run: npx prisma generate
       - run: npm run db:validate
       - run: npm run typecheck
       - run: npm run lint
       - run: npm test
-      - name: Create schema and database-level protections
+      - name: Apply real migrations (no db push) and check for drift
         run: |
-          npx prisma db push --skip-generate
-          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f prisma/manual/001_constraints_and_triggers.sql
-          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f prisma/manual/002_phase2_append_only.sql
-          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f prisma/manual/003_phase3_catalog.sql
+          npx prisma migrate deploy
+          npx prisma migrate status
+      - name: Production build (next build)
+        run: npm run build
+        env:
+          APP_URL: http://localhost:3000
+          SESSION_SECRET: ci-only-session-secret-0123456789abcdef0123456789
+          DATA_ENCRYPTION_KEY: MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=
       - name: Integration tests (real PostgreSQL)
         run: npm run test:integration
         env:
           DB_TRIGGERS_APPLIED: "1"
+      - name: Audit details (annotations)
+        if: always()
+        run: |
+          npm audit --omit=dev --json > audit.json || true
+          node -e 'const a=require("./audit.json");for(const [n,v] of Object.entries(a.vulnerabilities||{})){const via=v.via.map(x=>typeof x==="string"?x:x.title+" "+(x.range||"")).join(" | ");console.log("::warning title=audit "+n+" ["+v.severity+"]::fix="+JSON.stringify(v.fixAvailable)+" range="+v.range+" via "+via.slice(0,300))}'
       - run: npm run audit

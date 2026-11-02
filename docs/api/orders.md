@@ -1,0 +1,128 @@
+# Orders API (v1) — contract for the frontend
+
+Status: implemented in `src/app/api/v1/orders/**`. **Not yet run against a database** (see docs/PHASE4.md). Money is always an integer in piasters (100 = 1 EGP).
+
+## Common rules
+- Auth: the session cookie (same login as the web app). No cookie -> `401 {"error":{"code":"UNAUTHENTICATED"}}`.
+- Every `POST` must send `Content-Type: application/json` and an `Origin` header equal to the app origin (browsers do this automatically for same-origin `fetch`). Otherwise `415 UNSUPPORTED_MEDIA_TYPE` / `403 BAD_ORIGIN`.
+- Bodies are strict: unknown fields -> `422 VALIDATION_FAILED`. Max body 16 KB (`413`).
+- Errors always look like `{"error":{"code":"...","message"?:"..."}}`. Resources you may not see answer `404 NOT_FOUND` (same as missing).
+- Rate limits answer `429 RATE_LIMITED`.
+- Responses are `Cache-Control: no-store`.
+
+## Order model
+A checkout creates one **parent order** and one **suborder per merchant**. Everything the user pays and sees lives on the suborder: its own items, fee, total, payment and status. A parent has no stored status; the UI derives it from its suborders (`src/lib/orders/status.ts deriveParentStatus`).
+
+`orderStatus` flow: `AWAITING_PAYMENT -> AWAITING_MERCHANT_APPROVAL -> APPROVED -> PREPARING -> READY -> OUT_FOR_DELIVERY -> DELIVERED`; side exits `REJECTED` (merchant, before approval) and `CANCELLED`.
+`paymentStatus`: `NOT_REQUIRED_YET -> AWAITING_MERCHANT_CONFIRMATION -> CONFIRMED` (or `REJECTED`, then the customer may resubmit).
+Uploading a receipt never confirms payment. The shop owner confirms it; only then can the shop approve the order; stars are charged on approval.
+
+## POST /api/v1/orders — checkout (CUSTOMER)
+Request:
+```json
+{ "idempotencyKey": "k-2026-10-29-0001", "addressId": "cl...", "lines": [ { "productId": "cl...", "quantity": 2, "expectedUnitPriceCents": 5000 } ] }
+```
+- `idempotencyKey` 8–64 chars `[A-Za-z0-9_-]`; generate once per checkout attempt and reuse it on retry.
+- `expectedUnitPriceCents` is the price the user saw; if it differs from the current price the checkout is refused (never repriced).
+- Fees are computed on the server from the address zone and are copied into each suborder.
+
+`201` (new) or `200` (same key replayed):
+```json
+{ "parentOrderId": "cl...", "suborderIds": ["cl...", "cl..."], "subtotalCents": 13000, "deliveryFeeCents": 4000, "totalCents": 17000, "replayed": false }
+```
+Errors (`error.code`; `productId`/`merchantId` included when relevant):
+`422` INVALID_REQUEST, EMPTY_CART, TOO_MANY_LINES, INVALID_QUANTITY, PRODUCT_NOT_FOUND, ADDRESS_NOT_FOUND, ZONE_UNAVAILABLE · `403` ACCOUNT_NOT_ACTIVE, FORBIDDEN · `409` PRODUCT_UNAVAILABLE, PRICE_CHANGED, MERCHANT_UNAVAILABLE (closed / not approved / low stars), CUSTOMER_STARS_TOO_LOW, TRADING_NOT_CONFIGURED (admin has not set the merchant response window).
+Customer needs at least `stars.min_balance_customer` stars (default 5).
+
+## GET /api/v1/orders?cursor=&limit=&status=
+Own suborders (customer) or own shop's suborders (merchant); admins with `orders.view` see all. `limit` 1–50 (default 20), newest first.
+`200 { "items": [Order], "nextCursor": "cl..." | null }`.
+
+## GET /api/v1/orders/{id}
+`200 Order` | `404`.
+```json
+{ "id":"cl...","number":12,"parentOrderId":"cl...","merchantId":"cl...","orderStatus":"AWAITING_PAYMENT","paymentStatus":"NOT_REQUIRED_YET","refundStatus":"NONE","deliveryStatus":"NOT_STARTED",
+  "subtotalCents":10000,"deliveryFeeCents":2000,"totalCents":12000,"addressSnap":{"line":"..."},"cancelReason":null,"createdAt":"...",
+  "items":[{"productId":"cl...","nameSnapshot":"...","unitPriceCents":5000,"quantity":2,"lineTotalCents":10000}],
+  "payments":[{"id":"cl...","method":"instapay","referenceNo":"...","amountCents":12000,"submittedAt":"...","confirmedAt":null,"rejectedReason":null}] }
+```
+The receipt storage key is never returned here.
+
+## POST /api/v1/orders/{id}/{action}
+All answer `200 {"ok":true}` on success. Common errors: `404` (not your order), `409 WRONG_STATE`, `409 CONFLICT` (a concurrent request won; reload and retry), `422 VALIDATION_FAILED|INVALID_REQUEST`.
+
+| action | who | body | notes |
+|---|---|---|---|
+| `payment` | the order's customer | `{method, referenceNo, uploadId}` | method must be enabled (`422 PAYMENT_METHOD_DISABLED`). `uploadId` comes from `POST /orders/{id}/receipt` below; it must be your own unused upload for this same order (`422 INVALID_REQUEST` otherwise). A reused transfer reference or the same picture on another order is accepted but flagged for the reviewer. Amount is the suborder total, set by the server. Only in `AWAITING_PAYMENT` with payment `NOT_REQUIRED_YET` or `REJECTED`. |
+| `payment-confirm` | shop owner (or admin with `payments.review`) | `{}` | `409 DUPLICATE_TRANSFER` if the same method + reference was already confirmed on another order. Moves the order to `AWAITING_MERCHANT_APPROVAL`. |
+| `payment-reject` | shop owner (or admin with `payments.review`) | `{reason}` | order stays `AWAITING_PAYMENT`; customer can resubmit. |
+| `decision` | shop owner only | `{decision:"APPROVE"}` or `{decision:"REJECT", reason}` | needs payment `CONFIRMED` (`409 PAYMENT_NOT_CONFIRMED`). APPROVE charges `orders.stars_charge_per_party` (default 2) from the customer AND the merchant once (`409 INSUFFICIENT_STARS` if either side is below the minimum; nothing changes). REJECT opens a refund when money was confirmed. |
+| `advance` | shop owner | `{to}` | `PREPARING`, `READY`, `OUT_FOR_DELIVERY`, `DELIVERED`, in order. (Driver-driven steps arrive with the delivery phase.) |
+| `cancel` | customer (before approval only), shop owner, or admin with `payments.review` | `{reason}` | from `AWAITING_PAYMENT`, `AWAITING_MERCHANT_APPROVAL`, or `APPROVED`. After approval the exact stars charged go back to both sides once. If payment was confirmed a refund (merchant returns the money) is opened with a deadline (`refunds.deadline_hours`). |
+
+## POST /api/v1/orders/{id}/receipt — upload the transfer proof (customer)
+`multipart/form-data`, one field named `file`. JPEG, PNG or WebP only (detected from the file content, not the name), max 5 MB, up to 5 unused uploads per order, only while the suborder waits for payment. Needs the `Origin` header like other POSTs.
+`201 {"uploadId":"cl..."}` · `415 INVALID_FILE` · `413 FILE_TOO_LARGE` · `409 WRONG_STATE` · `429 TOO_MANY_UPLOADS|RATE_LIMITED` · `404`.
+
+## GET /api/v1/receipts/{uploadId} — view a proof
+The image bytes (`Cache-Control: private, no-store`). Only the order's customer, its shop owner, or an admin with `payments.review`; everyone else `404`. Every view is audited. Fetch it with the session cookie (an `<img src>` on the same site works).
+
+## Not implemented yet (do not build UI against these)
+Refund proof/verification endpoints, cancellation after `APPROVED` stages (`CANCELLATION_REQUESTED` flow), driver endpoints, plans/offers/memberships/contest endpoints, notifications.
+
+
+# Plans API (v1) — star packages
+
+Same conventions as above (session cookie, JSON + `Origin` on POST, error shape). Implemented in `src/app/api/v1/plans/**` and `src/app/api/v1/admin/plan-purchases/**`; CI-tested at service level.
+A plan lasts 30 days from the admin's approval. Early renewal adds a new cycle after the remaining time. Stars never expire with the plan. Buying a plan only sells stars (and, for merchants, an offer quota): it is NOT the Plus/Premium commission membership.
+
+- `GET /api/v1/plans` -> `{items:[{code,nameAr,priceCents,baseStars,bonusStars,offerQuota}]}` (only your audience: customer, driver or merchant).
+- `POST /api/v1/plans/receipt` multipart `file` (same rules as the order receipt) -> `201 {uploadId}`.
+- `POST /api/v1/plans/purchases` `{planCode, method, referenceNo, uploadId}` -> `201 {purchaseId}`. Errors: `409 PLAN_NOT_AVAILABLE | PURCHASE_PENDING` (one pending purchase at a time), `422 PAYMENT_METHOD_DISABLED | INVALID_REQUEST`. Nothing is activated and no stars are granted yet.
+- `GET /api/v1/plans/me` -> `{subscription:{plan,startsAt,expiresAt,isActive}|null, purchases:[...]}`.
+- Admin (`payments.review`): `GET /api/v1/admin/plan-purchases?status=PENDING` and `POST /api/v1/admin/plan-purchases/{id}` `{decision:"APPROVE"|"REJECT", reason?}`. Approve grants base + bonus stars once; `409 DUPLICATE_TRANSFER` if the same transfer reference was already confirmed elsewhere; `409 WRONG_STATE` if already decided. Reject needs a reason (3–300 chars).
+- Receipt images are viewed with `GET /api/v1/receipts/{uploadId}` (the buyer or an admin with `payments.review`).
+
+
+# Notifications API (v1) — in-app inbox
+
+Notifications are created in the same database transaction as the event (order payment submitted / confirmed / rejected, order approved / rejected / advanced / cancelled, plan approved / rejected / expiring / expired). Retries never duplicate them. **No push, SMS or email is sent**: there is no provider configured; the inbox is the only channel.
+
+- `GET /api/v1/notifications?cursor=&limit=&unread=1` -> `{items:[{id,type,title,body,data,readAt,createdAt}], nextCursor, unreadCount}` (own only, newest first). `data` carries ids such as `{orderId}` for deep links.
+- `POST /api/v1/notifications/read` `{ids:[...]}` or `{all:true}` -> `{updated}`. Ids that are not yours are ignored.
+- Scheduled jobs (scheduler only, `Authorization: Bearer $CRON_SECRET`): `POST /api/internal/jobs/daily-stars | monthly-rewards | plan-reminders`.
+
+
+# Refunds API (v1)
+
+The merchant returns the customer's money by transfer; the platform never moves money. A refund is opened automatically when a suborder whose payment was **confirmed** is cancelled or rejected (amount = what the customer paid for that suborder, deadline = `refunds.deadline_hours`, max 24).
+Status flow: `PENDING` (merchant must pay back) -> `UNDER_REVIEW` (proof submitted) -> `COMPLETED` (an admin verified the proof). A rejected proof goes back to `PENDING` with a note.
+
+- `GET /api/v1/refunds?status=` -> `{items:[{id,orderId,order:{number},amountCents,status,dueAt,hasProof,isOverdue,verifiedAt,decisionNote,createdAt}]}` (customer: refunds owed to them; shop owner: refunds they owe; admin with `refunds.verify`: all).
+- `POST /api/v1/orders/{orderId}/refund-proof` multipart `file` (shop owner; same image rules) -> `201 {uploadId}`; `409 WRONG_STATE` if no open refund.
+- `POST /api/v1/refunds/{id}/proof` `{uploadId}` (shop owner) -> `{ok:true}`; `409 WRONG_STATE` unless `PENDING`.
+- `POST /api/v1/admin/refunds/{id}` `{decision:"VERIFY"|"REJECT_PROOF", note?}` (admin, `refunds.verify`; `REJECT_PROOF` needs a 3–300 char note) -> `{ok:true}`; `409 WRONG_STATE` unless `UNDER_REVIEW`.
+- The customer is notified on `REFUND_COMPLETED`; the merchant on `REFUND_PROOF_REJECTED`; admins on `REFUND_OVERDUE` (job `POST /api/internal/jobs/refund-overdue`).
+- Proof images are viewed with `GET /api/v1/receipts/{uploadId}` (customer, shop owner or `payments.review` admin of that order).
+
+
+# Merchant memberships API (v1) — Plus / Premium
+
+For shop owners (`MERCHANT`). Premium grants the Premium commission tier (5%); Plus keeps the regular tier (8%): no other Plus benefit has been specified, so none exists. A membership lasts 30 days from the admin's approval; renewing early adds a cycle after the remaining time; when it ends the shop returns to the regular tier **for new orders only** (orders keep the rate stored when they were created). This is separate from the star plans.
+
+- `GET /api/v1/memberships/plans` -> `{items:[{code,nameAr,priceCents,tier,durationDays}]}`.
+- `POST /api/v1/plans/receipt` (multipart, same endpoint as for star plans) -> `{uploadId}`.
+- `POST /api/v1/memberships/purchases` `{planCode, method, referenceNo, uploadId}` -> `201 {purchaseId}`. Errors: `409 SHOP_NOT_APPROVED | PLAN_NOT_AVAILABLE | PURCHASE_PENDING | TIER_DOWNGRADE_BLOCKED` (cannot buy Plus while Premium is active), `422 PAYMENT_METHOD_DISABLED | INVALID_REQUEST`. Nothing changes until approval.
+- `GET /api/v1/memberships/me` -> `{tier, membership:{plan,tier,startsAt,expiresAt,isActive}|null, purchases:[...]}`.
+- Admin (`payments.review`): `GET /api/v1/admin/membership-purchases?status=` and `POST /api/v1/admin/membership-purchases/{id}` `{decision:"APPROVE"|"REJECT", reason?}`. Approve sets the tier (audited as `MERCHANT_TIER_CHANGED`); `409 DUPLICATE_TRANSFER` when the same transfer already funded an order payment, a star plan or another membership; `409 WRONG_STATE` when already decided.
+- Job: `POST /api/internal/jobs/membership-maintenance` (3-day reminder, expiry notice, fall back to the regular tier).
+
+# Commission settlements API (v1)
+
+Monthly statements per shop for a CLOSED Cairo calendar month. Rules: only suborders that reached `DELIVERED` in that month are charged, each once ever, at the rate stored in the order (rates and tiers changed later never touch old orders). Cancelled / rejected / fully refunded suborders owe nothing; a partly refunded one is charged on the kept value (refunds are treated as product value because no product/delivery split exists yet). A refund completed after a statement was issued becomes a negative `ADJUSTMENT` line in a later statement. Statements are frozen by database triggers; only the payment fields move (`ISSUED` -> `PAID`, once). The platform does not collect money: `PAID` records that an authorized admin confirmed receipt.
+
+- `GET /api/v1/settlements?month=YYYY-MM&status=ISSUED|PAID` -> `{items:[{id,merchantId,monthKey,orderCount,baseCents,commissionCents,adjustmentCents,netDueCents,status,issuedAt,paidAt,paymentReference}]}` (shop owner: own; admin with `settlements.manage`: all).
+- `GET /api/v1/settlements/{id}` -> the statement plus `lines:[{orderId,kind:"ORDER"|"ADJUSTMENT",baseCents,commissionBp,commissionCents}]`; another shop's id answers `404`.
+- Admin (`settlements.manage`): `POST /api/v1/admin/settlements/generate` `{month}` -> `{monthKey,created,skippedExisting,orders,adjustments}` (`409 MONTH_NOT_CLOSED`, safe to repeat) and `POST /api/v1/admin/settlements/{id}/paid` `{reference}` -> `{ok:true}` (`409 WRONG_STATE` if already paid).
+- Job: `POST /api/internal/jobs/settlements` generates the previous month.
+- Notifications: `SETTLEMENT_ISSUED`, `SETTLEMENT_PAID`, `MEMBERSHIP_APPROVED | REJECTED | EXPIRING | EXPIRED`.

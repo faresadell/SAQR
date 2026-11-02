@@ -12,7 +12,7 @@ import { getSettingAt, invalidateSettingsCache } from "@/lib/settings";
 import { buildCommissionSnapshot, CommissionNotConfiguredError, scheduleCommissionRate } from "@/server/commissions/service";
 import { createZone, resolveZoneFee, scheduleZoneFee, setZoneActive, ZoneUnavailableError } from "@/server/delivery/zones";
 import { AuthorizationError } from "@/server/errors";
-import { assertPaymentMethodEnabled, getEnabledPaymentMethods, PaymentMethodDisabledError, setPaymentMethodEnabled } from "@/server/payments/methods";
+import { assertPaymentMethodEnabled, getEnabledPaymentMethods, PaymentMethodDisabledError, setPaymentMethodEnabled, setPaymentReceiver } from "@/server/payments/methods";
 import { changeSetting } from "@/server/settings/service";
 
 if (!process.env.DATABASE_URL) throw new Error("DATABASE_URL is required for integration tests");
@@ -179,6 +179,8 @@ describe("payment methods", () => {
   });
 
   it("only enabled methods are offered, and a disabled one is rejected server-side", async () => {
+    await setPaymentReceiver(admin, "vodafone_cash", "01012345678");
+    await setPaymentReceiver(admin, "instapay", "01099999999");
     await setPaymentMethodEnabled(admin, "vodafone_cash", true);
     expect((await getEnabledPaymentMethods()).map((m) => m.code)).toEqual(["vodafone_cash"]);
     await expect(assertPaymentMethodEnabled("instapay")).rejects.toBeInstanceOf(PaymentMethodDisabledError);
@@ -187,7 +189,22 @@ describe("payment methods", () => {
     await expect(assertPaymentMethodEnabled("vodafone_cash")).rejects.toBeInstanceOf(PaymentMethodDisabledError);
   });
 
+  it("an enabled method without a receiving number is unavailable, with its own reason; numbers are validated, audited and permission-gated", async () => {
+    await setPaymentMethodEnabled(admin, "instapay", true);
+    expect(await getEnabledPaymentMethods()).toEqual([]);
+    await expect(assertPaymentMethodEnabled("instapay")).rejects.toMatchObject({ reason: "NO_RECEIVER" });
+    for (const bad of ["abc", "123", "0101 234 5678 99999999999999"]) expect(await setPaymentReceiver(admin, "instapay", bad)).toEqual({ ok: false, error: "INVALID_REQUEST" });
+    expect((await setPaymentReceiver(admin, "instapay", "010 1234-5678")).ok).toBe(true);
+    expect((await getEnabledPaymentMethods()).map((m) => m.receiverNumber)).toEqual(["01012345678"]);
+    await expect(setPaymentReceiver(viewer, "instapay", "01000000000")).rejects.toBeInstanceOf(AuthorizationError);
+    expect((await setPaymentReceiver(admin, "instapay", null)).ok).toBe(true);
+    await expect(assertPaymentMethodEnabled("instapay")).rejects.toMatchObject({ reason: "NO_RECEIVER" });
+    expect((await auditFor("PAYMENT_RECEIVER_CHANGED")).length).toBe(2);
+    await expect(db.$executeRawUnsafe(`UPDATE "PaymentMethodConfig" SET "receiverNumber" = 'abc' WHERE code = 'instapay'`)).rejects.toThrow();
+  });
+
   it("audits real changes only, and denies unauthorized users", async () => {
+    await setPaymentReceiver(admin, "instapay", "01099999999");
     await setPaymentMethodEnabled(admin, "instapay", true);
     await setPaymentMethodEnabled(admin, "instapay", true); // no-op
     expect((await auditFor("PAYMENT_METHOD_TOGGLED")).length).toBe(1);

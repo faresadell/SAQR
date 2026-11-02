@@ -2,7 +2,7 @@
 // Values are always whole numbers. Ranges are enforced on the server for every write AND every read;
 // an invalid stored value is ignored and the default is used, so a bad edit cannot weaken security.
 
-export type SettingGroup = "orders" | "security";
+export type SettingGroup = "orders" | "offers" | "contest" | "security";
 
 export interface IntSettingDefinition {
   label: string;
@@ -18,9 +18,9 @@ export interface IntSettingDefinition {
 export const SETTING_DEFINITIONS = {
   // ───── orders & stars ─────
   "orders.stars_charge_per_party": {
-    label: "النجوم المخصومة من كل طرف عند الموافقة على الطلب",
-    help: "تُخصم من العميل ومن التاجر معاً عند موافقة التاجر على الطلب، وتُسترجع مرة واحدة عند الإلغاء.",
-    group: "orders", unit: "نجمة", min: 0, max: 50, default: 5,
+    label: "النجوم المخصومة من كل طرف عن كل طلب فرعي",
+    help: "تُخصم من العميل ومن التاجر معاً عند موافقة التاجر على كل طلب فرعي، وتُسترجع مرة واحدة عند الإلغاء. الحد الأدنى للرصيد إعداد منفصل.",
+    group: "orders", unit: "نجمة", min: 0, max: 50, default: 2,
   },
   "stars.min_balance_customer": {
     label: "الحد الأدنى لرصيد العميل لإرسال طلب",
@@ -40,6 +40,61 @@ export const SETTING_DEFINITIONS = {
     help: "غير محددة بعد. يجب تحديدها قبل تشغيل الطلبات، وبعدها يُنبَّه الأدمن لمتابعة الطلب.",
     group: "orders", unit: "دقيقة", min: 1, max: 10080, nullable: true, default: null,
   },
+
+  // ───── offers ─────
+  "offers.base_duration_hours": {
+    label: "مدة العرض الأساسية",
+    help: "المدة التي يبدأ بها كل عرض جديد دون أي تكلفة إضافية.",
+    group: "offers", unit: "ساعة", min: 1, max: 720, default: 24,
+  },
+  "offers.extension_stars_per_hour": {
+    label: "تكلفة تمديد العرض لكل ساعة إضافية",
+    group: "offers", unit: "نجمة", min: 0, max: 100, default: 1,
+  },
+
+  // ───── offer discounts (OFF until an administrator reviews and enables them; the numbers are SUGGESTED defaults) ─────
+  "offers.discount.enabled": {
+    label: "تفعيل خصومات العروض",
+    help: "0 = متوقفة (الافتراضي)، 1 = مفعّلة. لا تُفعَّل في الإنتاج قبل اعتماد الحدود التالية.",
+    group: "offers", unit: "0 أو 1", min: 0, max: 1, default: 0,
+  },
+  "offers.discount.max_percent": {
+    label: "أقصى نسبة خصم مسموحة",
+    help: "قيمة مقترحة، تحتاج اعتماد الإدارة قبل التفعيل.",
+    group: "offers", unit: "%", min: 1, max: 90, default: 30,
+  },
+  "offers.discount.max_fixed_egp": {
+    label: "أقصى خصم ثابت على الوحدة الواحدة",
+    help: "قيمة مقترحة، تحتاج اعتماد الإدارة قبل التفعيل.",
+    group: "offers", unit: "جنيه", min: 1, max: 10000, default: 100,
+  },
+  "offers.discount.max_active_per_shop": {
+    label: "أقصى عدد عروض خصم فعّالة لكل متجر",
+    help: "قيمة مقترحة، تحتاج اعتماد الإدارة قبل التفعيل.",
+    group: "offers", unit: "عرض", min: 1, max: 50, default: 3,
+  },
+
+  // ───── monthly contest eligibility (the contest does not run until contest.enabled = 1 AND its rules page is approved) ─────
+  "contest.enabled": {
+    label: "تشغيل المسابقة الشهرية",
+    help: "0 = متوقفة (الافتراضي). لا تُشغَّل قبل نشر صفحة القواعد واعتماد هذه الإعدادات.",
+    group: "contest", unit: "0 أو 1", min: 0, max: 1, default: 0,
+  },
+  "contest.min_order_subtotal_egp": {
+    label: "الحد الأدنى لقيمة منتجات الطلب ليُحتسب في المسابقة",
+    help: "0 = بلا حد أدنى.",
+    group: "contest", unit: "جنيه", min: 0, max: 100000, default: 0,
+  },
+  "contest.max_orders_per_shop_per_customer": {
+    label: "أقصى عدد طلبات تُحتسب للعميل من نفس المتجر في الشهر",
+    help: "يمنع تكرار الطلب من متجر واحد لرفع العدد. 0 = بلا حد.",
+    group: "contest", unit: "طلب", min: 0, max: 100, default: 0,
+  },
+
+  // ───── monthly contest prizes ─────
+  "contest.prize_first_egp": { label: "جائزة المركز الأول", group: "contest", unit: "جنيه", min: 0, max: 1000000, default: 1000 },
+  "contest.prize_second_egp": { label: "جائزة المركز الثاني", group: "contest", unit: "جنيه", min: 0, max: 1000000, default: 500 },
+  "contest.prize_third_egp": { label: "جائزة المركز الثالث", group: "contest", unit: "جنيه", min: 0, max: 1000000, default: 250 },
 
   // ───── security ─────
   "auth.otp.ttl_seconds": { label: "صلاحية رمز التحقق", group: "security", unit: "ثانية", min: 60, max: 900, default: 300 },
