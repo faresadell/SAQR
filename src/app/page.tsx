@@ -1,13 +1,15 @@
-import { Logo } from "@/components/brand/logo";
-import { Badge } from "@/components/ui/badge";
+import type { Metadata } from "next";
+import { SiteShell } from "@/components/layout/site-shell";
+import { loadBusinessTypes, loadShops } from "@/features/public/data";
+import { HomeView } from "@/features/public/home-view";
 
-export default function HomePage() {
+export const metadata: Metadata = { title: "الرئيسية" };
+
+export default async function HomePage() {
+  const [types, shops] = await Promise.all([loadBusinessTypes(), loadShops()]);
   return (
-    <main className="flex min-h-dvh flex-col items-center justify-center gap-6 bg-navy-950 px-6 text-center">
-      <Logo size={128} priority />
-      <h1 className="text-4xl font-bold text-white">صقر</h1>
-      <p className="max-w-sm text-lg text-silver">منصة التجارة المحلية والتوصيل في مصر</p>
-      <Badge tone="info">قيد الإنشاء</Badge>
-    </main>
+    <SiteShell>
+      <HomeView types={types} shops={shops} />
+    </SiteShell>
   );
 }

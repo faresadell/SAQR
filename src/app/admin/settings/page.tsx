@@ -16,7 +16,7 @@ import { listSettingStates, type SettingState } from "@/server/settings/service"
 import { CommissionForm } from "./commission-form";
 import { SettingsForm, type SettingFieldView } from "./settings-form";
 import { CreateZoneForm, ZoneFeeForm } from "./zone-forms";
-import { setZoneActiveAction, togglePaymentMethodAction } from "./actions";
+import { setPaymentReceiverAction, setZoneActiveAction, togglePaymentMethodAction } from "./actions";
 
 export const metadata: Metadata = { title: "إعدادات المنصة" };
 
@@ -47,9 +47,11 @@ export default async function AdminSettingsPage({ searchParams }: { searchParams
   const { notice } = await searchParams;
   const now = new Date();
 
-  const [orders, security, history, methods, zones] = await Promise.all([
+  const [orders, security, offers, contest, history, methods, zones] = await Promise.all([
     listSettingStates(user, "orders"),
     listSettingStates(user, "security"),
+    listSettingStates(user, "offers"),
+    listSettingStates(user, "contest"),
     listCommissionHistory(user),
     listPaymentMethods(user),
     listZones(user),
@@ -122,6 +124,24 @@ export default async function AdminSettingsPage({ searchParams }: { searchParams
         <SettingsForm group="orders" fields={toFields(orders)} canEdit={canEdit} />
       </Card>
 
+      {/* ───────── Offers ───────── */}
+      <Card className="flex flex-col gap-4" id="offers">
+        <h2 className="text-lg font-bold">العروض والخصومات</h2>
+        <p className="text-sm text-ink-muted">
+          الخصومات مغلقة افتراضياً (0). عند التفعيل تُطبَّق الحدود على العروض الجديدة فقط، ولا يتغير أي طلب سابق لأن خصم كل طلب يُنسخ داخله عند إنشائه.
+        </p>
+        <SettingsForm group="offers" fields={toFields(offers)} canEdit={canEdit} />
+      </Card>
+
+      {/* ───────── Contest ───────── */}
+      <Card className="flex flex-col gap-4" id="contest">
+        <h2 className="text-lg font-bold">المسابقة الشهرية</h2>
+        <p className="text-sm text-ink-muted">
+          تبقى المسابقة مغلقة (0) حتى تراجع صفحة القواعد وتعتمدها من إدارة المحتوى، ثم تفعّلها هنا.
+        </p>
+        <SettingsForm group="contest" fields={toFields(contest)} canEdit={canEdit} />
+      </Card>
+
       {/* ───────── Payment methods ───────── */}
       <Card className="flex flex-col gap-4" id="payments">
         <h2 className="text-lg font-bold">طرق الدفع</h2>
@@ -139,7 +159,15 @@ export default async function AdminSettingsPage({ searchParams }: { searchParams
               <div className="flex items-center gap-3">
                 <span className="font-semibold">{m.nameAr}</span>
                 <Badge tone={m.isEnabled ? "success" : "neutral"}>{m.isEnabled ? "مفعّلة" : "معطّلة"}</Badge>
+                {m.isEnabled && !m.receiverNumber ? <Badge tone="warning">بدون رقم استلام: لن تُقبل طلبات الدفع</Badge> : null}
               </div>
+              {canEdit ? (
+                <form action={setPaymentReceiverAction} className="flex items-center gap-2">
+                  <input type="hidden" name="code" value={m.code} />
+                  <input name="receiver" defaultValue={m.receiverNumber ?? ""} inputMode="tel" dir="ltr" placeholder="رقم الاستلام" aria-label={`رقم استلام ${m.nameAr}`} className="w-44 rounded-control border border-line px-3 py-2 text-sm" />
+                  <Button type="submit" size="sm" variant="secondary">حفظ الرقم</Button>
+                </form>
+              ) : m.receiverNumber ? <span dir="ltr" className="text-sm">{m.receiverNumber}</span> : null}
               {canEdit ? (
                 <form action={togglePaymentMethodAction}>
                   <input type="hidden" name="code" value={m.code} />

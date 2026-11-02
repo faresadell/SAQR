@@ -5,6 +5,8 @@
  *   npm run db:seed
  */
 import { PrismaClient } from "@prisma/client";
+import { DEFAULT_PLANS } from "../src/lib/stars/rules";
+import { DEFAULT_MEMBERSHIP_PLANS } from "../src/lib/memberships/rules";
 
 const db = new PrismaClient();
 const SYSTEM = "system-seed";
@@ -35,6 +37,15 @@ async function main() {
   ];
   for (const type of businessTypes) {
     await db.businessType.upsert({ where: { code: type.code }, update: {}, create: type });
+  }
+  // Star plans: created once from the agreed table; prices and stars are then edited by admins (never overwritten here).
+  const audienceNames = { CUSTOMER: "عميل", DRIVER: "سائق", MERCHANT: "تاجر" } as const;
+  for (const [index, plan] of DEFAULT_PLANS.entries()) {
+    await db.plan.upsert({ where: { code: plan.code }, update: {}, create: { ...plan, nameAr: `${audienceNames[plan.audience]} ${plan.baseStars} نجمة`, sortOrder: index } });
+  }
+  // Merchant memberships (Plus / Premium): created once; prices are then edited by admins.
+  for (const [index, plan] of DEFAULT_MEMBERSHIP_PLANS.entries()) {
+    await db.membershipPlan.upsert({ where: { code: plan.code }, update: {}, create: { ...plan, sortOrder: index } });
   }
   console.log("Seed finished.");
 }

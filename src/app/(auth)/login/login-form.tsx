@@ -1,8 +1,10 @@
 "use client";
 
+import Link from "next/link";
 import { useActionState } from "react";
 import { Button } from "@/components/ui/button";
 import { Field } from "@/components/ui/field";
+import { Notice } from "@/components/ui/states";
 import { loginAction, type FormState } from "../actions";
 
 const initial: FormState = {};
@@ -23,8 +25,16 @@ export function LoginForm() {
         dir="ltr"
         placeholder="123456"
       />
-      {state.error ? <p role="alert" className="rounded-control bg-danger-soft p-3 text-sm font-medium text-danger-ink">{state.error}</p> : null}
+      <details className="rounded-control border border-line p-3 text-sm">
+        <summary className="cursor-pointer font-semibold">فقدت جهاز المصادقة؟ (للمشرفين)</summary>
+        <div className="mt-3 flex flex-col gap-2">
+          <p className="text-ink-muted">استخدم أحد رموز الاسترداد التي حفظتها. كل رمز يُستخدم مرة واحدة، وبعده أنشئ رموزاً جديدة من صفحة الأمان.</p>
+          <Field label="رمز استرداد" name="recoveryCode" dir="ltr" autoComplete="off" maxLength={20} placeholder="XXXXX-XXXXX" />
+        </div>
+      </details>
+      {state.error ? <Notice tone="danger">{state.error}</Notice> : null}
       <Button type="submit" loading={pending}>دخول</Button>
+      <Link href="/forgot-password" className="text-center text-sm font-semibold text-brand underline">نسيت كلمة المرور؟</Link>
     </form>
   );
 }
