@@ -1,7 +1,7 @@
 # Decisions needed from the owner (kept minimal)
 
 ## 1. `/admin/businesses` — read-only is what exists
-It lists every shop with owner, status, tier and counts so an admin can see the whole marketplace. The actions an admin really needs on a shop (approve, reject, suspend, change tier) already live in **`/admin/merchants`** and are audited. **Missing essential functions: none for launch.** Impact on launch: none.
+It lists every shop with type, owner, status, product counts (available / total) and registration date so an admin can see the whole marketplace. The actions an admin really needs on a shop (approve, reject, suspend, change tier) already live in **`/admin/merchants`** and are audited. **Missing essential functions: none for launch.** Impact on launch: none.
 Smallest optional step later: a link from each row to the shop's page in `/admin/merchants`. No schema change.
 
 ## 2. `/admin/notifications` — read-only counts is what exists
