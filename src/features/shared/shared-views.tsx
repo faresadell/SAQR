@@ -1,10 +1,12 @@
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { DataTable, type Column } from "@/components/ui/data-table";
 import { EmptyState } from "@/components/ui/states";
 import { StarBalance } from "@/components/saqr/star-balance";
 import { formatDateTime, formatNumber, starsLabel } from "@/lib/format";
 import { cn } from "@/lib/cn";
+import { markAllReadAction } from "./notification-actions";
 import type { NotificationItem, StarLedgerRow, StarsOverview } from "./types";
 
 const ledgerColumns: Column<StarLedgerRow>[] = [
@@ -46,7 +48,14 @@ export function StarsView({ data, caption }: { data: StarsOverview; caption?: st
 
 export function NotificationsView({ items }: { items: NotificationItem[] }) {
   if (items.length === 0) return <EmptyState icon="bell" title="لا توجد إشعارات">ستصلك هنا تنبيهات الطلبات والباقات.</EmptyState>;
+  const unread = items.some((n) => !n.read);
   return (
+    <div className="flex flex-col gap-3">
+      {unread ? (
+        <form action={markAllReadAction}>
+          <Button type="submit" size="sm" variant="outline">تعليم الكل كمقروء</Button>
+        </form>
+      ) : null}
     <ul className="flex flex-col gap-3">
       {items.map((n) => (
         <li key={n.id}>
@@ -61,5 +70,6 @@ export function NotificationsView({ items }: { items: NotificationItem[] }) {
         </li>
       ))}
     </ul>
+    </div>
   );
 }

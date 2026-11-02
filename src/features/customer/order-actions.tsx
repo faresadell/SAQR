@@ -8,7 +8,7 @@ import { Notice } from "@/components/ui/states";
 import { Textarea } from "@/components/ui/textarea";
 import type { FormState } from "@/lib/form-state";
 import { formatEgp } from "@/lib/money";
-import { cancelOrderAction, payOrderAction } from "./actions";
+import { cancelOrderAction, fileComplaintAction, payOrderAction } from "./actions";
 
 export interface PayMethod {
   code: string;
@@ -67,5 +67,23 @@ export function CancelControl({ orderId, mode }: { orderId: string; mode: "direc
         <Button type="button" variant="ghost" size="sm" onClick={() => setOpen(false)}>تراجع</Button>
       </div>
     </form>
+  );
+}
+
+/** Complaint about this sub-order. The shop is told and an administrator reviews it. */
+export function ComplaintForm({ orderId }: { orderId: string }) {
+  const [state, action, pending] = useActionState(fileComplaintAction, idle);
+  return (
+    <details className="rounded-control border border-line p-3">
+      <summary className="cursor-pointer text-sm font-semibold">تقديم شكوى على هذا الطلب</summary>
+      <form action={action} className="mt-3 flex flex-col gap-3">
+        <input type="hidden" name="orderId" value={orderId} />
+        <Field label="عنوان الشكوى" name="subject" required minLength={3} maxLength={100} />
+        <Textarea label="التفاصيل" name="details" required minLength={10} maxLength={1000} rows={4} />
+        {state.error ? <Notice tone="danger">{state.error}</Notice> : null}
+        {state.message ? <Notice tone="success">{state.message}</Notice> : null}
+        <Button type="submit" variant="outline" loading={pending} className="w-fit">إرسال الشكوى</Button>
+      </form>
+    </details>
   );
 }
