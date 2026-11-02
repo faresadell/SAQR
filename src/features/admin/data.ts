@@ -5,9 +5,10 @@ import { listAuditLog } from "@/server/audit/read";
 import { listComplaintsForAdmin } from "@/server/complaints/service";
 import { getStandings, listAwards } from "@/server/contest/service";
 import { listOffersForAdmin } from "@/server/offers/service";
+import { listBusinessesOverview, notificationActivity } from "@/server/platform/admin-overview";
 import { listAllPlans, listPurchasesForReview } from "@/server/plans/service";
 import { listRefunds } from "@/server/refunds/service";
-import { failed, ready, unavailable, type Loaded } from "@/features/shared/loaded";
+import { failed, ready, type Loaded } from "@/features/shared/loaded";
 import { listOrdersForActor, merchantNames } from "@/features/shared/server-mappers";
 import type { AdminOrderRow, AuditRow, ComplaintAdminRow, ComplaintsAdminData, ContestAdminData, OfferAdminRow, PackageAdminRow, PurchaseReviewRow, RefundReviewRow } from "./types";
 
@@ -161,9 +162,32 @@ export async function loadAudit(user: U): Promise<Loaded<AuditRow[]>> {
     return failed("تعذر تحميل السجل. تأكد من صلاحية عرض سجل العمليات.");
   }
 }
-export async function loadAdminNotifications(_user: U): Promise<Loaded<never>> {
-  return unavailable("admin.notifications");
+export interface BusinessOverviewRow {
+  id: string;
+  name: string;
+  status: string;
+  tier: string;
+  businessType: string;
+  ownerName: string;
+  ownerPhone: string;
+  createdAt: string;
+  products: number;
+  availableProducts: number;
 }
-export async function loadAdminBusinesses(_user: U): Promise<Loaded<never>> {
-  return unavailable("admin.businesses");
+
+export async function loadAdminBusinesses(user: U): Promise<Loaded<BusinessOverviewRow[]>> {
+  try {
+    const rows = await listBusinessesOverview(user);
+    return ready(rows.map((r) => ({ ...r, createdAt: r.createdAt.toISOString() })));
+  } catch {
+    return failed("تعذر تحميل الأنشطة. تأكد من الصلاحية.");
+  }
+}
+
+export async function loadNotificationActivity(user: U): Promise<Loaded<{ type: string; count: number }[]>> {
+  try {
+    return ready(await notificationActivity(user));
+  } catch {
+    return failed("تعذر تحميل النشاط. تأكد من الصلاحية.");
+  }
 }

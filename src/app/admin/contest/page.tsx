@@ -17,7 +17,14 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ m
   const result = await loadContestAdmin(user, monthKey);
   return (
     <>
-      <PageHeader title="المسابقة الشهرية" description={`ترتيب شهر ${monthKey}. غيّر الشهر بإضافة ?month=YYYY-MM للرابط.`} />
+      <PageHeader title="المسابقة الشهرية" description={`ترتيب شهر ${monthKey}.`} />
+      <form method="get" className="flex flex-wrap items-end gap-2">
+        <label className="flex flex-col gap-1 text-sm font-semibold">
+          الشهر
+          <input type="month" name="month" defaultValue={monthKey} required className="rounded-control border border-line bg-surface px-3 py-2 font-normal" />
+        </label>
+        <button type="submit" className="rounded-control bg-brand px-4 py-2 text-sm font-semibold text-white">عرض</button>
+      </form>
       {result.status !== "ready" ? <ResultState result={result} /> : result.data ? <ContestPanel data={result.data} /> : <EmptyState icon="star" title="شهر غير صالح" />}
     </>
   );

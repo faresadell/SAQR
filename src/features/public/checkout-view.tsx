@@ -20,6 +20,8 @@ export interface CheckoutAddress {
   label: string;
   line: string;
   zoneName?: string | undefined;
+  /** Delivery fee per shop for this address today; null when the zone is closed. */
+  feeCents: number | null;
 }
 
 interface CheckoutViewProps {
@@ -40,6 +42,7 @@ export function CheckoutView({ signedIn, starRules, addresses = [] }: CheckoutVi
   const [addressId, setAddressId] = useState(addresses[0]?.id ?? "");
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
+  const chosenAddress = addresses.find((a) => a.id === addressId);
   // One key per attempt-set: retrying after a network error must not create a second order.
   const [idempotencyKey] = useState(() => crypto.randomUUID());
 
@@ -88,7 +91,7 @@ export function CheckoutView({ signedIn, starRules, addresses = [] }: CheckoutVi
               <Select label="اختر العنوان" name="addressId" value={addressId} onChange={(e) => setAddressId(e.target.value)}>
                 {addresses.map((a) => <option key={a.id} value={a.id}>{a.label}{a.zoneName ? ` — ${a.zoneName}` : ""} — {a.line}</option>)}
               </Select>
-              <p className="text-xs text-ink-muted">رسوم التوصيل تُحسب على الخادم حسب المنطقة وتظهر في صفحة الطلب بعد التأكيد.</p>
+              {chosenAddress && chosenAddress.feeCents === null ? <Notice tone="danger">منطقة هذا العنوان غير متاحة للتوصيل الآن. اختر عنواناً آخر.</Notice> : <p className="text-xs text-ink-muted">رسم التوصيل لكل نشاط حسب المنطقة. المبلغ النهائي يحدده الخادم عند التأكيد.</p>}
             </>
           )}
         </Card>
@@ -132,9 +135,15 @@ export function CheckoutView({ signedIn, starRules, addresses = [] }: CheckoutVi
             </div>
           ))}
           <div className="flex items-center justify-between gap-3 border-t border-line pt-2">
-            <dt className="text-ink-muted">رسوم التوصيل</dt>
-            <dd className="text-xs font-semibold text-ink-muted">يحددها النظام</dd>
+            <dt className="text-ink-muted">رسوم التوصيل (متوقعة)</dt>
+            <dd className="num font-semibold">{chosenAddress && chosenAddress.feeCents !== null ? formatEgp(chosenAddress.feeCents * groups.length) : <span className="text-xs text-ink-muted">اختر عنواناً</span>}</dd>
           </div>
+          {chosenAddress && chosenAddress.feeCents !== null ? (
+            <div className="flex items-center justify-between gap-3 text-base">
+              <dt className="font-bold">الإجمالي المتوقع</dt>
+              <dd className="num font-bold">{formatEgp(groups.reduce((n, g) => n + g.subtotalCents, 0) + chosenAddress.feeCents * groups.length)}</dd>
+            </div>
+          ) : null}
         </dl>
 
         {!signedIn ? (
@@ -148,7 +157,7 @@ export function CheckoutView({ signedIn, starRules, addresses = [] }: CheckoutVi
         ) : (
           <>
             {error ? <Notice tone="danger">{error}</Notice> : null}
-            <Button size="lg" className="w-full" loading={pending} disabled={!addressId} onClick={confirm}>تأكيد الطلب</Button>
+            <Button size="lg" className="w-full" loading={pending} disabled={!addressId || chosenAddress?.feeCents === null} onClick={confirm}>تأكيد الطلب</Button>
           </>
         )}
       </aside>
