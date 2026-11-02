@@ -146,7 +146,8 @@ describe("drivers", () => {
     const ok = await createDriver(w.owner, { name: "سواق ١", phone: "01011112222", password: "Sturdy-pass-91" });
     expect(ok.ok).toBe(true);
     const user = await db.user.findUniqueOrThrow({ where: { phone: "+201011112222" } });
-    expect(user).toMatchObject({ role: "DRIVER", status: "PENDING" }); // verifies the phone by code at first sign-in
+    expect(user).toMatchObject({ role: "DRIVER", status: "ACTIVE" }); // the shop vouches for its driver; no SMS code exists
+    expect(await db.starAccount.count({ where: { userId: user.id } })).toBe(1);
     expect(await db.driver.count({ where: { merchantId: w.shopId } })).toBe(1);
     expect(await createDriver(w.owner, { name: "سواق ٢", phone: "01011112222", password: "Sturdy-pass-91" })).toEqual({ ok: false, error: "PHONE_IN_USE" });
     expect(await createDriver(w.owner, { name: "سواق ٣", phone: "01022223333", password: "12345678" })).toEqual({ ok: false, error: "WEAK_PASSWORD" });

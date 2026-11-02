@@ -17,6 +17,11 @@ describe("buildCsp (production)", () => {
     expect(csp).toContain("form-action 'self'");
   });
 
+  it("embeds nothing except the robot-check widget", () => {
+    expect(csp).toContain("frame-src https://challenges.cloudflare.com;");
+    expect(csp).toContain("connect-src 'self' https://challenges.cloudflare.com");
+  });
+
   it("upgrades insecure requests", () => {
     expect(csp).toContain("upgrade-insecure-requests");
   });

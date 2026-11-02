@@ -22,6 +22,10 @@ const schema = z
     // Optional published Resend templates. Variables sent: code, minutes, app_name (they must exist in the template).
     RESEND_TEMPLATE_VERIFY_ID: z.preprocess((v) => (v === "" ? undefined : v), z.string().min(3).max(100).optional()),
     RESEND_TEMPLATE_RESET_ID: z.preprocess((v) => (v === "" ? undefined : v), z.string().min(3).max(100).optional()),
+    // "Not a robot" check on sign-up (Cloudflare Turnstile). The site key is public (passed to the page by the server); the secret key only via environment.
+    CAPTCHA_PROVIDER: z.enum(["disabled", "turnstile"]).default("disabled"),
+    TURNSTILE_SECRET_KEY: z.preprocess((v) => (v === "" ? undefined : v), z.string().min(8).optional()),
+    TURNSTILE_SITE_KEY: z.preprocess((v) => (v === "" ? undefined : v), z.string().min(8).optional()),
     // Private object storage for receipts and product images.
     STORAGE_PROVIDER: z.enum(["local", "r2"]).default("local"),
     R2_ACCOUNT_ID: z.preprocess((v) => (v === "" ? undefined : v), z.string().regex(/^[a-f0-9]{32}$/).optional()),
@@ -43,6 +47,13 @@ const schema = z
     }
     if (env.NODE_ENV === "production" && env.EMAIL_PROVIDER === "console") {
       ctx.addIssue({ code: "custom", path: ["EMAIL_PROVIDER"], message: "console email sender is not allowed in production" });
+    }
+    if (env.CAPTCHA_PROVIDER === "turnstile") {
+      if (!env.TURNSTILE_SECRET_KEY) ctx.addIssue({ code: "custom", path: ["TURNSTILE_SECRET_KEY"], message: "TURNSTILE_SECRET_KEY is required when CAPTCHA_PROVIDER=turnstile" });
+      if (!env.TURNSTILE_SITE_KEY) ctx.addIssue({ code: "custom", path: ["TURNSTILE_SITE_KEY"], message: "TURNSTILE_SITE_KEY is required when CAPTCHA_PROVIDER=turnstile" });
+    }
+    if (env.NODE_ENV === "production" && env.CAPTCHA_PROVIDER === "disabled") {
+      ctx.addIssue({ code: "custom", path: ["CAPTCHA_PROVIDER"], message: "the sign-up robot check cannot be disabled in production" });
     }
     if (env.EMAIL_PROVIDER === "resend") {
       if (!env.RESEND_API_KEY) ctx.addIssue({ code: "custom", path: ["RESEND_API_KEY"], message: "RESEND_API_KEY is required when EMAIL_PROVIDER=resend" });

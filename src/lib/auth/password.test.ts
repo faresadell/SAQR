@@ -26,10 +26,13 @@ describe("checkPasswordStrength", () => {
     expect(checkPasswordStrength("12345678901")).toBe("ALL_DIGITS");
     expect(checkPasswordStrength("Password")).toBe("COMMON");
     expect(checkPasswordStrength("a".repeat(129))).toBe("TOO_LONG");
+    expect(checkPasswordStrength("onlyletters")).toBe("NEEDS_MIX");
+    expect(checkPasswordStrength("!!!!!!!!!!")).toBe("NEEDS_MIX");
     expect(checkPasswordStrength("+201012345678", "+201012345678")).toBe("SAME_AS_PHONE");
   });
 
   it("accepts a reasonable password", () => {
     expect(checkPasswordStrength("falcon-Nile-2026")).toBeNull();
+    expect(checkPasswordStrength("صقر1234مصر")).toBeNull();
   });
 });

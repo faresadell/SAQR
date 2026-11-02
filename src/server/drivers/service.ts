@@ -10,7 +10,7 @@ import { AuthorizationError, NotFoundError } from "@/server/errors";
 export type DriverError = "INVALID_REQUEST" | "PHONE_IN_USE" | "SHOP_NOT_APPROVED" | "WEAK_PASSWORD";
 export type DriverResult<T> = ({ ok: true } & T) | { ok: false; error: DriverError };
 
-/** A driver always works for ONE shop. The shop owner creates the account: there is no independent driver sign-up. */
+/** A shop may create accounts for its own drivers. Independent drivers sign up themselves and take orders from the open board. */
 async function ownShop(actor: Actor) {
   if (actor.role !== "MERCHANT") throw new AuthorizationError();
   const shop = await db.merchant.findUnique({ where: { ownerId: actor.id } });
@@ -21,7 +21,7 @@ async function ownShop(actor: Actor) {
 export interface CreateDriverInput {
   name: string;
   phone: string;
-  /** Temporary password the shop gives the driver. The driver proves the phone with a code at first sign-in. */
+  /** Temporary password the shop gives the driver. The shop vouches for the driver, so the account is active at once (there is no SMS code). */
   password: string;
 }
 
@@ -35,7 +35,8 @@ export async function createDriver(actor: Actor, input: CreateDriverInput): Prom
   const passwordHash = await hashPassword(input.password);
   try {
     const driverId = await db.$transaction(async (tx) => {
-      const user = await tx.user.create({ data: { phone, name, passwordHash, role: "DRIVER", status: "PENDING" } });
+      const user = await tx.user.create({ data: { phone, name, passwordHash, role: "DRIVER", status: "ACTIVE" } });
+      await tx.starAccount.create({ data: { userId: user.id } });
       const driver = await tx.driver.create({ data: { userId: user.id, merchantId: shop.id } });
       await writeAudit({ actorId: actor.id, action: "DRIVER_CREATED", entityType: "Driver", entityId: driver.id, after: { merchantId: shop.id } }, tx);
       return driver.id;

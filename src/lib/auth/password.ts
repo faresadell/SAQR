@@ -43,7 +43,7 @@ export async function burnPasswordCheck(password: string): Promise<void> {
   await verifyPassword(password, await dummyHash);
 }
 
-export type PasswordProblem = "TOO_SHORT" | "TOO_LONG" | "ALL_DIGITS" | "COMMON" | "SAME_AS_PHONE";
+export type PasswordProblem = "TOO_SHORT" | "TOO_LONG" | "ALL_DIGITS" | "COMMON" | "SAME_AS_PHONE" | "NEEDS_MIX";
 
 const COMMON = new Set([
   "password", "password1", "12345678", "123456789", "1234567890", "qwertyui", "qwerty123",
@@ -54,6 +54,8 @@ export function checkPasswordStrength(password: string, phone?: string): Passwor
   if (password.length < 8) return "TOO_SHORT";
   if (password.length > 128) return "TOO_LONG";
   if (/^\d+$/.test(password)) return "ALL_DIGITS";
+  // strong = letters AND at least one digit or symbol (length alone is not enough for a short password)
+  if (!/\p{L}/u.test(password) || !/[^\p{L}]/u.test(password)) return "NEEDS_MIX";
   if (COMMON.has(password.toLowerCase())) return "COMMON";
   if (phone && password.replace(/\D/g, "") === phone.replace(/\D/g, "")) return "SAME_AS_PHONE";
   return null;

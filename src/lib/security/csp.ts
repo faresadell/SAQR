@@ -1,3 +1,5 @@
+const CAPTCHA_ORIGIN = "https://challenges.cloudflare.com";
+
 export interface CspOptions {
   nonce: string;
   isDev: boolean;
@@ -16,7 +18,8 @@ export function buildCsp({ nonce, isDev }: CspOptions): string {
     "style-src": isDev ? ["'self'", "'unsafe-inline'"] : ["'self'", `'nonce-${nonce}'`],
     "img-src": ["'self'", "data:", "blob:"],
     "font-src": ["'self'"],
-    "connect-src": ["'self'", ...(isDev ? ["ws:", "wss:"] : [])],
+    "connect-src": ["'self'", CAPTCHA_ORIGIN, ...(isDev ? ["ws:", "wss:"] : [])],
+    "frame-src": [CAPTCHA_ORIGIN], // the "not a robot" widget (Cloudflare Turnstile) is the only thing we embed
     "manifest-src": ["'self'"],
     "worker-src": ["'self'"],
     "object-src": ["'none'"],

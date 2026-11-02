@@ -6,10 +6,11 @@ import { Button } from "@/components/ui/button";
 import { Field } from "@/components/ui/field";
 import { Notice } from "@/components/ui/states";
 import { registerAction, type FormState } from "../actions";
+import { Turnstile } from "./turnstile";
 
 const initial: FormState = {};
 
-export function RegisterForm() {
+export function RegisterForm({ siteKey, nonce }: { siteKey: string | null; nonce?: string }) {
   const [state, formAction, pending] = useActionState(registerAction, initial);
   const errors = state.fieldErrors ?? {};
 
@@ -17,7 +18,7 @@ export function RegisterForm() {
     <form action={formAction} className="flex flex-col gap-4">
       <fieldset className="flex flex-col gap-2">
         <legend className="mb-1 text-sm font-semibold">نوع الحساب</legend>
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-3 gap-3">
           <label className="flex cursor-pointer items-center gap-2 rounded-control border border-line bg-surface p-3 has-[:checked]:border-brand has-[:checked]:bg-brand-soft">
             <input type="radio" name="role" value="CUSTOMER" defaultChecked />
             <span className="font-semibold">عميل</span>
@@ -26,11 +27,18 @@ export function RegisterForm() {
             <input type="radio" name="role" value="MERCHANT" />
             <span className="font-semibold">تاجر</span>
           </label>
+          <label className="flex cursor-pointer items-center gap-2 rounded-control border border-line bg-surface p-3 has-[:checked]:border-brand has-[:checked]:bg-brand-soft">
+            <input type="radio" name="role" value="DRIVER" />
+            <span className="font-semibold">سائق</span>
+          </label>
         </div>
         {errors.role ? <p role="alert" className="text-sm font-medium text-danger-ink">{errors.role}</p> : null}
       </fieldset>
 
-      <Field label="الاسم" name="name" autoComplete="name" required error={errors.name} />
+      <div className="grid gap-4 sm:grid-cols-2">
+        <Field label="الاسم الأول" name="firstName" autoComplete="given-name" required error={errors.firstName} />
+        <Field label="الاسم الثاني" name="lastName" autoComplete="family-name" required error={errors.lastName} />
+      </div>
       <Field
         label="رقم الموبايل"
         name="phone"
@@ -42,12 +50,13 @@ export function RegisterForm() {
         required
         error={errors.phone}
       />
+      <Field label="البريد الإلكتروني" name="email" type="email" inputMode="email" autoComplete="email" dir="ltr" placeholder="name@example.com" hint="سنرسل إليه رمز تفعيل الحساب." required error={errors.email} />
       <Field
         label="كلمة المرور"
         name="password"
         type="password"
         autoComplete="new-password"
-        hint="8 أحرف على الأقل، وليست أرقاماً فقط."
+        hint="8 أحرف على الأقل، حروف مع أرقام أو رموز."
         required
         error={errors.password}
       />
@@ -62,6 +71,7 @@ export function RegisterForm() {
         {errors.consent ? <p role="alert" className="text-sm font-medium text-danger-ink">{errors.consent}</p> : null}
       </div>
 
+      <Turnstile siteKey={siteKey} nonce={nonce} />
       {state.error ? <Notice tone="danger">{state.error}</Notice> : null}
       <Button type="submit" loading={pending}>إنشاء الحساب</Button>
     </form>

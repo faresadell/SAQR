@@ -5,8 +5,10 @@ import { z } from "zod";
 import { getClientIp } from "@/lib/client-ip";
 import { normalizeEgyptPhone } from "@/lib/auth/phone";
 import { checkPasswordStrength, type PasswordProblem } from "@/lib/auth/password";
-import { authenticate, completePhoneVerification, registerAccount } from "@/server/auth/auth-service";
-import { requestOtp } from "@/server/auth/otp-service";
+import { getEnv } from "@/lib/env";
+import { normalizeEmail } from "@/lib/auth/email";
+import { verifyTurnstile } from "@/lib/security/captcha";
+import { authenticate, completeEmailActivation, registerAccount, resendActivationCode } from "@/server/auth/auth-service";
 import {
   clearPendingPhone,
   createSession,
@@ -29,21 +31,25 @@ const passwordMessages: Record<PasswordProblem, string> = {
   ALL_DIGITS: "كلمة المرور لا يجب أن تكون أرقاماً فقط.",
   COMMON: "كلمة المرور شائعة وسهلة التخمين.",
   SAME_AS_PHONE: "كلمة المرور لا يجب أن تكون رقم الهاتف.",
+  NEEDS_MIX: "كلمة المرور يجب أن تجمع حروفاً مع أرقام أو رموز.",
 };
 
 function homeFor(role: string): string {
   if (role === "ADMIN") return "/admin";
   if (role === "MERCHANT") return "/merchant";
+  if (role === "DRIVER") return "/driver";
   return "/account";
 }
 
 // ───────────── Register ─────────────
 
 const registerSchema = z.object({
-  name: z.string().trim().min(2, "اكتب اسمك (حرفان على الأقل).").max(80, "الاسم طويل جداً."),
+  firstName: z.string().trim().min(2, "اكتب الاسم الأول (حرفان على الأقل).").max(40, "الاسم طويل جداً."),
+  lastName: z.string().trim().min(2, "اكتب الاسم الثاني (حرفان على الأقل).").max(40, "الاسم طويل جداً."),
   phone: z.string().max(30),
+  email: z.string().max(200),
   password: z.string().max(200),
-  role: z.enum(["CUSTOMER", "MERCHANT"], { message: "اختر نوع الحساب." }),
+  role: z.enum(["CUSTOMER", "MERCHANT", "DRIVER"], { message: "اختر نوع الحساب." }),
   consent: z.literal("on", { message: "يجب الموافقة على سياسة الخصوصية للمتابعة." }),
 });
 
@@ -57,21 +63,27 @@ export async function registerAction(_prev: FormState, formData: FormData): Prom
 
   const phone = normalizeEgyptPhone(parsed.data.phone);
   if (!phone) return { fieldErrors: { phone: "اكتب رقم موبايل مصري صحيح (مثال: 01012345678)." } };
+  const email = normalizeEmail(parsed.data.email);
+  if (!email) return { fieldErrors: { email: "اكتب بريداً إلكترونياً صحيحاً." } };
 
   const problem = checkPasswordStrength(parsed.data.password, phone);
   if (problem) return { fieldErrors: { password: passwordMessages[problem] } };
 
-  const result = await registerAccount(
-    { name: parsed.data.name, phone, password: parsed.data.password, role: parsed.data.role },
-    await getClientIp(),
-  );
-  if (!result.ok) return { error: result.error === "RATE_LIMITED" ? RATE_LIMITED : "تعذر إرسال رمز التحقق. حاول لاحقاً." };
+  const ip = await getClientIp();
+  const env = getEnv();
+  if (env.CAPTCHA_PROVIDER === "turnstile") {
+    const token = formData.get("cf-turnstile-response");
+    if (!(await verifyTurnstile(typeof token === "string" ? token : null, env.TURNSTILE_SECRET_KEY!, ip))) return { error: "تعذر التحقق من أنك لست روبوتاً. أعد المحاولة." };
+  }
+
+  const result = await registerAccount({ name: `${parsed.data.firstName} ${parsed.data.lastName}`, phone, email, password: parsed.data.password, role: parsed.data.role }, ip);
+  if (!result.ok) return { error: result.error === "RATE_LIMITED" ? RATE_LIMITED : "تعذر إرسال رمز التفعيل إلى بريدك. حاول لاحقاً." };
 
   await setPendingPhone(phone);
   redirect("/verify");
 }
 
-// ───────────── Verify phone ─────────────
+// ───────────── Activate by email code ─────────────
 
 export async function verifyAction(_prev: FormState, formData: FormData): Promise<FormState> {
   const phone = await getPendingPhone();
@@ -81,7 +93,7 @@ export async function verifyAction(_prev: FormState, formData: FormData): Promis
   if (!/^\d{6}$/.test(code)) return { fieldErrors: { code: "اكتب الرمز المكوّن من 6 أرقام." } };
 
   const ip = await getClientIp();
-  const result = await completePhoneVerification(phone, code, ip);
+  const result = await completeEmailActivation(phone, code, ip);
   if (!result.ok) {
     if (result.error === "RATE_LIMITED") return { error: RATE_LIMITED };
     if (result.error === "SUSPENDED") return { error: "هذا الحساب موقوف. تواصل مع الدعم." };
@@ -96,10 +108,10 @@ export async function verifyAction(_prev: FormState, formData: FormData): Promis
 export async function resendCodeAction(_prev: FormState, _formData: FormData): Promise<FormState> {
   const phone = await getPendingPhone();
   if (!phone) redirect("/register");
-  const result = await requestOtp(phone, "SIGNUP", await getClientIp());
-  if (!result.ok && result.reason === "RATE_LIMITED") return { error: RATE_LIMITED };
+  const result = await resendActivationCode(phone, await getClientIp());
+  if (!result.ok) return { error: RATE_LIMITED };
   // Same neutral message even when the cooldown suppressed sending.
-  return { message: "إذا كان الرقم صحيحاً سيصلك رمز جديد خلال لحظات." };
+  return { message: "إذا كان الحساب بانتظار التفعيل سيصلك رمز جديد على بريدك خلال لحظات." };
 }
 
 // ───────────── Login / logout ─────────────
