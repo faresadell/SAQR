@@ -1,7 +1,6 @@
 "use client";
 
 import { useActionState } from "react";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { EmptyState, Notice } from "@/components/ui/states";

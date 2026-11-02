@@ -5,7 +5,7 @@ import type { FormState } from "@/lib/form-state";
 import { requireRole } from "@/server/auth/guards";
 import { createDriver, setDriverActive } from "@/server/drivers/service";
 import { AuthorizationError, NotFoundError } from "@/server/errors";
-import { DENIED_ERROR, DRIVER_MESSAGES, GENERIC_ERROR, NOT_FOUND_ERROR } from "@/features/shared/messages";
+import { DENIED_ERROR, DRIVER_MESSAGES, GENERIC_ERROR } from "@/features/shared/messages";
 
 const get = (formData: FormData, name: string) => {
   const v = formData.get(name);

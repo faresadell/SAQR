@@ -3,7 +3,7 @@ import type { SessionUser } from "@/server/auth/session";
 import { db } from "@/lib/db";
 import { cairoMonthKey } from "@/lib/stars/rules";
 import { merchantSalesReport } from "@/server/reports/service";
-import { failed, ready, unavailable, type Loaded } from "@/features/shared/loaded";
+import { failed, ready, type Loaded } from "@/features/shared/loaded";
 import { listOrdersForActor, mapNotifications, mapPackages, mapStars } from "@/features/shared/server-mappers";
 import type { CurrentPackage, NotificationItem, PackageOption, PaymentInstruction, StarsOverview } from "@/features/shared/types";
 import { getSetting } from "@/lib/settings";
