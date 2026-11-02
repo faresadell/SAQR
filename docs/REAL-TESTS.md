@@ -1,5 +1,29 @@
 # Real tests before launch (Resend, R2, payment, delivery)
 
+## Checklist at a glance
+
+**A. Proven by automated tests in CI (real PostgreSQL, fake email/storage senders).** CI is green on `main`; these prove the LOGIC, not the real services.
+- [x] Password reset (email and phone paths): expiry, single use, newest code only, 5-guess limit, confirm rate limit, per-IP throttle, identical answers for real/unknown/suspended/admin accounts, concurrent double-use.
+- [x] Email verification: code, single use, address ownership race, provider failure leaves no usable code.
+- [x] Manual payment: same transfer reference refused twice, concurrent confirmations charge once, disabled/unconfigured method refused, receipt access only for the order's customer, its shop owner, or an authorized admin, reused picture flagged.
+- [x] Plan purchase approval applies once (also under concurrency); duplicate transfer reference refused.
+- [x] Orders: idempotent placement, price-change refusal, stars charged once on approval and returned once on cancel, balance equals ledger.
+- [x] Commission and settlements: order money and owner frozen by a database trigger, retained-base math with full/partial refunds, each order charged once (also concurrent runs), statements immutable, paid once.
+- [x] Admin recovery codes: work once, replaced on regeneration.
+- [x] Offers and contest are OFF by default; a discount cannot be created while `offers.discount.enabled` is not 1.
+
+**B. NOT yet run: needs real accounts/secrets. Do not launch until each is ticked by you in the real deployment.** (Details and exact steps below.)
+- [ ] Resend: confirmation email actually received (inbox + Resend log "Delivered")
+- [ ] Resend: password-reset email actually received, new password works, old sessions ended
+- [ ] Resend: unknown address gets the same screen and no email; logs contain no key or full code
+- [ ] R2: product image upload, then retrieval by the public catalog route
+- [ ] R2: payment receipt upload, then viewing by the right people only
+- [ ] R2: other customer/shop gets "not found"; direct bucket URL is unreachable; disallowed file refused
+- [ ] Manual payment end to end with the real receiving number (section 3)
+- [ ] Admin TOTP enrollment and one-time recovery code (section 5)
+- [ ] Phone/SMS codes: **no provider is configured**. Not testable; see the launch blocker in `docs/SECURITY-REVIEW.md`.
+
+
 Nothing below has been run against real services by the build process. CI proves the code compiles and the automated tests pass; it does NOT prove an email arrived or a file reached R2. Tick each box yourself, in the real deployment, and do not launch until the "verify" lines are true.
 
 **Secrets:** put every key ONLY in the deployment environment (the host's environment-variable settings). Never in GitHub, in a `.env` file that is committed, in logs, or in chat. If a key is ever pasted anywhere else, rotate it.
@@ -38,6 +62,8 @@ Steps:
 4. Try the object's direct R2 URL in a private window. Verify: it is NOT reachable.
 5. Upload a non-image (rename a PDF to .jpg). Verify: it is refused.
 6. Verify in the logs: no access keys, no signed URLs.
+7. As a shop owner, upload a product image (JPG/PNG/WebP). Verify: it appears in the bucket and the product page shows it; a PDF renamed to .jpg is refused; an image over the size limit is refused.
+8. As a shop owner of ANOTHER shop, try to replace that product's image. Verify: refused.
 
 ## 3. Money flow (manual transfer) end to end
 
