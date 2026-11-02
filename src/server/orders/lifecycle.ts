@@ -1,0 +1,368 @@
+import "server-only";
+import type { OrderStatus, PaymentStatus, Prisma } from "@prisma/client";
+import { db } from "@/lib/db";
+import { writeAudit } from "@/lib/audit";
+import { hasPermission, type Actor } from "@/lib/auth/permissions";
+import { canTransition, type OrderStatusName } from "@/lib/orders/status";
+import { ledgerKeys } from "@/lib/stars/rules";
+import { getSetting } from "@/lib/settings";
+import { AuthorizationError, NotFoundError } from "@/server/errors";
+import { assertPaymentMethodEnabled, PaymentMethodDisabledError } from "@/server/payments/methods";
+import { transferConfirmedElsewhere } from "@/server/payments/transfers";
+import { notifyInTx } from "@/server/notifications/service";
+import { applyStarMoves, getStarBalance, InsufficientStarsError, type StarMove } from "@/server/stars/ledger";
+
+export type LifecycleError =
+  | "INVALID_REQUEST"
+  | "WRONG_STATE"
+  | "PAYMENT_METHOD_DISABLED" | "PAYMENT_RECEIVER_NOT_SET"
+  | "DUPLICATE_TRANSFER"
+  | "PAYMENT_NOT_CONFIRMED"
+  | "INSUFFICIENT_STARS"
+  | "DRIVER_NOT_AVAILABLE"
+  | "CONFLICT";
+export type LifecycleResult = { ok: true } | { ok: false; error: LifecycleError };
+
+export class Abort extends Error {
+  constructor(readonly error: LifecycleError) {
+    super(error);
+  }
+}
+
+export type Tx = Prisma.TransactionClient;
+export const fail = (error: LifecycleError): never => {
+  throw new Abort(error);
+};
+
+/** Runs `work` in a transaction. An Abort rolls everything back and becomes a normal error result. */
+export async function run(work: (tx: Tx) => Promise<void>): Promise<LifecycleResult> {
+  try {
+    await db.$transaction(work);
+    return { ok: true };
+  } catch (error) {
+    if (error instanceof Abort) return { ok: false, error: error.error };
+    if (error instanceof InsufficientStarsError) return { ok: false, error: "INSUFFICIENT_STARS" };
+    throw error;
+  }
+}
+
+export type OrderRow = Prisma.OrderGetPayload<{ include: { merchant: true } }>;
+
+export async function loadOrder(tx: Tx, orderId: string): Promise<OrderRow> {
+  const order = await tx.order.findUnique({ where: { id: orderId }, include: { merchant: true } });
+  if (!order) throw new NotFoundError();
+  return order;
+}
+
+/** The customer of the order. Another customer's id looks like a missing order. */
+async function loadOwnCustomerOrder(tx: Tx, actor: Actor, orderId: string): Promise<OrderRow> {
+  if (actor.role !== "CUSTOMER") throw new AuthorizationError();
+  const order = await loadOrder(tx, orderId);
+  if (order.customerId !== actor.id) throw new NotFoundError();
+  return order;
+}
+
+/** The merchant that owns the order's shop, or an admin holding `payments.review` (override). */
+async function loadOrderForSeller(tx: Tx, actor: Actor, orderId: string): Promise<{ order: OrderRow; asAdmin: boolean }> {
+  const order = await loadOrder(tx, orderId);
+  if (actor.role === "MERCHANT" && order.merchant.ownerId === actor.id) return { order, asAdmin: false };
+  if (hasPermission(actor, "payments.review")) return { order, asAdmin: true };
+  throw new NotFoundError(); // wrong merchant / wrong role: indistinguishable from a missing order
+}
+
+/**
+ * Change orderStatus with a compare-and-set, so two concurrent requests can never both apply the same transition.
+ * Writes the append-only OrderEvent in the same transaction.
+ */
+export async function moveStatus(tx: Tx, order: OrderRow, to: OrderStatus, actorId: string, note: string | null, extra: Prisma.OrderUpdateManyMutationInput = {}): Promise<void> {
+  if (!canTransition(order.orderStatus as OrderStatusName, to as OrderStatusName)) fail("WRONG_STATE");
+  const changed = await tx.order.updateMany({ where: { id: order.id, orderStatus: order.orderStatus }, data: { orderStatus: to, ...extra } });
+  if (changed.count !== 1) fail("CONFLICT");
+  await tx.orderEvent.create({ data: { orderId: order.id, field: "orderStatus", fromValue: order.orderStatus, toValue: to, actorId, note } });
+}
+
+async function setPaymentStatus(tx: Tx, order: OrderRow, to: PaymentStatus, actorId: string, note: string | null): Promise<void> {
+  const changed = await tx.order.updateMany({ where: { id: order.id, paymentStatus: order.paymentStatus }, data: { paymentStatus: to } });
+  if (changed.count !== 1) fail("CONFLICT");
+  await tx.orderEvent.create({ data: { orderId: order.id, field: "paymentStatus", fromValue: order.paymentStatus, toValue: to, actorId, note } });
+}
+
+// ───────────────────────── payment ─────────────────────────
+
+const REFERENCE_PATTERN = /^[A-Za-z0-9\-_/ ]{4,64}$/;
+
+export interface SubmitPaymentInput {
+  method: string;
+  referenceNo: string;
+  /** Id returned by POST /orders/{id}/receipt. Must belong to this customer and this order, and can be used once. */
+  uploadId: string;
+}
+
+/**
+ * Customer sends the transfer proof. This does NOT confirm payment: it only moves the payment to
+ * "awaiting merchant confirmation". The amount is the suborder total decided by the server.
+ */
+export async function submitPayment(actor: Actor, orderId: string, input: SubmitPaymentInput): Promise<LifecycleResult> {
+  const referenceNo = typeof input.referenceNo === "string" ? input.referenceNo.trim() : "";
+  if (!REFERENCE_PATTERN.test(referenceNo) || typeof input.uploadId !== "string" || input.uploadId.length < 8 || input.uploadId.length > 64) {
+    return { ok: false, error: "INVALID_REQUEST" };
+  }
+  try {
+    await assertPaymentMethodEnabled(String(input.method));
+  } catch (error) {
+    if (error instanceof PaymentMethodDisabledError) return { ok: false, error: error.reason === "NO_RECEIVER" ? "PAYMENT_RECEIVER_NOT_SET" : "PAYMENT_METHOD_DISABLED" };
+    throw error;
+  }
+  return run(async (tx) => {
+    const order = await loadOwnCustomerOrder(tx, actor, orderId);
+    if (order.orderStatus !== "AWAITING_PAYMENT" || (order.paymentStatus !== "NOT_REQUIRED_YET" && order.paymentStatus !== "REJECTED")) fail("WRONG_STATE");
+
+    // The proof must be an image this customer uploaded for THIS order, and it can be used only once.
+    const upload = await tx.receiptUpload.findFirst({ where: { id: input.uploadId, orderId: order.id, uploaderId: actor.id, usedAt: null } });
+    if (!upload) fail("INVALID_REQUEST");
+    const claimed = await tx.receiptUpload.updateMany({ where: { id: upload!.id, usedAt: null }, data: { usedAt: new Date() } });
+    if (claimed.count !== 1) fail("CONFLICT");
+
+    // Reused transfer reference, or the very same picture used on another order: keep it but flag it for the reviewer.
+    const clash = await tx.payment.findFirst({ where: { method: input.method, referenceNo, orderId: { not: order.id }, rejectedReason: null } });
+    const sameImage = await tx.receiptUpload.findFirst({ where: { sha256: upload!.sha256, orderId: { not: order.id }, usedAt: { not: null } } });
+    const flagReason = clash ? "Transfer reference already used on another order" : sameImage ? "Same receipt image already used on another order" : null;
+    const created = await tx.payment.create({
+      data: {
+        orderId: order.id,
+        method: input.method,
+        receiptKey: upload!.storageKey,
+        referenceNo,
+        amountCents: order.totalCents,
+        flagged: flagReason !== null,
+        flagReason,
+      },
+    });
+    await setPaymentStatus(tx, order, "AWAITING_MERCHANT_CONFIRMATION", actor.id, "receipt submitted");
+    await notifyInTx(tx, { userId: order.merchant.ownerId, type: "PAYMENT_SUBMITTED", title: "إيصال دفع جديد", body: `أرسل العميل إثبات تحويل للطلب رقم ${order.number}. راجعه وأكّد الدفع.`, data: { orderId: order.id }, dedupeKey: `payment-submitted:${created.id}` });
+    await writeAudit({ actorId: actor.id, action: "PAYMENT_SUBMITTED", entityType: "Order", entityId: order.id, after: { method: input.method, flagged: flagReason !== null } }, tx);
+  });
+}
+
+async function latestOpenPayment(tx: Tx, orderId: string) {
+  const payment = await tx.payment.findFirst({ where: { orderId, confirmedAt: null, rejectedReason: null }, orderBy: { submittedAt: "desc" } });
+  if (!payment) fail("WRONG_STATE");
+  return payment!;
+}
+
+/** The shop owner (or an authorized admin) confirms the money really arrived. Only then can the merchant approve the order. */
+export async function confirmPayment(actor: Actor, orderId: string): Promise<LifecycleResult> {
+  return run(async (tx) => {
+    const { order, asAdmin } = await loadOrderForSeller(tx, actor, orderId);
+    if (order.orderStatus !== "AWAITING_PAYMENT" || order.paymentStatus !== "AWAITING_MERCHANT_CONFIRMATION") fail("WRONG_STATE");
+    const payment = await latestOpenPayment(tx, order.id);
+
+    // The same transfer can never be confirmed twice: not across orders, nor as a plan or membership purchase.
+    const alreadyConfirmed = await transferConfirmedElsewhere(tx, payment.method, payment.referenceNo ?? "", { paymentId: payment.id });
+    if (alreadyConfirmed) {
+      // Written outside the transaction on purpose: the abort below rolls the transaction back, the flag must survive.
+      await db.payment.update({ where: { id: payment.id }, data: { flagged: true, flagReason: "Transfer reference already confirmed on another order" } });
+      fail("DUPLICATE_TRANSFER");
+    }
+
+    const done = await tx.payment.updateMany({ where: { id: payment.id, confirmedAt: null }, data: { confirmedAt: new Date(), confirmedById: actor.id } });
+    if (done.count !== 1) fail("CONFLICT");
+    await setPaymentStatus(tx, order, "CONFIRMED", actor.id, asAdmin ? "admin override" : "confirmed by merchant");
+    await moveStatus(tx, { ...order, paymentStatus: "CONFIRMED" }, "AWAITING_MERCHANT_APPROVAL", actor.id, null);
+    await notifyInTx(tx, { userId: order.customerId, type: "PAYMENT_CONFIRMED", title: "تم تأكيد الدفع", body: `تم تأكيد تحويلك للطلب رقم ${order.number}. في انتظار قبول التاجر.`, data: { orderId: order.id }, dedupeKey: `payment-confirmed:${order.id}` });
+    await writeAudit({ actorId: actor.id, action: "PAYMENT_CONFIRMED", entityType: "Order", entityId: order.id, after: { paymentId: payment.id, asAdmin } }, tx);
+  });
+}
+
+/** Rejecting a transfer leaves the order waiting for payment so the customer can send a new proof. */
+export async function rejectPayment(actor: Actor, orderId: string, reason: string): Promise<LifecycleResult> {
+  const clean = typeof reason === "string" ? reason.trim() : "";
+  if (clean.length < 3 || clean.length > 300) return { ok: false, error: "INVALID_REQUEST" };
+  return run(async (tx) => {
+    const { order, asAdmin } = await loadOrderForSeller(tx, actor, orderId);
+    if (order.orderStatus !== "AWAITING_PAYMENT" || order.paymentStatus !== "AWAITING_MERCHANT_CONFIRMATION") fail("WRONG_STATE");
+    const payment = await latestOpenPayment(tx, order.id);
+    await tx.payment.update({ where: { id: payment.id }, data: { rejectedReason: clean } });
+    await setPaymentStatus(tx, order, "REJECTED", actor.id, clean);
+    await notifyInTx(tx, { userId: order.customerId, type: "PAYMENT_REJECTED", title: "تم رفض إثبات الدفع", body: `رُفض إثبات التحويل للطلب رقم ${order.number}: ${clean}. يمكنك إرسال إثبات جديد.`, data: { orderId: order.id }, dedupeKey: `payment-rejected:${payment.id}` });
+    await writeAudit({ actorId: actor.id, action: "PAYMENT_REJECTED", entityType: "Order", entityId: order.id, after: { paymentId: payment.id, reason: clean, asAdmin } }, tx);
+  });
+}
+
+// ───────────────────────── stars + refunds helpers ─────────────────────────
+
+async function chargeStars(tx: Tx, order: OrderRow, actorId: string): Promise<void> {
+  const perParty = await getSetting("orders.stars_charge_per_party");
+  if (perParty === 0) return;
+  const minCustomer = await getSetting("stars.min_balance_customer");
+  const minMerchant = await getSetting("stars.min_balance_merchant");
+  if ((await getStarBalance(tx, order.customerId)) < Math.max(minCustomer, perParty)) fail("INSUFFICIENT_STARS");
+  if ((await getStarBalance(tx, order.merchant.ownerId)) < Math.max(minMerchant, perParty)) fail("INSUFFICIENT_STARS");
+  const moves: StarMove[] = [
+    { userId: order.customerId, amount: -perParty, reason: "ORDER_CHARGE", orderId: order.id, actorId, idempotencyKey: ledgerKeys.orderCharge(order.customerId, order.id) },
+    { userId: order.merchant.ownerId, amount: -perParty, reason: "ORDER_CHARGE", orderId: order.id, actorId, idempotencyKey: ledgerKeys.orderCharge(order.merchant.ownerId, order.id) },
+  ];
+  await applyStarMoves(tx, moves);
+}
+
+/** Gives back exactly what the ledger charged for this order (not the current setting), once per party. */
+async function refundStars(tx: Tx, order: OrderRow, actorId: string): Promise<void> {
+  const charges = await tx.starLedgerEntry.findMany({ where: { orderId: order.id, reason: "ORDER_CHARGE" }, include: { account: true } });
+  const moves: StarMove[] = charges.map((c) => ({
+    userId: c.account.userId,
+    amount: -c.amount,
+    reason: "ORDER_REFUND",
+    orderId: order.id,
+    actorId,
+    idempotencyKey: ledgerKeys.orderRefund(c.account.userId, order.id),
+  }));
+  if (moves.length > 0) await applyStarMoves(tx, moves);
+}
+
+/** If the customer's transfer was already confirmed, the merchant owes it back: open a Refund with a server-set deadline. */
+async function openRefundIfPaid(tx: Tx, order: OrderRow, actorId: string): Promise<void> {
+  if (order.paymentStatus !== "CONFIRMED") return;
+  const payment = await tx.payment.findFirst({ where: { orderId: order.id, confirmedAt: { not: null } }, orderBy: { confirmedAt: "desc" } });
+  if (!payment) return;
+  const hours = await getSetting("refunds.deadline_hours");
+  await tx.refund.create({ data: { orderId: order.id, amountCents: payment.amountCents, dueAt: new Date(Date.now() + hours * 3_600_000) } });
+  const changed = await tx.order.updateMany({ where: { id: order.id, refundStatus: "NONE" }, data: { refundStatus: "PENDING" } });
+  if (changed.count !== 1) fail("CONFLICT");
+  await tx.orderEvent.create({ data: { orderId: order.id, field: "refundStatus", fromValue: "NONE", toValue: "PENDING", actorId, note: "refund opened" } });
+}
+
+// ───────────────────────── merchant decision and fulfilment ─────────────────────────
+
+/** Approve: charges the stars (once) and moves on. Reject: only before approval, opens a refund if money was confirmed. */
+export async function decideOrder(actor: Actor, orderId: string, decision: "APPROVE" | "REJECT", reason?: string): Promise<LifecycleResult> {
+  const clean = reason?.trim() ?? "";
+  if (decision === "REJECT" && (clean.length < 3 || clean.length > 300)) return { ok: false, error: "INVALID_REQUEST" };
+  return run(async (tx) => {
+    const { order } = await loadOrderForSeller(tx, actor, orderId);
+    if (actor.role !== "MERCHANT") throw new AuthorizationError(); // approving is the shop owner's decision, not an admin override
+    if (order.orderStatus !== "AWAITING_MERCHANT_APPROVAL") fail("WRONG_STATE");
+    if (order.paymentStatus !== "CONFIRMED") fail("PAYMENT_NOT_CONFIRMED");
+
+    if (decision === "APPROVE") {
+      await chargeStars(tx, order, actor.id);
+      await moveStatus(tx, order, "APPROVED", actor.id, null, { starsChargedAt: new Date(), approvedAt: new Date(), approvedById: actor.id });
+      await notifyInTx(tx, { userId: order.customerId, type: "ORDER_APPROVED", title: "تم قبول طلبك", body: `قبل التاجر الطلب رقم ${order.number} وبدأ التجهيز.`, data: { orderId: order.id }, dedupeKey: `order-approved:${order.id}` });
+      await writeAudit({ actorId: actor.id, action: "ORDER_APPROVED", entityType: "Order", entityId: order.id }, tx);
+    } else {
+      await moveStatus(tx, order, "REJECTED", actor.id, clean, { cancelledAt: new Date(), cancelledById: actor.id, cancelReason: clean });
+      await openRefundIfPaid(tx, order, actor.id);
+      await notifyInTx(tx, { userId: order.customerId, type: "ORDER_REJECTED", title: "تم رفض طلبك", body: `رفض التاجر الطلب رقم ${order.number}: ${clean}.`, data: { orderId: order.id }, dedupeKey: `order-rejected:${order.id}` });
+      await writeAudit({ actorId: actor.id, action: "ORDER_REJECTED", entityType: "Order", entityId: order.id, after: { reason: clean } }, tx);
+    }
+  });
+}
+
+const FULFILMENT_STEPS: Record<string, OrderStatus> = { PREPARING: "PREPARING", READY: "READY", OUT_FOR_DELIVERY: "OUT_FOR_DELIVERY", DELIVERED: "DELIVERED" };
+
+/** The shop owner moves an approved order forward. (Driver-driven delivery steps arrive with the delivery phase.) */
+export async function advanceOrder(actor: Actor, orderId: string, to: "PREPARING" | "READY" | "OUT_FOR_DELIVERY" | "DELIVERED"): Promise<LifecycleResult> {
+  const target = FULFILMENT_STEPS[to];
+  if (!target) return { ok: false, error: "INVALID_REQUEST" };
+  return run(async (tx) => {
+    const order = await loadOrder(tx, orderId);
+    if (actor.role !== "MERCHANT" || order.merchant.ownerId !== actor.id) throw new NotFoundError();
+    // With a driver on the way the driver confirms pickup and delivery; the shop cannot skip that step.
+    if ((target === "OUT_FOR_DELIVERY" || target === "DELIVERED") && ["DRIVER_ASSIGNED", "PICKED_UP", "OUT_FOR_DELIVERY"].includes(order.deliveryStatus)) fail("WRONG_STATE");
+    await moveStatus(tx, order, target, actor.id, null);
+    await notifyInTx(tx, { userId: order.customerId, type: `ORDER_${target}`, title: "تحديث على طلبك", body: `تغيرت حالة الطلب رقم ${order.number}.`, data: { orderId: order.id, status: target }, dedupeKey: `order-${target}:${order.id}` });
+    await writeAudit({ actorId: actor.id, action: "ORDER_ADVANCED", entityType: "Order", entityId: order.id, after: { to } }, tx);
+  });
+}
+
+/**
+ * Cancellation.
+ * - Before approval: the customer, the shop owner, or an authorized admin may cancel; no stars were charged.
+ * - After approval: the customer cannot cancel directly: they ask (requestCancellation) and the shop answers
+ *   (resolveCancellation). The shop owner or an authorized admin may cancel an APPROVED or CANCELLATION_REQUESTED order
+ *   directly; the stars charged for THIS suborder go back to both sides exactly once.
+ * If the transfer was already confirmed, a Refund is opened (the merchant returns the money; nothing is paid out automatically).
+ */
+export async function cancelOrder(actor: Actor, orderId: string, reason: string): Promise<LifecycleResult> {
+  const clean = typeof reason === "string" ? reason.trim() : "";
+  if (clean.length < 3 || clean.length > 300) return { ok: false, error: "INVALID_REQUEST" };
+  return run(async (tx) => {
+    const order = await loadOrder(tx, orderId);
+    const isCustomer = actor.role === "CUSTOMER" && order.customerId === actor.id;
+    const isSeller = actor.role === "MERCHANT" && order.merchant.ownerId === actor.id;
+    const isAdmin = hasPermission(actor, "payments.review");
+    if (!isCustomer && !isSeller && !isAdmin) throw new NotFoundError();
+    // "charged" = the stars of this suborder were taken at approval and not yet given back (true from APPROVED on).
+    const approved = order.starsChargedAt !== null && order.starsRefundedAt === null;
+    if (order.starsChargedAt !== null && isCustomer) fail("WRONG_STATE"); // after acceptance the customer must ask (requestCancellation)
+
+    await moveStatus(tx, order, "CANCELLED", actor.id, clean, { cancelledAt: new Date(), cancelledById: actor.id, cancelReason: clean });
+    if (approved) {
+      await refundStars(tx, order, actor.id);
+      await tx.order.update({ where: { id: order.id }, data: { starsRefundedAt: new Date() } });
+    }
+    await openRefundIfPaid(tx, order, actor.id);
+    // Tell the other side. A customer's cancellation notifies the shop; anyone else's notifies the customer.
+    await notifyInTx(tx, isCustomer
+      ? { userId: order.merchant.ownerId, type: "ORDER_CANCELLED", title: "ألغى العميل الطلب", body: `ألغى العميل الطلب رقم ${order.number}.`, data: { orderId: order.id }, dedupeKey: `order-cancelled:${order.id}` }
+      : { userId: order.customerId, type: "ORDER_CANCELLED", title: "تم إلغاء طلبك", body: `أُلغي الطلب رقم ${order.number}: ${clean}.`, data: { orderId: order.id }, dedupeKey: `order-cancelled:${order.id}` });
+    await writeAudit({ actorId: actor.id, action: "ORDER_CANCELLED", entityType: "Order", entityId: order.id, after: { reason: clean, starsRefunded: approved } }, tx);
+  });
+}
+
+
+// ───────────────────────── cancellation request (after the merchant accepted) ─────────────────────────
+
+/** Stages from which the customer may ask to cancel. Once the order is out for delivery it is no longer cancellable by request. */
+const REQUESTABLE: readonly OrderStatus[] = ["APPROVED", "PREPARING", "READY"];
+
+/** The status the order had when the current cancellation request was made (read from the append-only event log). */
+async function statusBeforeRequest(tx: Tx, orderId: string): Promise<{ status: OrderStatus; requestNo: number }> {
+  const events = await tx.orderEvent.findMany({ where: { orderId, field: "orderStatus", toValue: "CANCELLATION_REQUESTED" }, orderBy: { createdAt: "desc" } });
+  const last = events[0];
+  if (!last?.fromValue) throw new Abort("WRONG_STATE");
+  return { status: last.fromValue as OrderStatus, requestNo: events.length };
+}
+
+/** Customer asks the shop to cancel an order it already accepted. Nothing is refunded yet; the order is only flagged. */
+export async function requestCancellation(actor: Actor, orderId: string, reason: string): Promise<LifecycleResult> {
+  const clean = typeof reason === "string" ? reason.trim() : "";
+  if (clean.length < 3 || clean.length > 300) return { ok: false, error: "INVALID_REQUEST" };
+  return run(async (tx) => {
+    const order = await loadOwnCustomerOrder(tx, actor, orderId);
+    if (!REQUESTABLE.includes(order.orderStatus)) fail("WRONG_STATE");
+    await moveStatus(tx, order, "CANCELLATION_REQUESTED", actor.id, clean);
+    const requestNo = await tx.orderEvent.count({ where: { orderId, field: "orderStatus", toValue: "CANCELLATION_REQUESTED" } });
+    await notifyInTx(tx, { userId: order.merchant.ownerId, type: "ORDER_CANCEL_REQUESTED", title: "طلب إلغاء من العميل", body: `طلب العميل إلغاء الطلب رقم ${order.number}: ${clean}.`, data: { orderId }, dedupeKey: `cancel-requested:${orderId}:${requestNo}` });
+    await writeAudit({ actorId: actor.id, action: "ORDER_CANCEL_REQUESTED", entityType: "Order", entityId: orderId, after: { reason: clean, from: order.orderStatus } }, tx);
+  });
+}
+
+/**
+ * The shop (or an authorized admin) answers a cancellation request.
+ * ACCEPT -> CANCELLED: stars go back to both sides once, and a Refund is opened if the transfer was confirmed.
+ * DECLINE -> the order returns to the stage it was in (a reason is required and is shown to the customer).
+ */
+export async function resolveCancellation(actor: Actor, orderId: string, decision: "ACCEPT" | "DECLINE", reason?: string): Promise<LifecycleResult> {
+  const clean = reason?.trim() ?? "";
+  if (decision === "DECLINE" && (clean.length < 3 || clean.length > 300)) return { ok: false, error: "INVALID_REQUEST" };
+  if (decision === "ACCEPT" && clean.length > 300) return { ok: false, error: "INVALID_REQUEST" };
+  return run(async (tx) => {
+    const { order } = await loadOrderForSeller(tx, actor, orderId);
+    if (order.orderStatus !== "CANCELLATION_REQUESTED") fail("WRONG_STATE");
+    const { status: before, requestNo } = await statusBeforeRequest(tx, orderId);
+    if (decision === "ACCEPT") {
+      await moveStatus(tx, order, "CANCELLED", actor.id, clean || null, { cancelledAt: new Date(), cancelledById: actor.id, cancelReason: clean || "طلب العميل" });
+      if (order.starsChargedAt !== null && order.starsRefundedAt === null) {
+        await refundStars(tx, order, actor.id);
+        await tx.order.update({ where: { id: order.id }, data: { starsRefundedAt: new Date() } });
+      }
+      await openRefundIfPaid(tx, order, actor.id);
+      await notifyInTx(tx, { userId: order.customerId, type: "ORDER_CANCELLED", title: "تم إلغاء طلبك", body: `وافق التاجر على إلغاء الطلب رقم ${order.number}.`, data: { orderId }, dedupeKey: `order-cancelled:${orderId}` });
+      await writeAudit({ actorId: actor.id, action: "ORDER_CANCEL_ACCEPTED", entityType: "Order", entityId: orderId, after: { starsRefunded: order.starsChargedAt !== null } }, tx);
+    } else {
+      await moveStatus(tx, order, before, actor.id, clean);
+      await notifyInTx(tx, { userId: order.customerId, type: "ORDER_CANCEL_DECLINED", title: "لم يُقبل طلب الإلغاء", body: `رفض التاجر إلغاء الطلب رقم ${order.number}: ${clean}.`, data: { orderId }, dedupeKey: `cancel-declined:${orderId}:${requestNo}` });
+      await writeAudit({ actorId: actor.id, action: "ORDER_CANCEL_DECLINED", entityType: "Order", entityId: orderId, after: { reason: clean, backTo: before } }, tx);
+    }
+  });
+}

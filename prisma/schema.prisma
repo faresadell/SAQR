@@ -97,6 +97,10 @@ enum StarReason {
   ORDER_CHARGE
   ORDER_REFUND
   ADMIN_CORRECTION
+  DAILY_CHARGE
+  MONTHLY_REWARD
+  PLAN_GRANT
+  OFFER_EXTENSION
 }
 
 // ───────────── Users, auth, permissions ─────────────
@@ -128,6 +132,8 @@ model User {
   driverProfile  Driver?
   starAccount    StarAccount?
   orders         Order[]           @relation("CustomerOrders")
+  emailCodes     EmailCode[]
+  recoveryCodes  AdminRecoveryCode[]
 }
 
 model OtpCode {
@@ -201,6 +207,10 @@ model Merchant {
   products        Product[]
   drivers         Driver[]
   orders          Order[]
+  membership      Membership?
+  membershipPurchases MembershipPurchase[]
+  settlements     CommissionSettlement[]
+  offers          Offer[]
 
   @@index([status])
 }
@@ -266,6 +276,7 @@ model Product {
   merchant Merchant    @relation(fields: [merchantId], references: [id])
   category Category    @relation(fields: [categoryId], references: [id])
   items    OrderItem[]
+  offerProducts OfferProduct[]
 
   @@index([merchantId, isAvailable])
   @@index([categoryId])
@@ -338,6 +349,8 @@ model PaymentMethodConfig {
   code      String   @id // "vodafone_cash" | "instapay"
   nameAr    String
   isEnabled Boolean  @default(false)
+  // Where customers send the money. Admin-set; empty = the method cannot take payment requests (no placeholder numbers).
+  receiverNumber String?
   sortOrder Int      @default(0)
   updatedAt DateTime @updatedAt
 }
@@ -402,6 +415,8 @@ model Order {
   number       Int    @unique @default(autoincrement())
   customerId   String
   merchantId   String
+  // Phase 4: this table is the SUBORDER (one merchant). Orders created before Phase 4 have no parent.
+  parentOrderId String?
 
   orderStatus    OrderStatus    @default(AWAITING_PAYMENT)
   paymentStatus  PaymentStatus  @default(NOT_REQUIRED_YET)
@@ -433,6 +448,7 @@ model Order {
 
   customer User     @relation("CustomerOrders", fields: [customerId], references: [id])
   merchant Merchant @relation(fields: [merchantId], references: [id])
+  parent   ParentOrder? @relation(fields: [parentOrderId], references: [id])
 
   items    OrderItem[]
   events   OrderEvent[]
@@ -441,9 +457,30 @@ model Order {
   delivery DeliveryRecord?
   stars    StarLedgerEntry[]
 
+  @@index([parentOrderId])
   @@index([customerId, createdAt])
   @@index([merchantId, orderStatus])
   @@index([orderStatus, paymentStatus])
+}
+
+// One checkout = one ParentOrder. Its status is NOT stored: it is derived from its suborders
+// (src/lib/orders/status.ts deriveParentStatus). Totals are copied from the server-built quote.
+model ParentOrder {
+  id               String   @id @default(cuid())
+  number           Int      @unique @default(autoincrement())
+  customerId       String
+  // Client-supplied key; one checkout request creates at most one parent (retry-safe).
+  idempotencyKey   String
+  subtotalCents    Int
+  deliveryFeeCents Int
+  totalCents       Int
+  addressSnap      Json
+  createdAt        DateTime @default(now())
+
+  suborders Order[]
+
+  @@unique([customerId, idempotencyKey])
+  @@index([customerId, createdAt])
 }
 
 model OrderItem {
@@ -453,8 +490,10 @@ model OrderItem {
   nameSnapshot   String
   unitPriceCents Int
   quantity       Int
-  discountCents  Int     @default(0)
-  lineTotalCents Int
+  discountCents  Int     @default(0) // whole line: unitDiscountCents x quantity
+  lineTotalCents Int // (unitPriceCents - unitDiscountCents) x quantity: what is charged and what the commission is computed on
+  offerId        String? // the offer that discounted this item (snapshot, no foreign key)
+  unitDiscountCents Int  @default(0)
   order          Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
   product        Product? @relation(fields: [productId], references: [id], onDelete: SetNull)
 }
@@ -493,6 +532,239 @@ model Payment {
 
   @@index([orderId])
   @@index([method, referenceNo])
+}
+
+// A receipt image stored in private storage. The content is identified by sha256 so the same picture used on
+// another order can be flagged. A payment may only reference an upload made by the same customer for the same order.
+model ReceiptUpload {
+  id          String   @id @default(cuid())
+  orderId     String? // null = proof for a plan purchase
+  uploaderId  String
+  storageKey  String   @unique
+  contentType String
+  sizeBytes   Int
+  sha256      String
+  usedAt      DateTime? // set once, when a payment is submitted with it
+  createdAt   DateTime @default(now())
+
+  @@index([orderId, uploaderId])
+  @@index([sha256])
+}
+
+// ───────────── Plans (star packages, 30-day cycle) ─────────────
+
+enum PlanAudience {
+  CUSTOMER
+  DRIVER
+  MERCHANT
+}
+
+enum PurchaseStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+// Admin-managed catalog. Purchases copy price and stars, so editing a plan never changes past purchases.
+// This is NOT the merchant membership (Basic/Premium commission tier): plans only sell stars and offer quota.
+model Plan {
+  id         String       @id @default(cuid())
+  code       String       @unique
+  audience   PlanAudience
+  nameAr     String
+  priceCents Int
+  baseStars  Int
+  bonusStars Int          @default(0)
+  offerQuota Int? // merchant offers per 30-day cycle
+  isActive   Boolean      @default(true)
+  sortOrder  Int          @default(0)
+  createdAt  DateTime     @default(now())
+  updatedAt  DateTime     @updatedAt
+
+  purchases     PlanPurchase[]
+  subscriptions Subscription[]
+}
+
+// One row per user: the current plan and when its paid time ends. Stars never expire with it.
+model Subscription {
+  id                String    @id @default(cuid())
+  userId            String    @unique
+  planId            String
+  startsAt          DateTime
+  expiresAt         DateTime
+  reminderSentAt    DateTime? // 3-day warning for the current expiry
+  expiredNotifiedAt DateTime?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  plan Plan @relation(fields: [planId], references: [id])
+
+  @@index([expiresAt])
+}
+
+model PlanPurchase {
+  id               String         @id @default(cuid())
+  userId           String
+  planId           String
+  priceCentsSnap   Int
+  baseStarsSnap    Int
+  bonusStarsSnap   Int
+  method           String
+  referenceNo      String
+  receiptUploadId  String         @unique
+  status           PurchaseStatus @default(PENDING)
+  decidedById      String?
+  decidedAt        DateTime?
+  rejectReason     String?
+  flagged          Boolean        @default(false)
+  flagReason       String?
+  createdAt        DateTime       @default(now())
+
+  plan Plan @relation(fields: [planId], references: [id])
+
+  @@index([userId, createdAt])
+  @@index([status, createdAt])
+  @@index([method, referenceNo])
+}
+
+// ───────────── Merchant memberships (Plus / Premium) and commission settlements ─────────────
+
+// Paid monthly membership of a shop. Premium grants the BUSINESS tier (5% commission), Plus grants the REGULAR tier
+// (8%, unchanged: no Plus-specific benefit has been specified, none is invented). Admin-editable.
+model MembershipPlan {
+  id           String       @id @default(cuid())
+  code         String       @unique // "plus" | "premium"
+  nameAr       String
+  priceCents   Int
+  tier         MerchantTier
+  durationDays Int          @default(30)
+  isActive     Boolean      @default(true)
+  sortOrder    Int          @default(0)
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+
+  purchases   MembershipPurchase[]
+  memberships Membership[]
+}
+
+// One row per shop: the current membership and when its paid time ends.
+model Membership {
+  id                String       @id @default(cuid())
+  merchantId        String       @unique
+  planId            String
+  grantedTier       MerchantTier
+  startsAt          DateTime
+  expiresAt         DateTime
+  tierRevertedAt    DateTime? // set once the shop went back to REGULAR after expiry
+  reminderSentAt    DateTime?
+  expiredNotifiedAt DateTime?
+  createdAt         DateTime     @default(now())
+  updatedAt         DateTime     @updatedAt
+
+  merchant Merchant       @relation(fields: [merchantId], references: [id])
+  plan     MembershipPlan @relation(fields: [planId], references: [id])
+
+  @@index([expiresAt])
+}
+
+model MembershipPurchase {
+  id               String         @id @default(cuid())
+  merchantId       String
+  planId           String
+  priceCentsSnap   Int
+  tierSnap         MerchantTier
+  durationDaysSnap Int
+  method           String
+  referenceNo      String
+  receiptUploadId  String         @unique
+  status           PurchaseStatus @default(PENDING)
+  decidedById      String?
+  decidedAt        DateTime?
+  rejectReason     String?
+  flagged          Boolean        @default(false)
+  flagReason       String?
+  createdAt        DateTime       @default(now())
+
+  merchant Merchant       @relation(fields: [merchantId], references: [id])
+  plan     MembershipPlan @relation(fields: [planId], references: [id])
+
+  @@index([merchantId, createdAt])
+  @@index([status, createdAt])
+  @@index([method, referenceNo])
+}
+
+enum SettlementStatus {
+  ISSUED
+  PAID
+}
+
+enum SettlementLineKind {
+  ORDER
+  ADJUSTMENT
+}
+
+// Monthly commission statement of one shop (Cairo calendar month). Frozen once created: only the status / payment
+// columns may change (database trigger). One per shop per month. `netDueCents` = commissionCents + adjustmentCents.
+model CommissionSettlement {
+  id               String           @id @default(cuid())
+  merchantId       String
+  monthKey         String // "YYYY-MM"
+  periodStart      DateTime
+  periodEnd        DateTime
+  orderCount       Int
+  baseCents        Int
+  commissionCents  Int
+  adjustmentCents  Int // <= 0: commission given back for refunds that happened after an earlier statement
+  netDueCents      Int
+  status           SettlementStatus @default(ISSUED)
+  issuedAt         DateTime         @default(now())
+  issuedById       String? // null = scheduled job
+  paidAt           DateTime?
+  paidById         String?
+  paymentReference String?
+  createdAt        DateTime         @default(now())
+
+  merchant Merchant                 @relation(fields: [merchantId], references: [id])
+  lines    CommissionSettlementLine[]
+
+  @@unique([merchantId, monthKey])
+  @@index([monthKey, status])
+}
+
+// Append-only. An order appears at most once as ORDER and at most once as ADJUSTMENT, across all months.
+model CommissionSettlementLine {
+  id              String             @id @default(cuid())
+  settlementId    String
+  orderId         String
+  kind            SettlementLineKind
+  baseCents       Int
+  commissionBp    Int
+  commissionCents Int // negative for ADJUSTMENT
+  createdAt       DateTime           @default(now())
+
+  settlement CommissionSettlement @relation(fields: [settlementId], references: [id])
+
+  @@unique([orderId, kind])
+  @@index([settlementId])
+}
+
+// ───────────── Notifications (in-app inbox) ─────────────
+
+// Created inside the same transaction as the event that causes them. `dedupeKey` is unique, so a retried
+// request can never create the same notification twice. Push/SMS/email delivery needs a configured provider
+// (not built): until then the inbox is the only channel.
+model Notification {
+  id        String    @id @default(cuid())
+  userId    String
+  type      String
+  title     String
+  body      String
+  data      Json?
+  dedupeKey String    @unique
+  readAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([userId, readAt, createdAt])
 }
 
 // ───────────── Refunds (merchant sends money, admin verifies) ─────────────
@@ -556,3 +828,193 @@ model AuditLog {
 // (SELECT ... FOR UPDATE, fixed order to avoid deadlock), recheck balance >= required,
 // insert both ledger entries, update balances, set order.starsChargedAt and orderStatus.
 // The unique (accountId, orderId, reason) constraint makes a double charge impossible.
+
+
+// ───────────── Offers (lifecycle only: no discount type or scope is defined yet) ─────────────
+
+enum OfferStatus {
+  ACTIVE
+  STOPPED
+}
+
+// A shop's announced offer. Base duration is a setting (24 h); each extra hour costs stars from the shop (a setting, 1).
+// Whether an offer discounts anything, and what, has NOT been decided: nothing here touches prices or order totals.
+enum OfferDiscountType {
+  PERCENT
+  FIXED
+}
+
+// Products a discounted offer applies to (all of them must belong to the offer's shop).
+model OfferProduct {
+  offerId   String
+  productId String
+
+  offer   Offer   @relation(fields: [offerId], references: [id])
+  product Product @relation(fields: [productId], references: [id])
+
+  @@id([offerId, productId])
+  @@index([productId])
+}
+
+model Offer {
+  id          String      @id @default(cuid())
+  merchantId  String
+  title       String
+  description String?
+  startsAt    DateTime
+  endsAt      DateTime
+  status      OfferStatus @default(ACTIVE)
+  stoppedAt   DateTime?
+  stoppedById String?
+  stopReason  String?
+  // Optional discount. null = announcement only. PERCENT: value in basis points (1500 = 15%). FIXED: piasters off each unit.
+  discountType  OfferDiscountType?
+  discountValue Int?
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  merchant   Merchant         @relation(fields: [merchantId], references: [id])
+  extensions OfferExtension[]
+  products   OfferProduct[]
+
+  @@index([merchantId, status, endsAt])
+  @@index([status, endsAt])
+}
+
+// Append-only record of every paid extension (one row per request key, so a retry never charges twice).
+model OfferExtension {
+  id             String   @id @default(cuid())
+  offerId        String
+  hours          Int
+  starsCharged   Int
+  actorId        String
+  idempotencyKey String
+  createdAt      DateTime @default(now())
+
+  offer Offer @relation(fields: [offerId], references: [id])
+
+  @@unique([offerId, idempotencyKey])
+}
+
+// ───────────── Monthly contest (ranking rule is not defined: admins enter the winners and approve them) ─────────────
+
+enum ContestAwardStatus {
+  PROPOSED
+  APPROVED
+  PAID
+  REJECTED
+}
+
+model ContestAward {
+  id               String             @id @default(cuid())
+  monthKey         String // Cairo month "YYYY-MM"
+  rank             Int // 1..3
+  userId           String
+  prizeCents       Int // copied from the prize settings when proposed
+  basisNote        String // why this person is at this rank (the admin states the basis; the system does not invent one)
+  status           ContestAwardStatus @default(PROPOSED)
+  proposedById     String
+  decidedById      String?
+  decidedAt        DateTime?
+  decisionNote     String?
+  paidById         String?
+  paidAt           DateTime?
+  paymentReference String?
+  createdAt        DateTime           @default(now())
+  updatedAt        DateTime           @updatedAt
+
+  // One winner per rank and one rank per person each month (a rejected award frees both through the partial indexes in the migration).
+  @@index([monthKey, status])
+  @@index([userId])
+}
+
+
+// ───────────── Complaints ─────────────
+
+enum ComplaintStatus {
+  OPEN
+  IN_REVIEW
+  RESOLVED
+  DISMISSED
+}
+
+// A customer's complaint about one of their own suborders. Admins review it; refunds still follow the refund flow.
+model Complaint {
+  id           String          @id @default(cuid())
+  orderId      String
+  customerId   String
+  merchantId   String
+  subject      String
+  details      String
+  status       ComplaintStatus @default(OPEN)
+  adminResponse String?
+  handledById  String?
+  handledAt    DateTime?
+  createdAt    DateTime        @default(now())
+  updatedAt    DateTime        @updatedAt
+
+  @@index([status, createdAt])
+  @@index([customerId, createdAt])
+  @@index([orderId])
+}
+
+enum EmailCodePurpose {
+  VERIFY_EMAIL
+  PASSWORD_RESET
+}
+
+// One-time codes sent by email (Resend). Stored only as keyed hashes; the address is part of the hash so a code
+// for one address cannot confirm another.
+model EmailCode {
+  id         String           @id @default(cuid())
+  userId     String
+  email      String
+  purpose    EmailCodePurpose
+  codeHash   String
+  attempts   Int              @default(0)
+  expiresAt  DateTime
+  consumedAt DateTime?
+  createdAt  DateTime         @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, purpose, createdAt])
+}
+
+// Single-use backup codes for administrators who lost their authenticator. Only hashes are stored.
+model AdminRecoveryCode {
+  id        String    @id @default(cuid())
+  userId    String
+  codeHash  String    @unique
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, usedAt])
+}
+
+// Editable legal / support pages. They are drafts until an administrator approves them after legal review;
+// any edit removes the approval.
+model LegalPage {
+  slug         String    @id
+  title        String
+  body         String
+  version      Int       @default(1)
+  approvedAt   DateTime?
+  approvedById String?
+  updatedAt    DateTime  @updatedAt
+  updatedById  String?
+}
+
+// An administrator removes a person from a month's contest (manipulation, fraud, rule breach). Never deleted: audited.
+model ContestExclusion {
+  id           String   @id @default(cuid())
+  monthKey     String
+  userId       String
+  reason       String
+  excludedById String
+  createdAt    DateTime @default(now())
+
+  @@unique([monthKey, userId])
+}
