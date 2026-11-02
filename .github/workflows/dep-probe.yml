@@ -1,0 +1,55 @@
+name: dep-probe
+on:
+  push:
+    branches: [dep-probe]
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: prisma7
+            cmd: npm install @prisma/client@7 prisma@7
+          - name: types-node26
+            cmd: npm install -D @types/node@26
+          - name: eslint-config-next16
+            cmd: npm install -D eslint-config-next@16
+          - name: eslint10-with-next16
+            cmd: npm install -D eslint@10 eslint-config-next@16
+    env:
+      DATABASE_URL: postgresql://ci:ci@localhost:5432/ci
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+      - run: npm ci
+      - name: install candidate
+        id: install
+        continue-on-error: true
+        run: |
+          set +e
+          ${{ matrix.cmd }} > install.log 2>&1
+          code=$?
+          echo "install exit=$code"
+          grep -E "npm (error|warn)|ERESOLVE|peer" install.log | head -12 | while read -r l; do echo "::warning title=${{ matrix.name }} install::$l"; done
+          exit $code
+      - name: steps
+        if: steps.install.outcome == 'success'
+        run: |
+          set +e
+          for step in "npx prisma generate" "npm run typecheck" "npm run lint" "npm test"; do
+            $step > step.log 2>&1
+            code=$?
+            echo "[$step] exit=$code"
+            if [ $code -ne 0 ]; then
+              grep -vE "^\s*$" step.log | head -10 | while read -r l; do echo "::error title=${{ matrix.name }} [$step]::$l"; done
+            else
+              echo "::notice title=${{ matrix.name }} [$step]::OK"
+            fi
+          done
