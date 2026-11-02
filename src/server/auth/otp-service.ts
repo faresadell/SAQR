@@ -7,7 +7,7 @@ import { getSetting } from "@/lib/settings";
 import { generateOtp, hashOtp, otpMatches } from "@/lib/auth/otp";
 import { getOtpSender } from "./otp-sender";
 
-export type OtpRequestResult = { ok: true } | { ok: false; reason: "RATE_LIMITED" | "SEND_FAILED" };
+export type OtpRequestResult = { ok: true } | { ok: false; reason: "RATE_LIMITED" | "SEND_FAILED"; by?: "ip" | "account" };
 
 /**
  * Issue a one-time code. Callers must show the same neutral message whether or not a code was sent,
@@ -24,9 +24,9 @@ export async function requestOtp(phone: string, purpose: OtpPurpose, ip: string)
   const latest = await db.otpCode.findFirst({ where: { phone, purpose }, orderBy: { createdAt: "desc" } });
   if (latest && Date.now() - latest.createdAt.getTime() < cooldown * 1000) return { ok: true };
 
-  if (!(await consumeRateLimit(`otp:phone:${phone}`, perPhone, 3600))) return { ok: false, reason: "RATE_LIMITED" };
+  if (!(await consumeRateLimit(`otp:phone:${phone}`, perPhone, 3600))) return { ok: false, reason: "RATE_LIMITED", by: "account" };
   if (ip !== "unknown" && !(await consumeRateLimit(`otp:ip:${ip}`, perIp, 3600))) {
-    return { ok: false, reason: "RATE_LIMITED" };
+    return { ok: false, reason: "RATE_LIMITED", by: "ip" };
   }
 
   const code = generateOtp();

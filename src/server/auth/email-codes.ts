@@ -8,7 +8,7 @@ import { EMAIL_CODE_MINUTES } from "@/lib/email/resend";
 import { generateOtp, hashOtp, otpMatches } from "@/lib/auth/otp";
 import { getEmailSender } from "./email-sender";
 
-export type IssueResult = { ok: true } | { ok: false; reason: "RATE_LIMITED" | "SEND_FAILED" };
+export type IssueResult = { ok: true } | { ok: false; reason: "RATE_LIMITED" | "SEND_FAILED"; by?: "ip" | "account" };
 
 const binding = (userId: string, email: string) => `email:${userId}:${email}`;
 
@@ -21,8 +21,8 @@ export async function issueEmailCode(userId: string, email: string, purpose: Ema
   ]);
   const latest = await db.emailCode.findFirst({ where: { userId, purpose }, orderBy: { createdAt: "desc" } });
   if (latest && Date.now() - latest.createdAt.getTime() < cooldown * 1000) return { ok: true };
-  if (!(await consumeRateLimit(`email:user:${userId}`, perUser, 3600))) return { ok: false, reason: "RATE_LIMITED" };
-  if (ip !== "unknown" && !(await consumeRateLimit(`email:ip:${ip}`, perIp, 3600))) return { ok: false, reason: "RATE_LIMITED" };
+  if (!(await consumeRateLimit(`email:user:${userId}`, perUser, 3600))) return { ok: false, reason: "RATE_LIMITED", by: "account" };
+  if (ip !== "unknown" && !(await consumeRateLimit(`email:ip:${ip}`, perIp, 3600))) return { ok: false, reason: "RATE_LIMITED", by: "ip" };
 
   const code = generateOtp();
   const record = await db.$transaction(async (tx) => {

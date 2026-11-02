@@ -60,7 +60,8 @@ export async function requestPasswordResetByEmail(rawEmail: string, ip: string):
     return { ok: true };
   }
   const sent = await issueEmailCode(user.id, email, "PASSWORD_RESET", ip);
-  if (!sent.ok && sent.reason === "RATE_LIMITED") return { ok: false, error: "RATE_LIMITED" };
+  // the per-account limit is NOT reported: it would only ever fire for real accounts and reveal them
+  if (!sent.ok && sent.reason === "RATE_LIMITED" && sent.by === "ip") return { ok: false, error: "RATE_LIMITED" };
   return { ok: true };
 }
 

@@ -26,7 +26,8 @@ export async function requestPasswordReset(rawPhone: string, ip: string): Promis
     return { ok: true };
   }
   const sent = await requestOtp(phone, "PASSWORD_RESET", ip);
-  if (!sent.ok && sent.reason === "RATE_LIMITED") return { ok: false, error: "RATE_LIMITED" };
+  // the per-account limit is NOT reported: it would only ever fire for real accounts and reveal them
+  if (!sent.ok && sent.reason === "RATE_LIMITED" && sent.by === "ip") return { ok: false, error: "RATE_LIMITED" };
   return { ok: true };
 }
 
