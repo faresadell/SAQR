@@ -1,6 +1,8 @@
 import type { Metadata, Viewport } from "next";
 import { Cairo, Inter } from "next/font/google";
 import { RegisterServiceWorker } from "@/components/pwa/register-sw";
+import { ToastProvider } from "@/components/ui/toast";
+import { CartProvider } from "@/features/cart/cart-provider";
 import "./globals.css";
 
 const cairo = Cairo({ subsets: ["arabic", "latin"], variable: "--font-cairo", display: "swap" });
@@ -26,7 +28,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="ar" dir="rtl" className={`${cairo.variable} ${inter.variable}`}>
       <body>
-        {children}
+        <ToastProvider>
+          <CartProvider>{children}</CartProvider>
+        </ToastProvider>
         <RegisterServiceWorker />
       </body>
     </html>

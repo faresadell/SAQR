@@ -100,6 +100,7 @@ enum StarReason {
   DAILY_CHARGE
   MONTHLY_REWARD
   PLAN_GRANT
+  OFFER_EXTENSION
 }
 
 // ───────────── Users, auth, permissions ─────────────
@@ -131,6 +132,8 @@ model User {
   driverProfile  Driver?
   starAccount    StarAccount?
   orders         Order[]           @relation("CustomerOrders")
+  emailCodes     EmailCode[]
+  recoveryCodes  AdminRecoveryCode[]
 }
 
 model OtpCode {
@@ -207,6 +210,7 @@ model Merchant {
   membership      Membership?
   membershipPurchases MembershipPurchase[]
   settlements     CommissionSettlement[]
+  offers          Offer[]
 
   @@index([status])
 }
@@ -272,6 +276,7 @@ model Product {
   merchant Merchant    @relation(fields: [merchantId], references: [id])
   category Category    @relation(fields: [categoryId], references: [id])
   items    OrderItem[]
+  offerProducts OfferProduct[]
 
   @@index([merchantId, isAvailable])
   @@index([categoryId])
@@ -485,8 +490,10 @@ model OrderItem {
   nameSnapshot   String
   unitPriceCents Int
   quantity       Int
-  discountCents  Int     @default(0)
-  lineTotalCents Int
+  discountCents  Int     @default(0) // whole line: unitDiscountCents x quantity
+  lineTotalCents Int // (unitPriceCents - unitDiscountCents) x quantity: what is charged and what the commission is computed on
+  offerId        String? // the offer that discounted this item (snapshot, no foreign key)
+  unitDiscountCents Int  @default(0)
   order          Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
   product        Product? @relation(fields: [productId], references: [id], onDelete: SetNull)
 }
@@ -821,3 +828,193 @@ model AuditLog {
 // (SELECT ... FOR UPDATE, fixed order to avoid deadlock), recheck balance >= required,
 // insert both ledger entries, update balances, set order.starsChargedAt and orderStatus.
 // The unique (accountId, orderId, reason) constraint makes a double charge impossible.
+
+
+// ───────────── Offers (lifecycle only: no discount type or scope is defined yet) ─────────────
+
+enum OfferStatus {
+  ACTIVE
+  STOPPED
+}
+
+// A shop's announced offer. Base duration is a setting (24 h); each extra hour costs stars from the shop (a setting, 1).
+// Whether an offer discounts anything, and what, has NOT been decided: nothing here touches prices or order totals.
+enum OfferDiscountType {
+  PERCENT
+  FIXED
+}
+
+// Products a discounted offer applies to (all of them must belong to the offer's shop).
+model OfferProduct {
+  offerId   String
+  productId String
+
+  offer   Offer   @relation(fields: [offerId], references: [id])
+  product Product @relation(fields: [productId], references: [id])
+
+  @@id([offerId, productId])
+  @@index([productId])
+}
+
+model Offer {
+  id          String      @id @default(cuid())
+  merchantId  String
+  title       String
+  description String?
+  startsAt    DateTime
+  endsAt      DateTime
+  status      OfferStatus @default(ACTIVE)
+  stoppedAt   DateTime?
+  stoppedById String?
+  stopReason  String?
+  // Optional discount. null = announcement only. PERCENT: value in basis points (1500 = 15%). FIXED: piasters off each unit.
+  discountType  OfferDiscountType?
+  discountValue Int?
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  merchant   Merchant         @relation(fields: [merchantId], references: [id])
+  extensions OfferExtension[]
+  products   OfferProduct[]
+
+  @@index([merchantId, status, endsAt])
+  @@index([status, endsAt])
+}
+
+// Append-only record of every paid extension (one row per request key, so a retry never charges twice).
+model OfferExtension {
+  id             String   @id @default(cuid())
+  offerId        String
+  hours          Int
+  starsCharged   Int
+  actorId        String
+  idempotencyKey String
+  createdAt      DateTime @default(now())
+
+  offer Offer @relation(fields: [offerId], references: [id])
+
+  @@unique([offerId, idempotencyKey])
+}
+
+// ───────────── Monthly contest (ranking rule is not defined: admins enter the winners and approve them) ─────────────
+
+enum ContestAwardStatus {
+  PROPOSED
+  APPROVED
+  PAID
+  REJECTED
+}
+
+model ContestAward {
+  id               String             @id @default(cuid())
+  monthKey         String // Cairo month "YYYY-MM"
+  rank             Int // 1..3
+  userId           String
+  prizeCents       Int // copied from the prize settings when proposed
+  basisNote        String // why this person is at this rank (the admin states the basis; the system does not invent one)
+  status           ContestAwardStatus @default(PROPOSED)
+  proposedById     String
+  decidedById      String?
+  decidedAt        DateTime?
+  decisionNote     String?
+  paidById         String?
+  paidAt           DateTime?
+  paymentReference String?
+  createdAt        DateTime           @default(now())
+  updatedAt        DateTime           @updatedAt
+
+  // One winner per rank and one rank per person each month (a rejected award frees both through the partial indexes in the migration).
+  @@index([monthKey, status])
+  @@index([userId])
+}
+
+
+// ───────────── Complaints ─────────────
+
+enum ComplaintStatus {
+  OPEN
+  IN_REVIEW
+  RESOLVED
+  DISMISSED
+}
+
+// A customer's complaint about one of their own suborders. Admins review it; refunds still follow the refund flow.
+model Complaint {
+  id           String          @id @default(cuid())
+  orderId      String
+  customerId   String
+  merchantId   String
+  subject      String
+  details      String
+  status       ComplaintStatus @default(OPEN)
+  adminResponse String?
+  handledById  String?
+  handledAt    DateTime?
+  createdAt    DateTime        @default(now())
+  updatedAt    DateTime        @updatedAt
+
+  @@index([status, createdAt])
+  @@index([customerId, createdAt])
+  @@index([orderId])
+}
+
+enum EmailCodePurpose {
+  VERIFY_EMAIL
+  PASSWORD_RESET
+}
+
+// One-time codes sent by email (Resend). Stored only as keyed hashes; the address is part of the hash so a code
+// for one address cannot confirm another.
+model EmailCode {
+  id         String           @id @default(cuid())
+  userId     String
+  email      String
+  purpose    EmailCodePurpose
+  codeHash   String
+  attempts   Int              @default(0)
+  expiresAt  DateTime
+  consumedAt DateTime?
+  createdAt  DateTime         @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, purpose, createdAt])
+}
+
+// Single-use backup codes for administrators who lost their authenticator. Only hashes are stored.
+model AdminRecoveryCode {
+  id        String    @id @default(cuid())
+  userId    String
+  codeHash  String    @unique
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, usedAt])
+}
+
+// Editable legal / support pages. They are drafts until an administrator approves them after legal review;
+// any edit removes the approval.
+model LegalPage {
+  slug         String    @id
+  title        String
+  body         String
+  version      Int       @default(1)
+  approvedAt   DateTime?
+  approvedById String?
+  updatedAt    DateTime  @updatedAt
+  updatedById  String?
+}
+
+// An administrator removes a person from a month's contest (manipulation, fraud, rule breach). Never deleted: audited.
+model ContestExclusion {
+  id           String   @id @default(cuid())
+  monthKey     String
+  userId       String
+  reason       String
+  excludedById String
+  createdAt    DateTime @default(now())
+
+  @@unique([monthKey, userId])
+}

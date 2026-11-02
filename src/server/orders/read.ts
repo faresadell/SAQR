@@ -20,7 +20,7 @@ const orderSelect = {
   addressSnap: true,
   cancelReason: true,
   createdAt: true,
-  items: { select: { productId: true, nameSnapshot: true, unitPriceCents: true, quantity: true, lineTotalCents: true } },
+  items: { select: { productId: true, nameSnapshot: true, unitPriceCents: true, unitDiscountCents: true, discountCents: true, offerId: true, quantity: true, lineTotalCents: true } },
   payments: { select: { id: true, method: true, referenceNo: true, amountCents: true, submittedAt: true, confirmedAt: true, rejectedReason: true } },
 } satisfies Prisma.OrderSelect;
 
