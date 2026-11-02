@@ -25,7 +25,7 @@ export default async function CheckoutPage() {
   const [rows, zones] = customer ? await Promise.all([listMyAddresses(customer), listOpenZones()]) : [[], []];
   const feeByZone = new Map(zones.map((z) => [z.id, z.feeCents]));
   // feeCents is what the server would charge per shop for this address today; null = the zone is closed right now.
-  const addresses = rows.map((a) => ({ id: a.id, label: a.label ?? "عنوان", line: a.line, zoneName: a.zone?.name, feeCents: feeByZone.get(a.zoneId) ?? null }));
+  const addresses = rows.map((a) => ({ id: a.id, label: a.label ?? "عنوان", line: a.line, zoneName: a.zone?.name, feeCents: a.zoneId ? (feeByZone.get(a.zoneId) ?? null) : null }));
   return (
     <SiteShell>
       <div className="mx-auto flex w-full max-w-page flex-col gap-6 px-4 py-8 sm:px-6">
