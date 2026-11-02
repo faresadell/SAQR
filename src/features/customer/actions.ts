@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import type { FormState } from "@/lib/form-state";
+import { fileComplaint } from "@/server/complaints/service";
 import { createAddress, deleteAddress } from "@/server/addresses/service";
 import { requireRole } from "@/server/auth/guards";
 import { AuthorizationError, NotFoundError } from "@/server/errors";
@@ -118,6 +119,27 @@ export async function cancelOrderAction(_prev: FormState, formData: FormData): P
     if (!result.ok) return { error: LIFECYCLE_MESSAGES[result.error] ?? GENERIC_ERROR };
     revalidatePath("/account/orders", "layout");
     return { message: mode === "request" ? "تم إرسال طلب الإلغاء للنشاط." : "تم إلغاء الطلب." };
+  } catch (error) {
+    return failure(error);
+  }
+}
+
+// ───────────── complaints ─────────────
+
+const COMPLAINT_MESSAGES: Record<string, string> = {
+  INVALID_REQUEST: "اكتب عنواناً (3 أحرف على الأقل) وتفاصيل (10 أحرف على الأقل).",
+  RATE_LIMITED: "قدّمت شكاوى كثيرة اليوم. حاول لاحقاً.",
+  WRONG_STATE: "لا يمكن تقديم شكوى الآن.",
+};
+
+/** A complaint about one of the customer's own sub-orders. Refunds stay in the refund flow. */
+export async function fileComplaintAction(_prev: FormState, formData: FormData): Promise<FormState> {
+  const { user } = await requireRole("CUSTOMER");
+  try {
+    const result = await fileComplaint(user, { orderId: text(formData, "orderId"), subject: text(formData, "subject"), details: text(formData, "details") });
+    if (!result.ok) return { error: COMPLAINT_MESSAGES[result.error] ?? GENERIC_ERROR };
+    revalidatePath("/account/orders", "layout");
+    return { message: "وصلت شكواك للنشاط وللإدارة وسنرد عليك هنا." };
   } catch (error) {
     return failure(error);
   }
