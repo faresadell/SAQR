@@ -99,6 +99,8 @@ export interface SubOrderView {
   orderStatus: OrderStatus;
   paymentStatus: PaymentStatus;
   deliveryStatus: DeliveryStatus;
+  /** Set once a driver accepted the delivery. */
+  driverName?: string;
   refundStatus: RefundStatus;
   /** Present when the customer has submitted a transfer receipt for this sub-order. */
   payment?: { methodLabel: string; referenceNo?: string; submittedAt: string; amountCents: number };

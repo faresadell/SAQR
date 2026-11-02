@@ -230,12 +230,12 @@ model BusinessType {
 model Driver {
   id         String   @id @default(cuid())
   userId     String   @unique
-  merchantId String
+  merchantId String? // null = independent driver who takes orders from the open board
   isActive   Boolean  @default(true)
   createdAt  DateTime @default(now())
 
   user      User             @relation(fields: [userId], references: [id])
-  merchant  Merchant         @relation(fields: [merchantId], references: [id])
+  merchant  Merchant?        @relation(fields: [merchantId], references: [id])
   deliveries DeliveryRecord[]
 }
 

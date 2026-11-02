@@ -75,7 +75,8 @@ export function DriverHomeView({ data, base }: { data: DriverHomeData; base: str
         <StatCard label="رصيد النجوم" icon="star" tone="warning" value={formatNumber(data.starsBalance)} />
       </div>
       <div className="flex flex-wrap gap-2">
-        <LinkButton href={`${base}/tasks`}>الطلبات المسندة إليّ</LinkButton>
+        <LinkButton href={`${base}/board`}>طلبات متاحة</LinkButton>
+        <LinkButton href={`${base}/tasks`} variant="outline">الطلبات المسندة إليّ</LinkButton>
         <LinkButton href={`${base}/trip`} variant="outline">قيد التوصيل</LinkButton>
       </div>
       <p className="text-xs text-ink-muted">النشاط هو من يُسند لك الطلبات. لا تُخصم نجوم من السائق على الطلبات أو الرحلات.</p>

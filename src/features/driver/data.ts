@@ -1,13 +1,14 @@
 import "server-only";
 import type { SessionUser } from "@/server/auth/session";
 import { listMyDeliveries } from "@/server/orders/delivery";
+import { listBoard } from "@/server/orders/driver-board";
 import { failed, ready, type Loaded } from "@/features/shared/loaded";
 import { mapNotifications, mapPackages, mapStars } from "@/features/shared/server-mappers";
 import type { CurrentPackage, NotificationItem, PackageOption, PaymentInstruction, StarsOverview } from "@/features/shared/types";
 
 /**
- * Driver loaders over the real delivery service. A driver belongs to ONE shop and works only on orders that shop
- * assigned; each loader reads only the signed-in driver's own deliveries.
+ * Driver loaders over the real delivery service. A driver may work for one shop or independently; each loader reads
+ * only the signed-in driver's own deliveries, plus the open board (without customer details).
  */
 type U = SessionUser["user"];
 
@@ -53,7 +54,7 @@ function toRow(r: Awaited<ReturnType<typeof listMyDeliveries>>[number]): DriverD
   };
 }
 
-/** Deliveries the SHOP has given to this driver. There is no open task pool: a shop assigns its own drivers. */
+/** Deliveries this driver holds: accepted from the open board or given by a shop. */
 export async function loadMyDeliveries(user: U, scope: "ACTIVE" | "HISTORY"): Promise<Loaded<DriverDeliveryRow[]>> {
   return load(async () => (await listMyDeliveries(user, scope)).map(toRow));
 }
@@ -90,4 +91,9 @@ export async function loadDriverPackage(user: U): Promise<Loaded<DriverPackageDa
 }
 export async function loadDriverNotifications(user: U): Promise<Loaded<NotificationItem[]>> {
   return load(() => mapNotifications(user));
+}
+
+/** The open board: accepted and paid orders still without a driver. Customer details are not part of it. */
+export async function loadBoard(user: U): Promise<Loaded<import("./board-view").BoardRow[]>> {
+  return load(async () => (await listBoard(user)).map((r) => ({ ...r, createdAt: r.createdAt.toISOString() })));
 }

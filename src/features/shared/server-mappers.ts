@@ -132,6 +132,7 @@ function toSub(o: OrderRow, names: Map<string, string>): SubOrderView {
     orderStatus: o.orderStatus,
     paymentStatus: o.paymentStatus,
     deliveryStatus: o.deliveryStatus,
+    ...(o.driverName ? { driverName: o.driverName } : {}),
     refundStatus: o.refundStatus,
     ...(pay ? { payment: { methodLabel: pay.method, ...(pay.referenceNo ? { referenceNo: pay.referenceNo } : {}), submittedAt: pay.submittedAt.toISOString(), amountCents: pay.amountCents } } : {}),
     events: timeline(o.orderStatus),
