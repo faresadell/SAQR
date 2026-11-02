@@ -48,4 +48,25 @@ describe("buildCheckoutQuote", () => {
     const r = buildCheckoutQuote({ lines: [{ productId: "a", quantity: 1, expectedUnitPriceCents: 2500 }], products, feeForMerchant: fee });
     expect(r.ok).toBe(true);
   });
+
+  it("applies a validated unit discount, keeps the original price, and compares the price the customer saw AFTER discount", () => {
+    const withOffer = new Map(products);
+    withOffer.set("a", { ...products.get("a")!, unitDiscountCents: 500, offerId: "offer1" });
+    const r = buildCheckoutQuote({ lines: [{ productId: "a", quantity: 3, expectedUnitPriceCents: 2000 }], products: withOffer, feeForMerchant: fee });
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    const item = r.quote.suborders[0]!.items[0]!;
+    expect(item).toMatchObject({ unitPriceCents: 2500, unitDiscountCents: 500, offerId: "offer1", quantity: 3, discountCents: 1500, lineTotalCents: 6000 });
+    expect(r.quote.suborders[0]!.subtotalCents).toBe(6000); // the commission base: product value after discount
+    // the customer saw the old, undiscounted price: refuse instead of silently repricing
+    expect(buildCheckoutQuote({ lines: [{ productId: "a", quantity: 1, expectedUnitPriceCents: 2500 }], products: withOffer, feeForMerchant: fee })).toEqual({ ok: false, error: "PRICE_CHANGED", productId: "a" });
+  });
+
+  it("refuses a discount that would make the price zero or negative", () => {
+    for (const unitDiscountCents of [2500, 3000]) {
+      const bad = new Map(products);
+      bad.set("a", { ...products.get("a")!, unitDiscountCents, offerId: "o" });
+      expect(buildCheckoutQuote({ lines: [{ productId: "a", quantity: 1 }], products: bad, feeForMerchant: fee })).toEqual({ ok: false, error: "PRICE_CHANGED", productId: "a" });
+    }
+  });
 });

@@ -108,6 +108,7 @@ const loginSchema = z.object({
   phone: z.string().max(30),
   password: z.string().min(1, "اكتب كلمة المرور.").max(200),
   totp: z.string().max(10).optional(),
+  recoveryCode: z.string().max(20).optional(), // administrators who lost their authenticator
 });
 
 export async function loginAction(_prev: FormState, formData: FormData): Promise<FormState> {
@@ -119,7 +120,7 @@ export async function loginAction(_prev: FormState, formData: FormData): Promise
   const invalid: FormState = { error: "رقم الهاتف أو كلمة المرور غير صحيحة." };
   if (!phone) return invalid;
 
-  const result = await authenticate({ phone, password: parsed.data.password, totp: parsed.data.totp || undefined }, ip);
+  const result = await authenticate({ phone, password: parsed.data.password, totp: parsed.data.totp || undefined, recoveryCode: parsed.data.recoveryCode || undefined }, ip);
   if (!result.ok) {
     switch (result.error) {
       case "RATE_LIMITED":

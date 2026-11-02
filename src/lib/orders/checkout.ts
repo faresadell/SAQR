@@ -9,7 +9,7 @@ export const MAX_LINE_QUANTITY = 99;
 export interface CartLineInput {
   productId: string;
   quantity: number;
-  /** Price the customer saw (piasters). If it differs from the current price the checkout is refused, never silently repriced. */
+  /** Price the customer saw (piasters, AFTER any running discount). If it differs from the current price the checkout is refused, never silently repriced. */
   expectedUnitPriceCents?: number;
 }
 
@@ -20,13 +20,23 @@ export interface PricedProduct {
   priceCents: number;
   isAvailable: boolean;
   isArchived: boolean;
+  /** Discount for ONE unit from a running offer, already validated server-side (0 / undefined = none). */
+  unitDiscountCents?: number;
+  offerId?: string | null;
 }
 
 export interface SuborderItemDraft {
   productId: string;
   nameSnapshot: string;
+  /** Normal price of one unit. */
   unitPriceCents: number;
+  /** Discount taken off one unit (0 = none) and the offer that gave it. */
+  unitDiscountCents: number;
+  offerId: string | null;
   quantity: number;
+  /** unitDiscountCents x quantity. */
+  discountCents: number;
+  /** (unitPriceCents - unitDiscountCents) x quantity: what is charged; the commission base is the sum of these. */
   lineTotalCents: number;
 }
 
@@ -95,15 +105,21 @@ export function buildCheckoutQuote(input: QuoteInput): CheckoutResult {
     if (!product) return { ok: false, error: "PRODUCT_NOT_FOUND", productId: line.productId };
     if (product.isArchived || !product.isAvailable) return { ok: false, error: "PRODUCT_UNAVAILABLE", productId: line.productId };
     assertPiasters(product.priceCents, "price");
-    if (line.expectedUnitPriceCents !== undefined && line.expectedUnitPriceCents !== product.priceCents) {
+    const unitDiscount = product.unitDiscountCents ?? 0;
+    if (!Number.isSafeInteger(unitDiscount) || unitDiscount < 0 || unitDiscount >= product.priceCents) return { ok: false, error: "PRICE_CHANGED", productId: line.productId }; // never free or negative
+    const effectiveUnit = product.priceCents - unitDiscount;
+    if (line.expectedUnitPriceCents !== undefined && line.expectedUnitPriceCents !== effectiveUnit) {
       return { ok: false, error: "PRICE_CHANGED", productId: line.productId };
     }
     const item: SuborderItemDraft = {
       productId: product.id,
       nameSnapshot: product.nameAr,
       unitPriceCents: product.priceCents,
+      unitDiscountCents: unitDiscount,
+      offerId: unitDiscount > 0 ? (product.offerId ?? null) : null,
       quantity: line.quantity,
-      lineTotalCents: assertPiasters(product.priceCents * line.quantity, "line total"),
+      discountCents: assertPiasters(unitDiscount * line.quantity, "line discount"),
+      lineTotalCents: assertPiasters(effectiveUnit * line.quantity, "line total"),
     };
     const list = byMerchant.get(product.merchantId) ?? [];
     list.push(item);

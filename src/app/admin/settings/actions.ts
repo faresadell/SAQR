@@ -52,7 +52,7 @@ function toFailure(error: unknown): FormState {
 export async function saveSettingsAction(_prev: FormState, formData: FormData): Promise<FormState> {
   const { user } = await requirePermission("settings.manage");
   try {
-    const group = z.enum(["orders", "security"]).safeParse(formData.get("group"));
+    const group = z.enum(["orders", "security", "offers", "contest"]).safeParse(formData.get("group"));
     if (!group.success) return { error: GENERIC };
 
     const when = readEffectiveFrom(formData);
