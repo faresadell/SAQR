@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { PageHeader } from "@/components/ui/page-header";
 import { ProfileView } from "@/features/customer/views";
+import { EmailSection } from "@/features/shared/email-section";
 import { ROLE_LABEL } from "@/features/shared/role-home";
 import { requireRole } from "@/server/auth/guards";
 
@@ -12,6 +13,7 @@ export default async function ProfilePage() {
     <>
       <PageHeader title="الملف الشخصي والدعم" />
       <ProfileView name={user.name} phone={user.phone} roleLabel={ROLE_LABEL[user.role]} />
+      <EmailSection userId={user.id} />
     </>
   );
 }

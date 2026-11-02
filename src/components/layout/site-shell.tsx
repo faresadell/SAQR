@@ -46,7 +46,11 @@ export function SiteFrame({ children, accountHref, signedIn, ribbon }: { childre
           <nav aria-label="روابط التذييل" className="flex flex-wrap gap-5">
             <Link href="/explore" className="hover:text-ink">استكشف</Link>
             <Link href="/offers" className="hover:text-ink">العروض</Link>
-            <Link href="/privacy" className="hover:text-ink">سياسة الخصوصية</Link>
+            <Link href="/legal/privacy" className="hover:text-ink">سياسة الخصوصية</Link>
+            <Link href="/legal/terms" className="hover:text-ink">الشروط والأحكام</Link>
+            <Link href="/legal/cancellation" className="hover:text-ink">الإلغاء</Link>
+            <Link href="/legal/refund" className="hover:text-ink">الاسترجاع</Link>
+            <Link href="/legal/support" className="hover:text-ink">الدعم</Link>
           </nav>
         </div>
       </footer>

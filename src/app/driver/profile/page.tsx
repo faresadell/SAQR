@@ -3,6 +3,7 @@ import { PageHeader } from "@/components/ui/page-header";
 import { loadDriverNotifications } from "@/features/driver/data";
 import { ProfileView } from "@/features/customer/views";
 import { ResultState } from "@/features/shared/result-state";
+import { EmailSection } from "@/features/shared/email-section";
 import { ROLE_LABEL } from "@/features/shared/role-home";
 import { NotificationsView } from "@/features/shared/shared-views";
 import { requireRole } from "@/server/auth/guards";
@@ -16,6 +17,7 @@ export default async function DriverProfilePage() {
     <>
       <PageHeader title="الملف والإشعارات والدعم" />
       <ProfileView name={user.name} phone={user.phone} roleLabel={ROLE_LABEL[user.role]} />
+      <EmailSection userId={user.id} />
       <h2 className="text-lg font-bold">الإشعارات</h2>
       {notifications.status === "ready" ? <NotificationsView items={notifications.data} /> : <ResultState result={notifications} />}
     </>
