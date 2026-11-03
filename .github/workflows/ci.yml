@@ -53,3 +53,55 @@ jobs:
           npm audit --omit=dev --json > audit.json || true
           node -e 'const a=require("./audit.json");for(const [n,v] of Object.entries(a.vulnerabilities||{})){const via=v.via.map(x=>typeof x==="string"?x:x.title+" "+(x.range||"")).join(" | ");console.log("::warning title=audit "+n+" ["+v.severity+"]::fix="+JSON.stringify(v.fixAvailable)+" range="+v.range+" via "+via.slice(0,300))}'
       - run: npm run audit
+
+  # Real browser (Chromium) on a phone-sized and a desktop-sized screen against the running site and a real database.
+  # Development mode on purpose: the production build refuses the console email sender that prints the sign-up codes.
+  e2e:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: ci
+          POSTGRES_PASSWORD: ci
+          POSTGRES_DB: ci
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U ci" --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      DATABASE_URL: postgresql://ci:ci@localhost:5432/ci
+      APP_URL: http://localhost:3000
+      SESSION_SECRET: ci-only-session-secret-0123456789abcdef0123456789
+      DATA_ENCRYPTION_KEY: MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=
+      EMAIL_PROVIDER: console
+      OTP_PROVIDER: console
+      CAPTCHA_PROVIDER: disabled
+      UPLOAD_DIR: /tmp/saqr-uploads
+      DEV_LOG: /tmp/saqr-dev.log
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+      - run: npm ci
+      - run: npx prisma generate
+      - run: npx prisma migrate deploy
+      - run: npx tsx e2e/seed.ts
+      - run: npm install --no-save --no-package-lock @playwright/test@1.49.1
+      - run: npx playwright install --with-deps chromium
+      - name: Start the site (development mode)
+        run: |
+          nohup npx next dev -p 3000 > "$DEV_LOG" 2>&1 &
+          for i in $(seq 1 60); do curl -fs -o /dev/null http://localhost:3000/login && break; sleep 2; done
+          curl -fs -o /dev/null http://localhost:3000/login
+      - name: Browser tests
+        run: npx playwright test -c e2e/playwright.config.ts
+      - name: Server log (last lines)
+        if: always()
+        run: tail -n 80 "$DEV_LOG" || true
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: e2e-results
+          path: e2e-results
+          if-no-files-found: ignore

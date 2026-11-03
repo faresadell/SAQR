@@ -14,5 +14,5 @@ export default [
       "@typescript-eslint/no-unused-vars": ["error", { argsIgnorePattern: "^_", varsIgnorePattern: "^_" }],
     },
   },
-  { ignores: [".next/**", "node_modules/**", "public/sw.js"] },
+  { ignores: [".next/**", "node_modules/**", "public/sw.js", "e2e/**", "e2e-results/**"] },
 ];

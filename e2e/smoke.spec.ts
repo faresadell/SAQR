@@ -1,0 +1,60 @@
+import { expect, test } from "@playwright/test";
+import { E2E_ACCOUNTS, type E2eProject } from "./accounts";
+import { expectNoHorizontalScroll, skipIntro, watchErrors } from "./helpers";
+
+const PUBLIC_PAGES = ["/", "/explore", "/offers", "/tasbeeh", "/settings", "/search", "/login", "/register", "/forgot-password", "/privacy"];
+
+test("opening screen shows once and can be skipped", async ({ page }) => {
+  await page.goto("/");
+  const intro = page.getByRole("dialog", { name: "مرحباً بك في صقر" });
+  await expect(intro).toBeVisible();
+  await page.getByRole("button", { name: "تخطي" }).click();
+  await expect(intro).toBeHidden();
+  await page.reload();
+  await expect(intro).toBeHidden(); // already seen in this session
+});
+
+for (const path of PUBLIC_PAGES) {
+  test(`public page ${path}: loads, no errors, fits the screen`, async ({ page }) => {
+    await skipIntro(page);
+    const errors = watchErrors(page);
+    const response = await page.goto(path);
+    expect(response?.status(), `${path} status`).toBeLessThan(400);
+    await expect(page.locator("main, h1").first()).toBeVisible();
+    await expectNoHorizontalScroll(page);
+    errors.assertClean();
+  });
+}
+
+test("bottom bar: five sections on a phone, hidden on desktop", async ({ page }, testInfo) => {
+  await skipIntro(page);
+  await page.goto("/");
+  const bar = page.getByRole("navigation", { name: "التنقل السريع" });
+  if (testInfo.project.name === "mobile") {
+    await expect(bar).toBeVisible();
+    for (const label of ["الرئيسية", "المنتجات", "العروض", "التسبيح", "الإعدادات"]) await expect(bar.getByRole("link", { name: label })).toBeVisible();
+    await bar.getByRole("link", { name: "المنتجات" }).click();
+    await expect(page).toHaveURL(/\/explore/);
+  } else {
+    await expect(bar).toBeHidden();
+  }
+});
+
+test("customer browsing: category tile -> shop -> product -> cart", async ({ page }, testInfo) => {
+  await skipIntro(page);
+  const errors = watchErrors(page);
+  const shopName = E2E_ACCOUNTS[testInfo.project.name as E2eProject].seededShopName;
+  await page.goto("/explore");
+  await expect(page.getByRole("navigation", { name: "الأقسام" })).toBeVisible();
+  await page.getByRole("navigation", { name: "الأقسام" }).getByRole("link", { name: "مطاعم" }).click();
+  await expect(page).toHaveURL(/type=restaurant/);
+  await page.getByRole("link", { name: new RegExp(shopName) }).click();
+  await expect(page.getByRole("heading", { name: shopName })).toBeVisible();
+  await expect(page.getByText("كباب")).toBeVisible();
+  await expectNoHorizontalScroll(page);
+  await page.getByRole("button", { name: "أضف كباب إلى السلة" }).click();
+  await page.goto("/cart");
+  await expect(page.getByText("كباب")).toBeVisible();
+  await expectNoHorizontalScroll(page);
+  errors.assertClean();
+});
