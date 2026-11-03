@@ -10,7 +10,7 @@ import { AuthorizationError, NotFoundError } from "@/server/errors";
 import { createDriver, listMyDrivers, setDriverActive } from "@/server/drivers/service";
 import { placeOrder } from "@/server/orders/checkout";
 import { assignDriver, deliver, listMyDeliveries, pickUp, reportFailure } from "@/server/orders/delivery";
-import { claimOrder, listBoard, MAX_ACTIVE_DELIVERIES, releaseOrder } from "@/server/orders/driver-board";
+import { claimOrder, listBoard, releaseOrder } from "@/server/orders/driver-board";
 import { advanceOrder, cancelOrder, confirmPayment, decideOrder, requestCancellation, resolveCancellation, submitPayment } from "@/server/orders/lifecycle";
 import { applyStarMove, getStarBalance } from "@/server/stars/ledger";
 
@@ -299,18 +299,19 @@ describe("open driver board", () => {
     expect(await db.notification.count({ where: { userId: w.customer.id, type: "DELIVERY_ASSIGNED" } })).toBe(1);
   });
 
-  it("a driver cannot hold more than the cap; a paused or unverified account cannot claim", async () => {
+  it("a driver may hold any number of orders; a paused or unverified account cannot claim", async () => {
     const d = await user("DRIVER");
     const ids: string[] = [];
-    for (let i = 0; i < MAX_ACTIVE_DELIVERIES + 1; i += 1) ids.push(await approvedOrder());
-    for (const id of ids.slice(0, MAX_ACTIVE_DELIVERIES)) expect(await claimOrder(d, id)).toEqual({ ok: true });
-    expect(await claimOrder(d, ids[MAX_ACTIVE_DELIVERIES]!)).toEqual({ ok: false, error: "TOO_MANY_ACTIVE" });
+    for (let i = 0; i < 5; i += 1) ids.push(await approvedOrder());
+    for (const id of ids.slice(0, 4)) expect(await claimOrder(d, id)).toEqual({ ok: true }); // no fixed limit
+    const fifth = ids[4]!;
+    expect(await claimOrder(d, fifth)).toEqual({ ok: true });
     const paused = await user("DRIVER");
     await db.driver.create({ data: { userId: paused.id, merchantId: null, isActive: false } });
-    await expect(claimOrder(paused, ids[MAX_ACTIVE_DELIVERIES]!)).rejects.toBeInstanceOf(AuthorizationError);
+    await expect(claimOrder(paused, fifth)).rejects.toBeInstanceOf(AuthorizationError);
     const pending = await user("DRIVER");
     await db.user.update({ where: { id: pending.id }, data: { status: "PENDING" } });
-    await expect(claimOrder(pending, ids[MAX_ACTIVE_DELIVERIES]!)).rejects.toBeInstanceOf(AuthorizationError);
+    await expect(claimOrder(pending, fifth)).rejects.toBeInstanceOf(AuthorizationError);
   });
 
   it("releasing puts the order back on the board for others; only the holder can release, and not after pickup", async () => {

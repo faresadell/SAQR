@@ -5,7 +5,7 @@
 **A. Proven by automated tests in CI (real PostgreSQL, fake email/storage senders).** CI is green on `main`; these prove the LOGIC, not the real services.
 - [x] Password reset (email and phone paths): expiry, single use, newest code only, 5-guess limit, confirm rate limit, per-IP throttle, identical answers for real/unknown/suspended/admin accounts, concurrent double-use.
 - [x] Sign-up: activation only by the emailed code, neutral answers for taken phone/email, shop-created driver not hijackable, strong-password rule, robot-check verification (fake Cloudflare).
-- [x] Driver board: only accepted+paid orders listed, customer details hidden until accepted, first driver wins under concurrency, others told the winner's name, release back to the board, cap of 3 held orders.
+- [x] Driver board: only accepted+paid orders listed, customer details hidden until accepted, first driver wins under concurrency, others told the winner's name, release back to the board, no fixed limit on held orders (owner decision).
 - [x] Admin control: add/edit/hide/withdraw/restore any shop's products, shop cannot revive a withdrawn one, business-type rename, permission checks.
 - [x] Email verification: code, single use, address ownership race, provider failure leaves no usable code.
 - [x] Manual payment: same transfer reference refused twice, concurrent confirmations charge once, disabled/unconfigured method refused, receipt access only for the order's customer, its shop owner, or an authorized admin, reused picture flagged.

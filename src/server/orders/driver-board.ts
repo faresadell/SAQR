@@ -12,9 +12,8 @@ import type { Tx } from "@/server/orders/lifecycle";
 const BOARD_ORDER_STATUS: OrderStatus[] = ["APPROVED", "PREPARING", "READY"];
 const BOARD_DELIVERY_STATUS: DeliveryStatus[] = ["NOT_STARTED", "AWAITING_DRIVER"];
 /** Technical cap so one driver cannot hoard the board (not a business rule): orders held and not yet delivered. */
-export const MAX_ACTIVE_DELIVERIES = 3;
 
-export type ClaimResult = { ok: true } | { ok: false; error: "NOT_AVAILABLE" | "TAKEN" | "TOO_MANY_ACTIVE"; takenBy?: string };
+export type ClaimResult = { ok: true } | { ok: false; error: "NOT_AVAILABLE" | "TAKEN"; takenBy?: string };
 export type ReleaseResult = { ok: true } | { ok: false; error: "WRONG_STATE" };
 
 async function currentDriver(tx: Tx, actor: Actor) {
@@ -67,8 +66,6 @@ export async function claimOrder(actor: Actor, orderId: string): Promise<ClaimRe
     if (!BOARD_DELIVERY_STATUS.includes(order.deliveryStatus)) {
       return order.deliveryStatus === "DRIVER_ASSIGNED" || order.deliveryStatus === "PICKED_UP" ? { ok: false, error: "TAKEN", takenBy: await holderName(tx, orderId) } : { ok: false, error: "NOT_AVAILABLE" };
     }
-    const active = await tx.deliveryRecord.count({ where: { driverId: driver.id, order: { deliveryStatus: { in: ["DRIVER_ASSIGNED", "PICKED_UP"] } } } });
-    if (active >= MAX_ACTIVE_DELIVERIES) return { ok: false, error: "TOO_MANY_ACTIVE" };
     // Atomic: only one driver can flip the order out of the board states.
     const won = await tx.order.updateMany({ where: { id: order.id, deliveryStatus: order.deliveryStatus, orderStatus: order.orderStatus }, data: { deliveryStatus: "DRIVER_ASSIGNED" } });
     if (won.count !== 1) {

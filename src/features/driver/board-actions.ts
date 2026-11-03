@@ -19,7 +19,6 @@ export async function boardAction(_prev: FormState, formData: FormData): Promise
       revalidatePath("/driver", "layout");
       if (result.ok) return { message: "قبلت الطلب. تابعه من «الطلبات المسندة»." };
       if (result.error === "TAKEN") return { error: result.takenBy ? `سبقك السائق ${result.takenBy} وقبل هذا الطلب.` : "سبقك سائق آخر وقبل هذا الطلب." };
-      if (result.error === "TOO_MANY_ACTIVE") return { error: "لديك أقصى عدد من الطلبات غير المكتملة. أنهِ طلباً أولاً." };
       return { error: "هذا الطلب لم يعد متاحاً." };
     }
     if (command === "release") {
