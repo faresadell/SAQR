@@ -12,6 +12,8 @@ import { adminArchiveProduct, adminCreateProduct, adminRestoreProduct, adminSetP
 import { archiveProduct, createProduct, listOwnProducts, setProductAvailability, updateProduct } from "@/server/catalog/products";
 import { getPublicMenu, listPublicMerchants } from "@/server/catalog/public";
 import { AuthorizationError, NotFoundError } from "@/server/errors";
+import { createShopByAdmin, listOwnerCandidates, readShopImage, updateShopByAdmin, uploadShopImage } from "@/server/merchants/admin-shops";
+import { setStorageForTests } from "@/server/uploads/storage";
 import { listMerchantsForAdmin, resubmitOwnMerchant, reviewMerchant, saveOwnMerchant, setMerchantTier } from "@/server/merchants/service";
 
 if (!process.env.DATABASE_URL) throw new Error("DATABASE_URL is required for integration tests");
@@ -346,5 +348,70 @@ describe("admin control of products and business types", () => {
     await expect(updateBusinessType(admin, "missing", { nameAr: "اسم صحيح" })).rejects.toBeInstanceOf(NotFoundError);
     await expect(updateBusinessType(supportOnly, "restaurant", { nameAr: "اسم صحيح" })).rejects.toBeInstanceOf(AuthorizationError);
     expect(await auditFor("BUSINESS_TYPE_UPDATED")).toHaveLength(1);
+  });
+});
+
+describe("admin adds and edits shops", () => {
+  const form = (over: Record<string, string> = {}) => ({ name: "مطعم النيل", businessType: "restaurant", description: "مشويات", address: "شارع النيل", phone: "01011112222", phones: "0223456789\n01033334444", facebook: "https://www.facebook.com/nile", whatsapp: "01055556666", ...over });
+  const jpegBytes = (size = 64) => Uint8Array.from([0xff, 0xd8, 0xff, ...Array.from({ length: size }, (_, i) => i % 250)]);
+
+  it("creates an approved shop for the chosen owner (who then owns it); only owners without a shop are offered; audited", async () => {
+    const owner = await makeMerchantUser();
+    const taken = await approvedMerchant();
+    expect((await listOwnerCandidates(admin)).map((u) => u.id)).toEqual([owner.id]);
+    const r = await createShopByAdmin(admin, owner.id, form());
+    expect(r.ok).toBe(true);
+    const shop = await db.merchant.findFirstOrThrow({ where: { ownerId: owner.id } });
+    expect(shop).toMatchObject({ status: "APPROVED", reviewedById: admin.id, contactPhones: ["0223456789", "+201033334444"], socialLinks: { facebook: "https://www.facebook.com/nile", whatsapp: "+201055556666" } });
+    expect((await listPublicMerchants()).map((m) => m.id)).toContain(shop.id);
+    expect(await listOwnerCandidates(admin)).toEqual([]);
+    expect(await createShopByAdmin(admin, owner.id, form())).toMatchObject({ ok: false, errors: { owner: expect.any(String) } }); // already owns one
+    expect(await createShopByAdmin(admin, taken.id, form())).toMatchObject({ ok: false }); // has a shop
+    const [entry] = await auditFor("MERCHANT_CREATED_BY_ADMIN");
+    expect(entry).toMatchObject({ actorId: admin.id, entityId: shop.id, after: { ownerId: owner.id } });
+  });
+
+  it("refuses non-merchant, inactive or unknown owners, bad input and unsafe links; creates nothing", async () => {
+    const owner = await makeMerchantUser();
+    const customer = await db.user.create({ data: { phone: "+201099990000", name: "عميل", passwordHash: "x", role: "CUSTOMER", status: "ACTIVE" } });
+    const paused = await makeMerchantUser();
+    await db.user.update({ where: { id: paused.id }, data: { status: "SUSPENDED" } });
+    for (const id of [customer.id, paused.id, "missing"]) expect(await createShopByAdmin(admin, id, form())).toMatchObject({ ok: false, errors: { owner: expect.any(String) } });
+    expect(await createShopByAdmin(admin, owner.id, form({ name: "" }))).toMatchObject({ ok: false, errors: { name: expect.any(String) } });
+    expect(await createShopByAdmin(admin, owner.id, form({ website: "javascript:alert(1)" }))).toMatchObject({ ok: false, errors: { website: expect.any(String) } });
+    expect(await createShopByAdmin(admin, owner.id, form({ businessType: "nope" }))).toMatchObject({ ok: false, errors: { businessType: expect.any(String) } });
+    expect(await db.merchant.count()).toBe(0);
+  });
+
+  it("editing any shop validates, saves and audits before/after; permissions are enforced everywhere", async () => {
+    const owner = await approvedMerchant("قديم");
+    const shop = await db.merchant.findFirstOrThrow({ where: { ownerId: owner.id } });
+    expect(await updateShopByAdmin(admin, shop.id, form({ name: "الاسم الجديد", address: "عنوان جديد" }))).toEqual({ ok: true, id: shop.id });
+    expect(await db.merchant.findUniqueOrThrow({ where: { id: shop.id } })).toMatchObject({ name: "الاسم الجديد", address: "عنوان جديد" });
+    expect(await auditFor("MERCHANT_UPDATED_BY_ADMIN")).toMatchObject([{ before: { name: "قديم" }, after: { name: "الاسم الجديد", address: "عنوان جديد" } }]);
+    expect((await updateShopByAdmin(admin, shop.id, form({ name: "x" }))).ok).toBe(false);
+    await expect(updateShopByAdmin(admin, "missing", form())).rejects.toBeInstanceOf(NotFoundError);
+    await expect(updateShopByAdmin(supportOnly, shop.id, form())).rejects.toBeInstanceOf(AuthorizationError);
+    await expect(createShopByAdmin(supportOnly, owner.id, form())).rejects.toBeInstanceOf(AuthorizationError);
+    await expect(listOwnerCandidates(owner)).rejects.toBeInstanceOf(AuthorizationError);
+    await expect(uploadShopImage(owner, shop.id, jpegBytes())).rejects.toBeInstanceOf(AuthorizationError); // a shop owner cannot use the admin upload
+  });
+
+  it("shop picture: type decided from the bytes, size capped, public only while the shop is approved", async () => {
+    const files = new Map<string, Uint8Array>();
+    setStorageForTests({ put: async (k, b) => void files.set(k, b), get: async (k) => files.get(k) ?? null });
+    try {
+      const owner = await approvedMerchant();
+      const shop = await db.merchant.findFirstOrThrow({ where: { ownerId: owner.id } });
+      expect(await uploadShopImage(admin, shop.id, new Uint8Array(40))).toEqual({ ok: false, error: "INVALID_FILE" });
+      expect(await uploadShopImage(admin, shop.id, jpegBytes(6 * 1024 * 1024))).toEqual({ ok: false, error: "FILE_TOO_LARGE" });
+      expect(await uploadShopImage(admin, shop.id, jpegBytes())).toEqual({ ok: true });
+      expect((await readShopImage(shop.id))?.contentType).toBe("image/jpeg");
+      expect((await listPublicMerchants()).find((m) => m.id === shop.id)?.hasImage).toBe(true);
+      await reviewMerchant(admin, shop.id, "SUSPEND", "اختبار");
+      expect(await readShopImage(shop.id)).toBeNull();
+    } finally {
+      setStorageForTests(undefined);
+    }
   });
 });

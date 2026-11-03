@@ -32,8 +32,15 @@ async function main() {
   }
   // Starting business kinds. Admins can add or hide kinds from the dashboard (nothing here is hardcoded in the app).
   const businessTypes = [
-    { code: "restaurant", nameAr: "مطعم", sortOrder: 1 },
-    { code: "shop", nameAr: "متجر", sortOrder: 2 },
+    { code: "restaurant", nameAr: "مطاعم", sortOrder: 1 },
+    { code: "supermarket", nameAr: "سوبر ماركت", sortOrder: 2 },
+    { code: "phones", nameAr: "تليفونات", sortOrder: 3 },
+    { code: "pharmacy", nameAr: "صيدليات", sortOrder: 4 },
+    { code: "bakery", nameAr: "مخابز وحلويات", sortOrder: 5 },
+    { code: "greengrocer", nameAr: "خضار وفاكهة", sortOrder: 6 },
+    { code: "clothes", nameAr: "ملابس", sortOrder: 7 },
+    { code: "electronics", nameAr: "أجهزة وإلكترونيات", sortOrder: 8 },
+    { code: "home", nameAr: "أدوات منزلية", sortOrder: 9 },
   ];
   for (const type of businessTypes) {
     await db.businessType.upsert({ where: { code: type.code }, update: {}, create: type });

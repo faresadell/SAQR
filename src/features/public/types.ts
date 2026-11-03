@@ -5,6 +5,7 @@ export interface ShopSummary {
   description: string | null;
   businessType: string;
   address: string | null;
+  hasImage: boolean;
   isOpen: boolean;
 }
 

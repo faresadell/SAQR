@@ -10,7 +10,7 @@ export function ShopCard({ shop, typeLabel }: { shop: ShopSummary; typeLabel?: s
       href={`/shops/${shop.id}`}
       className="group flex flex-col overflow-hidden rounded-card border border-line bg-surface shadow-card transition-shadow hover:shadow-pop"
     >
-      <SafeImage alt="" src={null} fallbackIcon="store" className="h-28 w-full bg-gradient-to-br from-navy-800 to-navy-900 text-silver-dim" />
+      <SafeImage alt="" src={shop.hasImage ? `/api/v1/shops/${shop.id}/image` : null} fallbackIcon="store" className="h-28 w-full bg-gradient-to-br from-navy-800 to-navy-900 text-silver-dim" />
       <div className="flex flex-1 flex-col gap-2 p-4">
         <div className="flex items-start justify-between gap-2">
           <h3 className="min-w-0 text-base font-bold text-ink group-hover:text-brand">{shop.name}</h3>

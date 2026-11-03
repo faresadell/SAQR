@@ -1,7 +1,8 @@
 import "server-only";
 import { listBusinessTypes } from "@/server/catalog/categories";
 import { listUsableCategories } from "@/server/catalog/products";
-import { getPublicMenu, listPublicMerchants } from "@/server/catalog/public";
+import type { SocialLinks } from "@/lib/catalog/shop-contact";
+import { getPublicMenu, getPublicShopContact, listPublicMerchants } from "@/server/catalog/public";
 import { listPublicOffers } from "@/server/offers/service";
 import { failed, ready, type Loaded } from "@/features/shared/loaded";
 import type { BusinessTypeOption, CategoryOption, MenuProduct, ShopSummary } from "./types";
@@ -26,6 +27,7 @@ export async function loadCategories(): Promise<CategoryOption[]> {
 export interface ShopPage {
   shop: ShopSummary;
   products: MenuProduct[];
+  contact: { phones: string[]; social: SocialLinks };
 }
 
 /**
@@ -43,9 +45,11 @@ export async function loadShopPage(merchantId: string, filter: { q?: string; cat
     description: menu.merchant.description,
     businessType: "",
     address: null,
+    hasImage: false,
     isOpen: true,
   };
-  return { shop, products: menu.products };
+  const contact = (await getPublicShopContact(merchantId)) ?? { phones: [], social: {} };
+  return { shop, products: menu.products, contact };
 }
 
 export interface PublicOfferView {

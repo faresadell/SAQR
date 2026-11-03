@@ -18,7 +18,7 @@ export default async function ShopPage({ params, searchParams }: { params: Promi
   const term = q.trim().slice(0, 60);
   const page = await loadShopPage(id.slice(0, 64), { ...(term ? { q: term } : {}), ...(categoryId ? { categoryId } : {}) });
   if (!page) notFound();
-  const { shop, products } = page;
+  const { shop, products, contact } = page;
   const typeLabel = types.find((t) => t.code === shop.businessType)?.nameAr;
   const base = `/shops/${shop.id}`;
   const qs = (extra: Record<string, string | undefined>) => {
@@ -32,6 +32,10 @@ export default async function ShopPage({ params, searchParams }: { params: Promi
     <SiteShell>
       <section className="bg-navy-900 text-white">
         <div className="mx-auto flex w-full max-w-page flex-col gap-3 px-4 py-8 sm:px-6">
+          {shop.hasImage ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={`/api/v1/shops/${shop.id}/image`} alt="" className="h-40 w-full max-w-md rounded-card object-cover" />
+          ) : null}
           <div className="flex flex-wrap items-center gap-3">
             <h1 className="text-2xl font-bold sm:text-3xl">{shop.name}</h1>
             <Badge tone={shop.isOpen ? "success" : "neutral"}>{shop.isOpen ? "مفتوح الآن" : "مغلق الآن"}</Badge>
@@ -43,6 +47,18 @@ export default async function ShopPage({ params, searchParams }: { params: Promi
               <Icon name="pin" className="size-4" />
               {shop.address}
             </p>
+          ) : null}
+          {contact.phones.length > 0 || Object.keys(contact.social).length > 0 ? (
+            <ul className="flex flex-wrap gap-2 text-sm" aria-label="التواصل مع النشاط">
+              {contact.phones.map((ph) => (
+                <li key={ph}><a href={`tel:${ph}`} dir="ltr" className="inline-block rounded-full bg-white/10 px-3 py-1 font-semibold hover:bg-white/20">{ph}</a></li>
+              ))}
+              {contact.social.whatsapp ? <li><a href={`https://wa.me/${contact.social.whatsapp.replace("+", "")}`} target="_blank" rel="noopener noreferrer" className="inline-block rounded-full bg-white/10 px-3 py-1 font-semibold hover:bg-white/20">واتساب</a></li> : null}
+              {([["facebook", "فيسبوك"], ["instagram", "إنستجرام"], ["tiktok", "تيك توك"], ["website", "الموقع"]] as const).map(([key, label]) => {
+                const href = contact.social[key];
+                return href ? <li key={key}><a href={href} target="_blank" rel="noopener noreferrer" className="inline-block rounded-full bg-white/10 px-3 py-1 font-semibold hover:bg-white/20">{label}</a></li> : null;
+              })}
+            </ul>
           ) : null}
         </div>
       </section>

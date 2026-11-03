@@ -199,6 +199,9 @@ model Merchant {
   lat             Float?
   lng             Float?
   openingHours    Json? // see src/lib/catalog/opening-hours.ts; null = no schedule set
+  imageKey        String? // shop picture in private storage, served by /api/v1/shops/{id}/image
+  contactPhones   String[]       @default([]) // extra public contact numbers (E.164), set by an admin
+  socialLinks     Json? // { facebook, instagram, tiktok, whatsapp, website } validated in src/lib/catalog/shop-contact.ts
   createdAt       DateTime       @default(now())
   updatedAt       DateTime       @updatedAt
 

@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import { SiteShell } from "@/components/layout/site-shell";
 import { PageHeader } from "@/components/ui/page-header";
 import { EmptyState } from "@/components/ui/states";
@@ -19,6 +20,17 @@ export default async function ExplorePage({ searchParams }: { searchParams: Prom
     <SiteShell>
       <div className="mx-auto flex w-full max-w-page flex-col gap-6 px-4 py-8 sm:px-6">
         <PageHeader title="استكشف الأنشطة" description="كل الأنشطة المعتمدة في صقر. اختر تصنيفاً أو ابحث بالاسم من الأعلى." />
+        {!activeType && types.length > 0 ? (
+          <nav aria-label="الأقسام">
+            <ul className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+              {types.map((t) => (
+                <li key={t.code}>
+                  <Link href={`/explore?type=${encodeURIComponent(t.code)}`} className="flex h-20 items-center justify-center rounded-card border border-line bg-surface p-3 text-center text-base font-bold shadow-card transition-shadow hover:shadow-pop">{t.nameAr}</Link>
+                </li>
+              ))}
+            </ul>
+          </nav>
+        ) : null}
         <TabLinks
           label="تصفية حسب نوع النشاط"
           items={[

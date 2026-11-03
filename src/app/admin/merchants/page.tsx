@@ -33,7 +33,10 @@ export default async function AdminMerchantsPage({ searchParams }: { searchParam
 
   return (
     <div className="flex flex-col gap-4">
-      <h1 className="text-2xl font-bold">التجار</h1>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h1 className="text-2xl font-bold">التجار</h1>
+        <Link href="/admin/shops/new" className="rounded-control bg-navy-900 px-4 py-2 text-sm font-semibold text-white hover:bg-navy-800">إضافة نشاط جديد</Link>
+      </div>
       {notice && notices[notice] ? <p role="status" className="rounded-control bg-brand-soft p-3 text-sm font-medium">{notices[notice]}</p> : null}
 
       <nav className="flex flex-wrap gap-2" aria-label="تصفية الحالة">
@@ -58,6 +61,7 @@ export default async function AdminMerchantsPage({ searchParams }: { searchParam
               </div>
             </div>
             {m.description ? <p className="text-sm">{m.description}</p> : null}
+            <Link href={`/admin/shops/${m.id}`} className="w-fit text-sm font-semibold underline">تعديل بيانات النشاط وصورته</Link>
             {m.rejectionReason ? <p className="text-sm text-danger-ink">سبب الرفض: {m.rejectionReason}</p> : null}
 
             <div className="flex flex-col gap-2">

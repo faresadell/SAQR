@@ -1,4 +1,5 @@
 import "server-only";
+import { parseSocialLinks } from "@/lib/catalog/shop-contact";
 import { db } from "@/lib/db";
 import { isOpenAt, validateOpeningHours } from "@/lib/catalog/opening-hours";
 
@@ -17,11 +18,11 @@ export async function listPublicMerchants(filter: { q?: string; businessType?: s
     },
     orderBy: [{ name: "asc" }],
     take: 100,
-    select: { id: true, name: true, description: true, businessType: true, address: true, openingHours: true },
+    select: { id: true, name: true, description: true, businessType: true, address: true, openingHours: true, imageKey: true },
   });
   return rows.map((r) => {
     const hours = r.openingHours === null ? null : validateOpeningHours(r.openingHours);
-    return { id: r.id, name: r.name, description: r.description, businessType: r.businessType, address: r.address, isOpen: isOpenAt(hours?.ok ? hours.value : null, at) };
+    return { id: r.id, name: r.name, description: r.description, businessType: r.businessType, address: r.address, hasImage: r.imageKey !== null, isOpen: isOpenAt(hours?.ok ? hours.value : null, at) };
   });
 }
 
@@ -42,4 +43,12 @@ export async function getPublicMenu(merchantId: string, filter: { q?: string; ca
     select: { id: true, nameAr: true, description: true, priceCents: true, isAvailable: true, categoryId: true },
   });
   return { merchant: shop, products };
+}
+
+/** Public contact details of an approved shop. Links are re-validated on the way out, so nothing unsafe can reach a page. */
+export async function getPublicShopContact(merchantId: string) {
+  const shop = await db.merchant.findFirst({ where: { id: merchantId, status: "APPROVED" }, select: { phone: true, contactPhones: true, socialLinks: true } });
+  if (!shop) return null;
+  const phones = [...new Set([...(shop.phone ? [shop.phone] : []), ...shop.contactPhones])];
+  return { phones, social: parseSocialLinks(shop.socialLinks) };
 }
