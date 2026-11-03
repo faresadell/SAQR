@@ -4,6 +4,7 @@ import { Notice } from "@/components/ui/states";
 import { PageHeader } from "@/components/ui/page-header";
 import { Badge } from "@/components/ui/badge";
 import { EmailSection } from "@/features/shared/email-section";
+import { PhonePanel } from "@/features/shared/phone-panel";
 import { MERCHANT_STATUS } from "@/features/shared/status";
 import { canEditOwnProfile } from "@/lib/catalog/catalog-policy";
 import { emptyWeek, validateOpeningHours, type OpeningHours } from "@/lib/catalog/opening-hours";
@@ -45,6 +46,7 @@ export default async function MerchantProfilePage() {
         <ProfileForm defaults={defaults} businessTypes={businessTypes.map((t) => ({ code: t.code, nameAr: t.nameAr }))} canEdit={canEdit} />
       </Card>
       <div className="max-w-3xl">
+        <PhonePanel phone={user.phone} />
         <EmailSection userId={user.id} />
       </div>
     </>
