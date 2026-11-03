@@ -33,6 +33,9 @@ const config: Config = {
       keyframes: {
         "fade-in": { from: { opacity: "0" }, to: { opacity: "1" } },
         "rise-in": { from: { opacity: "0", transform: "translateY(8px)" }, to: { opacity: "1", transform: "translateY(0)" } },
+        "falcon-in": { "0%": { opacity: "0", transform: "translate(60px,-70px) scale(0.4) rotate(-14deg)" }, "60%": { opacity: "1", transform: "translate(-6px,6px) scale(1.06) rotate(3deg)" }, "100%": { opacity: "1", transform: "translate(0,0) scale(1) rotate(0)" } },
+        "ring-expand": { "0%": { opacity: "0.7", transform: "scale(0.7)" }, "100%": { opacity: "0", transform: "scale(1.35)" } },
+        "text-in": { from: { opacity: "0", transform: "translateY(10px)" }, to: { opacity: "1", transform: "translateY(0)" } },
         shimmer: { "100%": { transform: "translateX(100%)" } },
         "count-pop": { "0%": { transform: "scale(1)" }, "40%": { transform: "scale(1.06)" }, "100%": { transform: "scale(1)" } },
       },
