@@ -4,6 +4,9 @@
 
 **A. Proven by automated tests in CI (real PostgreSQL, fake email/storage senders).** CI is green on `main`; these prove the LOGIC, not the real services.
 - [x] Password reset (email and phone paths): expiry, single use, newest code only, 5-guess limit, confirm rate limit, per-IP throttle, identical answers for real/unknown/suspended/admin accounts, concurrent double-use.
+- [x] Sign-up: activation only by the emailed code, neutral answers for taken phone/email, shop-created driver not hijackable, strong-password rule, robot-check verification (fake Cloudflare).
+- [x] Driver board: only accepted+paid orders listed, customer details hidden until accepted, first driver wins under concurrency, others told the winner's name, release back to the board, cap of 3 held orders.
+- [x] Admin control: add/edit/hide/withdraw/restore any shop's products, shop cannot revive a withdrawn one, business-type rename, permission checks.
 - [x] Email verification: code, single use, address ownership race, provider failure leaves no usable code.
 - [x] Manual payment: same transfer reference refused twice, concurrent confirmations charge once, disabled/unconfigured method refused, receipt access only for the order's customer, its shop owner, or an authorized admin, reused picture flagged.
 - [x] Plan purchase approval applies once (also under concurrency); duplicate transfer reference refused.
@@ -21,7 +24,10 @@
 - [ ] R2: other customer/shop gets "not found"; direct bucket URL is unreachable; disallowed file refused
 - [ ] Manual payment end to end with the real receiving number (section 3)
 - [ ] Admin TOTP enrollment and one-time recovery code (section 5)
-- [ ] Phone/SMS codes: **no provider is configured**. Not testable; see the launch blocker in `docs/SECURITY-REVIEW.md`.
+- [ ] Sign-up with the real robot check: Turnstile widget appears, a wrong/missing token is refused, a real one creates the account
+- [ ] Sign-up email: the activation code really arrives (customer, merchant, driver), activation logs the user into the right dashboard
+- [ ] Driver board: two real drivers open `/driver/board`, one accepts, the other sees "سبقك السائق …"; shop and customer see the driver's name and a notification
+- [ ] Phone/SMS codes: not used any more (see `docs/SECURITY-REVIEW.md` item 1 for the side effect)
 
 
 Nothing below has been run against real services by the build process. CI proves the code compiles and the automated tests pass; it does NOT prove an email arrived or a file reached R2. Tick each box yourself, in the real deployment, and do not launch until the "verify" lines are true.

@@ -20,7 +20,8 @@ Scope: code at `main` after PR #27. Method: reading the code paths named below a
 ## Remaining risks / NOT VERIFIED
 | # | Item | Status |
 |---|------|--------|
-| 1 | **No SMS provider.** Registration sends a phone code; with `OTP_PROVIDER=disabled` (the only production-legal value without a gateway) new users cannot verify their phone, so **customers cannot register in production**. Needs either an SMS gateway (`OTP_PROVIDER=http` + `SMS_API_URL/SMS_API_TOKEN/SMS_SENDER`) or a product decision to allow email-based sign-up. | LAUNCH BLOCKER |
+| 1 | **Sign-up no longer needs SMS (changed 2026-11-03).** Accounts are activated by the code emailed to the user, so Resend must really work (REAL-TESTS section 1). **Side effect: the phone number is a login/contact number that is NOT proven by a code.** Someone can register another person's number first and the real owner is then refused (the answer stays neutral). Drivers' and shops' phone numbers shown to customers are as claimed by the user. Mitigation later: an SMS provider, or login by email. | Accepted risk — owner decision |
+| 1b | The robot check needs a real Cloudflare Turnstile widget; production refuses to start without it. Not tested against Cloudflare from here (the verification call is unit-tested with a fake). | NOT RUN — needs your account |
 | 2 | Resend and R2 real behaviour (domain verified, delivery, bucket privacy, key permissions). | NOT RUN — needs your accounts; steps in `docs/REAL-TESTS.md` |
 | 3 | TOTP enrollment through `npm run admin:create` and recovery-code login with a real authenticator. | NOT RUN — manual |
 | 4 | Page-by-page review was done by pattern (layout + action + service + route guards), not by clicking every page as every role. Loaders were read for the pages touched in the last batches only. | Manual role walkthrough recommended (checklist in the final report) |

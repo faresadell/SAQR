@@ -10,7 +10,8 @@
 | `CRON_SECRET` | protects `/api/internal/jobs/*` |
 | `TRUST_PROXY` | `true` only behind a proxy that sets the client IP |
 | `EMAIL_PROVIDER` | `resend` in production (console is refused). Needs `RESEND_API_KEY` and `EMAIL_FROM` (an address on a domain VERIFIED in Resend, e.g. `صقر <no-reply@your-domain>`). Optional `RESEND_TEMPLATE_VERIFY_ID` / `RESEND_TEMPLATE_RESET_ID`: the published template must define the variables `code`, `minutes`, `app_name`. Not production-ready until a real send succeeds (see "Real-send test" below). |
-| `OTP_PROVIDER` | SMS is not used for now. Keep `disabled` in production (`console` is refused); `http` exists only for a future gateway. |
+| `OTP_PROVIDER` | SMS is not used: accounts are activated by the code emailed to the user. Keep `disabled` in production (`console` is refused); `http` exists only for a future gateway. |
+| `CAPTCHA_PROVIDER` | `turnstile` in production (`disabled` is refused). Needs `TURNSTILE_SECRET_KEY` (secret, environment only) and `TURNSTILE_SITE_KEY` (public) from a free Cloudflare Turnstile widget for your domain. The sign-up page shows the "not a robot" check and the server verifies it; no account is created without it. |
 | `STORAGE_PROVIDER` | `r2` for Cloudflare R2 (needs `R2_ACCOUNT_ID` (32 hex), `R2_BUCKET`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY` with Object Read & Write on that one bucket only). The bucket must stay PRIVATE: no public bucket URL and no custom domain; every file is served through our own authorised routes. Default `local` needs a persistent volume. |
 | `UPLOAD_DIR` | only with `STORAGE_PROVIDER=local`: persistent volume OUTSIDE the web root |
 
