@@ -54,9 +54,9 @@ export function checkPasswordStrength(password: string, phone?: string): Passwor
   if (password.length < 8) return "TOO_SHORT";
   if (password.length > 128) return "TOO_LONG";
   if (/^\d+$/.test(password)) return "ALL_DIGITS";
-  // strong = letters AND at least one digit or symbol (length alone is not enough for a short password)
-  if (!/\p{L}/u.test(password) || !/[^\p{L}]/u.test(password)) return "NEEDS_MIX";
   if (COMMON.has(password.toLowerCase())) return "COMMON";
   if (phone && password.replace(/\D/g, "") === phone.replace(/\D/g, "")) return "SAME_AS_PHONE";
+  // strong = letters AND at least one digit or symbol (length alone is not enough for a short password)
+  if (!/\p{L}/u.test(password) || !/[^\p{L}]/u.test(password)) return "NEEDS_MIX";
   return null;
 }
