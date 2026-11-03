@@ -7,6 +7,7 @@
 - [x] Sign-up: activation only by the emailed code, neutral answers for taken phone/email, shop-created driver not hijackable, strong-password rule, robot-check verification (fake Cloudflare).
 - [x] Driver board: only accepted+paid orders listed, customer details hidden until accepted, first driver wins under concurrency, others told the winner's name, release back to the board, no fixed limit on held orders (owner decision).
 - [x] Admin control: add/edit/hide/withdraw/restore any shop's products, shop cannot revive a withdrawn one, business-type rename, permission checks.
+- [x] Change phone: needs the current password, wrong password changes nothing, new number stored unverified, old/new audited, taken/same/invalid refused, guessing rate-limited.
 - [x] Email verification: code, single use, address ownership race, provider failure leaves no usable code.
 - [x] Manual payment: same transfer reference refused twice, concurrent confirmations charge once, disabled/unconfigured method refused, receipt access only for the order's customer, its shop owner, or an authorized admin, reused picture flagged.
 - [x] Plan purchase approval applies once (also under concurrency); duplicate transfer reference refused.
