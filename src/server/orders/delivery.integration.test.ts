@@ -10,6 +10,7 @@ import { AuthorizationError, NotFoundError } from "@/server/errors";
 import { createDriver, listMyDrivers, setDriverActive } from "@/server/drivers/service";
 import { placeOrder } from "@/server/orders/checkout";
 import { assignDriver, deliver, listMyDeliveries, pickUp, reportFailure } from "@/server/orders/delivery";
+import { claimOrder, listBoard, MAX_ACTIVE_DELIVERIES, releaseOrder } from "@/server/orders/driver-board";
 import { advanceOrder, cancelOrder, confirmPayment, decideOrder, requestCancellation, resolveCancellation, submitPayment } from "@/server/orders/lifecycle";
 import { applyStarMove, getStarBalance } from "@/server/stars/ledger";
 
@@ -249,5 +250,98 @@ describe("delivery", () => {
     expect(await status(id)).toBe("OUT_FOR_DELIVERY"); // moved once, not again
     expect((await deliver(d2.actor, id, { feeCollected: true })).ok).toBe(true);
     expect(await db.orderEvent.count({ where: { orderId: id, field: "orderStatus", toValue: "OUT_FOR_DELIVERY" } })).toBe(1);
+  });
+});
+
+describe("open driver board", () => {
+  it("shows only accepted+paid orders, hides the customer's details, and refuses non-drivers", async () => {
+    const waiting = await paidOrder(); // paid but the shop has not accepted yet
+    const accepted = await approvedOrder();
+    const d = await user("DRIVER");
+    const rows = await listBoard(d);
+    expect(rows.map((r) => r.orderId)).toEqual([accepted]);
+    expect(rows[0]).toMatchObject({ shop: "A", zone: "المعادي", feeCents: 2000 });
+    expect(JSON.stringify(rows)).not.toContain("شارع 9");
+    expect(JSON.stringify(rows)).not.toContain("+2015");
+    expect(rows.some((r) => r.orderId === waiting)).toBe(false);
+    await expect(listBoard(w.customer)).rejects.toBeInstanceOf(AuthorizationError);
+    await expect(claimOrder(w.owner, accepted)).rejects.toBeInstanceOf(AuthorizationError);
+  });
+
+  it("the first driver wins, the shop and customer are told his name, the next driver is told who took it", async () => {
+    const id = await approvedOrder();
+    const a = await user("DRIVER");
+    const b = await user("DRIVER");
+    expect(await claimOrder(a, id)).toEqual({ ok: true });
+    const first = await db.user.findUniqueOrThrow({ where: { id: a.id } });
+    expect(await claimOrder(b, id)).toEqual({ ok: false, error: "TAKEN", takenBy: first.name });
+    expect(await claimOrder(a, id)).toEqual({ ok: false, error: "TAKEN", takenBy: first.name }); // not twice
+    expect((await listBoard(b)).length).toBe(0);
+    const row = await db.order.findUniqueOrThrow({ where: { id } });
+    expect(row.deliveryStatus).toBe("DRIVER_ASSIGNED");
+    for (const userId of [w.owner.id, w.customer.id]) {
+      const notes = await db.notification.findMany({ where: { userId, type: "DELIVERY_ASSIGNED" } });
+      expect(notes.some((x) => x.body.includes(first.name))).toBe(true);
+    }
+    expect(await db.auditLog.count({ where: { action: "DELIVERY_CLAIMED", entityId: id } })).toBe(1);
+    expect(await db.deliveryRecord.count({ where: { orderId: id } })).toBe(1);
+  });
+
+  it("simultaneous drivers: exactly one gets the order, every other one is told the same name", async () => {
+    const id = await approvedOrder();
+    const drivers = await Promise.all([user("DRIVER"), user("DRIVER"), user("DRIVER"), user("DRIVER")]);
+    const results = await Promise.all(drivers.map((d) => claimOrder(d, id)));
+    expect(results.filter((r) => r.ok)).toHaveLength(1);
+    const winner = drivers[results.findIndex((r) => r.ok)]!;
+    const winnerName = (await db.user.findUniqueOrThrow({ where: { id: winner.id } })).name;
+    for (const r of results) if (!r.ok) expect(r).toMatchObject({ error: "TAKEN", takenBy: winnerName });
+    expect(await db.notification.count({ where: { userId: w.customer.id, type: "DELIVERY_ASSIGNED" } })).toBe(1);
+  });
+
+  it("a driver cannot hold more than the cap; a paused or unverified account cannot claim", async () => {
+    const d = await user("DRIVER");
+    const ids: string[] = [];
+    for (let i = 0; i < MAX_ACTIVE_DELIVERIES + 1; i += 1) ids.push(await approvedOrder());
+    for (const id of ids.slice(0, MAX_ACTIVE_DELIVERIES)) expect(await claimOrder(d, id)).toEqual({ ok: true });
+    expect(await claimOrder(d, ids[MAX_ACTIVE_DELIVERIES]!)).toEqual({ ok: false, error: "TOO_MANY_ACTIVE" });
+    const paused = await user("DRIVER");
+    await db.driver.create({ data: { userId: paused.id, merchantId: null, isActive: false } });
+    await expect(claimOrder(paused, ids[MAX_ACTIVE_DELIVERIES]!)).rejects.toBeInstanceOf(AuthorizationError);
+    const pending = await user("DRIVER");
+    await db.user.update({ where: { id: pending.id }, data: { status: "PENDING" } });
+    await expect(claimOrder(pending, ids[MAX_ACTIVE_DELIVERIES]!)).rejects.toBeInstanceOf(AuthorizationError);
+  });
+
+  it("releasing puts the order back on the board for others; only the holder can release, and not after pickup", async () => {
+    const id = await approvedOrder();
+    const a = await user("DRIVER");
+    const b = await user("DRIVER");
+    await claimOrder(a, id);
+    await expect(releaseOrder(b, id)).rejects.toBeInstanceOf(NotFoundError);
+    expect(await releaseOrder(a, id)).toEqual({ ok: true });
+    expect((await listBoard(b)).map((r) => r.orderId)).toEqual([id]);
+    expect(await claimOrder(b, id)).toEqual({ ok: true });
+    await expect(releaseOrder(a, id)).rejects.toBeInstanceOf(NotFoundError); // no longer hers
+    await advanceOrder(w.owner, id, "PREPARING");
+    await advanceOrder(w.owner, id, "READY");
+    expect((await pickUp(b, id)).ok).toBe(true);
+    expect(await releaseOrder(b, id)).toEqual({ ok: false, error: "WRONG_STATE" });
+  });
+
+  it("the holder completes the delivery and alone sees the customer's address and phone", async () => {
+    const id = await approvedOrder();
+    const a = await user("DRIVER");
+    const b = await user("DRIVER");
+    await claimOrder(a, id);
+    await advanceOrder(w.owner, id, "PREPARING");
+    await advanceOrder(w.owner, id, "READY");
+    await expect(pickUp(b, id)).rejects.toBeInstanceOf(NotFoundError);
+    expect(await listMyDeliveries(b, "ACTIVE")).toEqual([]);
+    expect((await pickUp(a, id)).ok).toBe(true);
+    const mine = await listMyDeliveries(a, "ACTIVE");
+    expect(mine[0]).toMatchObject({ orderId: id, address: expect.objectContaining({ line: "شارع 9" }) });
+    expect((await deliver(a, id, { feeCollected: true })).ok).toBe(true);
+    expect((await db.order.findUniqueOrThrow({ where: { id } })).orderStatus).toBe("DELIVERED");
+    expect((await db.deliveryRecord.findUniqueOrThrow({ where: { orderId: id } })).collectionStatus).toBe("COLLECTED");
   });
 });
