@@ -11,6 +11,7 @@ import { E2E_ADMIN_PASSWORD, E2E_ACCOUNTS, E2E_TOTP_SECRET, E2E_PROJECTS } from 
 async function main() {
   const db = new PrismaClient();
   try {
+    if (!E2E_ADMIN_PASSWORD || E2E_TOTP_SECRET.length < 16) throw new Error("E2E_ADMIN_PASSWORD and E2E_TOTP_SECRET must be set");
     const key = parseEncryptionKey(process.env.DATA_ENCRYPTION_KEY ?? "");
     const passwordHash = await hashPassword(E2E_ADMIN_PASSWORD);
     const category = await db.category.create({ data: { nameAr: "مشويات" } });

@@ -63,16 +63,14 @@ jobs:
         image: postgres:16
         env:
           POSTGRES_USER: ci
-          POSTGRES_PASSWORD: ci
+          POSTGRES_HOST_AUTH_METHOD: trust
           POSTGRES_DB: ci
         ports: ["5432:5432"]
         options: >-
           --health-cmd "pg_isready -U ci" --health-interval 5s --health-timeout 5s --health-retries 10
     env:
-      DATABASE_URL: postgresql://ci:ci@localhost:5432/ci
+      DATABASE_URL: postgresql://ci@localhost:5432/ci
       APP_URL: http://localhost:3000
-      SESSION_SECRET: ci-only-session-secret-0123456789abcdef0123456789
-      DATA_ENCRYPTION_KEY: MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=
       EMAIL_PROVIDER: console
       OTP_PROVIDER: console
       CAPTCHA_PROVIDER: disabled
@@ -83,11 +81,20 @@ jobs:
       - uses: actions/setup-node@v7
         with:
           node-version: 22
+      - name: Generate throwaway secrets for this run (never stored)
+        run: |
+          {
+            echo "SESSION_SECRET=$(openssl rand -hex 32)"
+            echo "DATA_ENCRYPTION_KEY=$(openssl rand -base64 32)"
+            echo "E2E_ADMIN_PASSWORD=Ad1-$(openssl rand -hex 12)"
+            echo "E2E_USER_PASSWORD=Us1-$(openssl rand -hex 12)"
+            echo "E2E_TOTP_SECRET=$(openssl rand -base64 20)"
+          } >> "$GITHUB_ENV"
       - run: npm ci
       - run: npx prisma generate
       - run: npx prisma migrate deploy
       - run: npx tsx e2e/seed.ts
-      - run: npm install --no-save --no-package-lock @playwright/test@1.49.1
+      - run: npm install --no-save --no-package-lock @playwright/test@1.52.0
       - run: npx playwright install --with-deps chromium
       - name: Start the site (development mode)
         run: |

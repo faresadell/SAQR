@@ -1,8 +1,8 @@
 import { expect, test, type Page } from "@playwright/test";
-import { E2E_ADMIN_PASSWORD } from "./accounts";
+import { E2E_ADMIN_PASSWORD, E2E_USER_PASSWORD } from "./accounts";
 import { emailedCode, expectNoHorizontalScroll, skipIntro, uniqueDigits, watchErrors } from "./helpers";
 
-const PASSWORD = "Sturdy-Pass-2026!";
+const PASSWORD = E2E_USER_PASSWORD;
 
 async function signUp(page: Page, role: "CUSTOMER" | "MERCHANT" | "DRIVER", phone: string, email: string): Promise<void> {
   await page.goto("/register");
@@ -39,7 +39,7 @@ test("customer: sign up with an emailed code, change phone with the password, si
   await page.goto("/account/profile");
   const form = page.locator("form", { has: page.locator("input[name=phone]") });
   await form.locator("input[name=phone]").fill(newPhone);
-  await form.locator("input[name=password]").fill("Wrong-Pass-2026!");
+  await form.locator("input[name=password]").fill(`${PASSWORD}x`);
   await form.getByRole("button", { name: "تغيير الرقم" }).click();
   await expect(page.getByText("كلمة المرور غير صحيحة")).toBeVisible();
   await form.locator("input[name=password]").fill(PASSWORD);
