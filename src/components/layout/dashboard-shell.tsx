@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState, type ReactNode } from "react";
 import { Logo } from "@/components/brand/logo";
+import { AutoRefresh } from "@/components/layout/auto-refresh";
 import { Drawer } from "@/components/ui/drawer";
 import { Icon } from "@/components/ui/icon";
 import { cn } from "@/lib/cn";
@@ -138,6 +139,7 @@ export function DashboardShell({ areaLabel, groups, mobileItems, user, logoutAct
       {ribbon ? <p className="bg-warning-soft px-4 py-2 text-center text-sm font-semibold text-warning-ink">{ribbon}</p> : null}
 
       <main id="main" className="mx-auto flex w-full max-w-page flex-col gap-6 px-4 pb-28 pt-5 sm:px-6 lg:pb-10 lg:pt-8">
+        {logoutAction ? <AutoRefresh /> : null}
         {children}
       </main>
 
