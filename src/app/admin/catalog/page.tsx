@@ -5,7 +5,7 @@ import { Card } from "@/components/ui/card";
 import { requirePermission } from "@/server/auth/guards";
 import { listBusinessTypes, listCategoryTree } from "@/server/catalog/categories";
 import { archiveCategoryAction, setBusinessTypeActiveAction, setCategoryActiveAction } from "./actions";
-import { CreateBusinessTypeForm, CreateCategoryForm, EditCategoryForm } from "./catalog-forms";
+import { CreateBusinessTypeForm, CreateCategoryForm, EditBusinessTypeForm, EditCategoryForm } from "./catalog-forms";
 
 export const metadata: Metadata = { title: "التصنيفات وأنواع النشاط" };
 
@@ -96,19 +96,26 @@ export default async function AdminCatalogPage({ searchParams }: { searchParams:
 
       <Card className="flex flex-col gap-4" id="types">
         <h2 className="text-lg font-bold">أنواع النشاط</h2>
+        <p className="text-sm text-ink-muted">هذه هي الأقسام التي يراها العميل في «المنتجات» (مطاعم، سوبر ماركت، عطارة…). الإخفاء يزيل القسم من الموقع دون حذف الأنشطة المسجلة تحته، وتستطيع إظهاره في أي وقت.</p>
         <div className="flex flex-col gap-2">
           {types.map((t) => (
-            <div key={t.code} className="flex flex-wrap items-center justify-between gap-2 rounded-control border border-line p-3">
-              <div className="flex items-center gap-2">
-                <span className="font-semibold">{t.nameAr}</span>
-                <span className="text-xs text-ink-muted" dir="ltr">{t.code}</span>
-                <Badge tone={t.isActive ? "success" : "neutral"}>{t.isActive ? "متاح" : "مخفي"}</Badge>
+            <div key={t.code} className="flex flex-col gap-2 rounded-control border border-line p-3">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div className="flex items-center gap-2">
+                  <span className="font-semibold">{t.nameAr}</span>
+                  <span className="text-xs text-ink-muted" dir="ltr">{t.code}</span>
+                  <Badge tone={t.isActive ? "success" : "neutral"}>{t.isActive ? "متاح" : "مخفي"}</Badge>
+                </div>
+                <form action={setBusinessTypeActiveAction}>
+                  <input type="hidden" name="code" value={t.code} />
+                  <input type="hidden" name="active" value={t.isActive ? "false" : "true"} />
+                  <Button type="submit" size="sm" variant="ghost">{t.isActive ? "إخفاء" : "إظهار"}</Button>
+                </form>
               </div>
-              <form action={setBusinessTypeActiveAction}>
-                <input type="hidden" name="code" value={t.code} />
-                <input type="hidden" name="active" value={t.isActive ? "false" : "true"} />
-                <Button type="submit" size="sm" variant="ghost">{t.isActive ? "إخفاء" : "إظهار"}</Button>
-              </form>
+              <details>
+                <summary className="cursor-pointer text-sm font-semibold text-brand">تعديل الاسم والترتيب</summary>
+                <div className="mt-3"><EditBusinessTypeForm code={t.code} nameAr={t.nameAr} sortOrder={t.sortOrder} /></div>
+              </details>
             </div>
           ))}
         </div>

@@ -4,7 +4,7 @@ import { useActionState } from "react";
 import { Button } from "@/components/ui/button";
 import { Field } from "@/components/ui/field";
 import type { FormState } from "@/lib/form-state";
-import { createBusinessTypeAction, createCategoryAction, updateCategoryAction } from "./actions";
+import { createBusinessTypeAction, createCategoryAction, updateBusinessTypeAction, updateCategoryAction } from "./actions";
 
 const initial: FormState = {};
 
@@ -62,6 +62,22 @@ export function CreateBusinessTypeForm() {
       </div>
       <Feedback state={state} />
       <Button type="submit" size="sm" loading={pending}>إضافة نوع نشاط</Button>
+    </form>
+  );
+}
+
+export function EditBusinessTypeForm({ code, nameAr, sortOrder }: { code: string; nameAr: string; sortOrder: number }) {
+  const [state, formAction, pending] = useActionState(updateBusinessTypeAction, initial);
+  const errors = state.fieldErrors ?? {};
+  return (
+    <form action={formAction} className="flex flex-col gap-3">
+      <input type="hidden" name="code" value={code} />
+      <div className="grid gap-3 sm:grid-cols-2">
+        <Field label="الاسم العربي" name="nameAr" defaultValue={nameAr} required error={errors.nameAr} />
+        <Field label="الترتيب" name="sortOrder" inputMode="numeric" dir="ltr" defaultValue={String(sortOrder)} />
+      </div>
+      <Feedback state={state} />
+      <Button type="submit" size="sm" variant="secondary" loading={pending}>حفظ</Button>
     </form>
   );
 }

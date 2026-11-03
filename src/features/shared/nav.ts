@@ -103,7 +103,8 @@ export function adminNav(base = "/admin"): { groups: NavGroup[]; mobile: NavItem
         items: [
           { href: `${base}/users`, label: "المستخدمون", icon: "users", permission: "users.view" },
           merchants,
-          { href: `${base}/businesses`, label: "الأنشطة والمنتجات", icon: "layers", permission: "catalog.manage" },
+          { href: `${base}/businesses`, label: "الأنشطة", icon: "layers", permission: "catalog.manage" },
+          { href: `${base}/products`, label: "منتجات الأنشطة", icon: "box", permission: "catalog.manage" },
           orders,
         ],
       },

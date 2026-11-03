@@ -11,6 +11,7 @@ import {
   createCategory,
   setBusinessTypeActive,
   setCategoryActive,
+  updateBusinessType,
   updateCategory,
 } from "@/server/catalog/categories";
 import { AuthorizationError, NotFoundError } from "@/server/errors";
@@ -119,6 +120,23 @@ export async function createBusinessTypeAction(_prev: FormState, formData: FormD
     }
     if (result.error === "DUPLICATE") return { fieldErrors: { code: "هذا الرمز مستخدم بالفعل." } };
     return { fieldErrors: result.errors ?? {} };
+  } catch (error) {
+    return failure(error);
+  }
+}
+
+export async function updateBusinessTypeAction(_prev: FormState, formData: FormData): Promise<FormState> {
+  const { user } = await requirePermission("catalog.manage");
+  const code = z.string().min(1).max(40).safeParse(formData.get("code"));
+  if (!code.success) return { error: "بيانات غير صالحة." };
+  try {
+    const result = await updateBusinessType(user, code.data, { nameAr: text(formData, "nameAr"), sortOrder: text(formData, "sortOrder") });
+    if (result.ok) {
+      revalidatePath("/admin/catalog");
+      revalidatePath("/", "layout");
+      return { message: "تم الحفظ." };
+    }
+    return { fieldErrors: result.errors ?? { nameAr: "بيانات غير صالحة." } };
   } catch (error) {
     return failure(error);
   }

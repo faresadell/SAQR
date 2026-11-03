@@ -118,6 +118,22 @@ export async function setBusinessTypeActive(actor: Actor, code: string, isActive
   });
 }
 
+/** Rename a kind of business or change its position in the list. The code never changes (shops refer to it). */
+export async function updateBusinessType(actor: Actor, code: string, raw: { nameAr?: string; sortOrder?: string }): Promise<BusinessTypeResult> {
+  assertCanManage(actor);
+  const nameAr = typeof raw.nameAr === "string" ? raw.nameAr.replace(/\s+/g, " ").trim() : "";
+  const sortRaw = typeof raw.sortOrder === "string" && raw.sortOrder.trim() !== "" ? Number(raw.sortOrder) : 0;
+  if (nameAr.length < 2 || nameAr.length > 60) return { ok: false, error: "INVALID", errors: { nameAr: "اكتب اسماً من حرفين إلى 60 حرفاً." } };
+  if (!Number.isInteger(sortRaw) || sortRaw < 0 || sortRaw > 1000) return { ok: false, error: "INVALID" };
+  return db.$transaction(async (tx): Promise<BusinessTypeResult> => {
+    const current = await tx.businessType.findUnique({ where: { code } });
+    if (!current) throw new NotFoundError();
+    await tx.businessType.update({ where: { code }, data: { nameAr, sortOrder: sortRaw } });
+    await writeAudit({ actorId: actor.id, action: "BUSINESS_TYPE_UPDATED", entityType: "BusinessType", entityId: code, before: { nameAr: current.nameAr, sortOrder: current.sortOrder }, after: { nameAr, sortOrder: sortRaw } }, tx);
+    return { ok: true };
+  });
+}
+
 export async function listBusinessTypes(activeOnly = false) {
   return db.businessType.findMany({ where: activeOnly ? { isActive: true } : {}, orderBy: [{ sortOrder: "asc" }, { code: "asc" }] });
 }

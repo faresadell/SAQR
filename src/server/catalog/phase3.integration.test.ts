@@ -7,7 +7,8 @@ import { db } from "@/lib/db";
 import type { Actor } from "@/lib/auth/permissions";
 import { emptyWeek, type OpeningHours } from "@/lib/catalog/opening-hours";
 import { buildCommissionSnapshot } from "@/server/commissions/service";
-import { archiveCategory, createBusinessType, createCategory, setBusinessTypeActive, setCategoryActive } from "@/server/catalog/categories";
+import { archiveCategory, createBusinessType, createCategory, setBusinessTypeActive, setCategoryActive, updateBusinessType } from "@/server/catalog/categories";
+import { adminArchiveProduct, adminCreateProduct, adminRestoreProduct, adminSetProductAvailability, adminUpdateProduct, listProductsForAdmin, listShopOptions } from "@/server/catalog/admin-products";
 import { archiveProduct, createProduct, listOwnProducts, setProductAvailability, updateProduct } from "@/server/catalog/products";
 import { getPublicMenu, listPublicMerchants } from "@/server/catalog/public";
 import { AuthorizationError, NotFoundError } from "@/server/errors";
@@ -294,5 +295,56 @@ describe("public catalog (what customers may see)", () => {
     const shop = await db.merchant.findFirstOrThrow();
     await reviewMerchant(admin, shop.id, "APPROVE");
     expect((await listPublicMerchants())[0]?.isOpen).toBe(false);
+  });
+});
+
+describe("admin control of products and business types", () => {
+  it("an admin adds, edits, hides and withdraws any shop's products; a withdrawn product cannot be revived by the shop", async () => {
+    const owner = await approvedMerchant("متجر أ");
+    const shop = await db.merchant.findFirstOrThrow({ where: { ownerId: owner.id } });
+    const cat = await usableCategory();
+    expect(await adminCreateProduct(admin, shop.id, product(cat.id))).toEqual({ ok: true });
+    const created = await db.product.findFirstOrThrow({ where: { merchantId: shop.id } });
+    expect((await auditFor("PRODUCT_CREATED"))[0]?.after).toMatchObject({ byAdmin: true });
+    expect(await adminUpdateProduct(admin, created.id, product(cat.id, { name: "شاورما دجاج", price: "99.00" }))).toEqual({ ok: true });
+    expect(await db.product.findUniqueOrThrow({ where: { id: created.id } })).toMatchObject({ nameAr: "شاورما دجاج", priceCents: 9900 });
+    await adminSetProductAvailability(admin, created.id, false);
+    expect((await db.product.findUniqueOrThrow({ where: { id: created.id } })).isAvailable).toBe(false);
+    expect(await adminArchiveProduct(admin, created.id, "x")).toEqual({ ok: false, error: "REASON_REQUIRED" });
+    expect(await adminArchiveProduct(admin, created.id, "منتج مخالف للسياسة")).toEqual({ ok: true });
+    expect((await auditFor("PRODUCT_ARCHIVED")).at(-1)?.after).toMatchObject({ reason: "منتج مخالف للسياسة", byAdmin: true });
+    expect(await listOwnProducts(owner)).toHaveLength(0);
+    await expect(setProductAvailability(owner, created.id, true)).rejects.toBeInstanceOf(NotFoundError); // the shop cannot undo it
+    await expect(updateProduct(owner, created.id, product(cat.id))).rejects.toBeInstanceOf(NotFoundError);
+    expect((await listProductsForAdmin(admin, { archived: true })).map((p) => p.id)).toEqual([created.id]);
+    expect(await listProductsForAdmin(admin, {})).toHaveLength(0);
+    await adminRestoreProduct(admin, created.id);
+    expect(await db.product.findUniqueOrThrow({ where: { id: created.id } })).toMatchObject({ archivedAt: null, isAvailable: false });
+    expect((await listShopOptions(admin)).map((s) => s.id)).toEqual([shop.id]);
+  });
+
+  it("is refused without catalog.manage, for a shop that is not approved, for a hidden category, and across bad input", async () => {
+    const owner = await makeMerchantUser();
+    await saveOwnMerchant(owner, profile("غير معتمد"), alwaysOpen());
+    const pending = await db.merchant.findFirstOrThrow({ where: { ownerId: owner.id } });
+    const cat = await usableCategory();
+    await expect(adminCreateProduct(supportOnly, pending.id, product(cat.id))).rejects.toBeInstanceOf(AuthorizationError);
+    await expect(adminArchiveProduct(supportOnly, "x", "سبب كافٍ")).rejects.toBeInstanceOf(AuthorizationError);
+    await expect(listProductsForAdmin(owner, {})).rejects.toBeInstanceOf(AuthorizationError);
+    expect(await adminCreateProduct(admin, pending.id, product(cat.id))).toEqual({ ok: false, error: "SHOP_NOT_APPROVED" });
+    await expect(adminCreateProduct(admin, "missing", product(cat.id))).rejects.toBeInstanceOf(NotFoundError);
+    expect(await reviewMerchant(admin, pending.id, "APPROVE")).toEqual({ ok: true });
+    expect((await adminCreateProduct(admin, pending.id, product(cat.id, { price: "abc" }))).ok).toBe(false);
+    await setCategoryActive(admin, cat.id, false);
+    expect(await adminCreateProduct(admin, pending.id, product(cat.id))).toEqual({ ok: false, error: "CATEGORY_UNAVAILABLE" });
+  });
+
+  it("business types can be renamed and reordered (code fixed), only with catalog.manage", async () => {
+    expect(await updateBusinessType(admin, "restaurant", { nameAr: "مطاعم ووجبات", sortOrder: "2" })).toEqual({ ok: true });
+    expect(await db.businessType.findUniqueOrThrow({ where: { code: "restaurant" } })).toMatchObject({ nameAr: "مطاعم ووجبات", sortOrder: 2 });
+    expect((await updateBusinessType(admin, "restaurant", { nameAr: "م" })).ok).toBe(false);
+    await expect(updateBusinessType(admin, "missing", { nameAr: "اسم صحيح" })).rejects.toBeInstanceOf(NotFoundError);
+    await expect(updateBusinessType(supportOnly, "restaurant", { nameAr: "اسم صحيح" })).rejects.toBeInstanceOf(AuthorizationError);
+    expect(await auditFor("BUSINESS_TYPE_UPDATED")).toHaveLength(1);
   });
 });
