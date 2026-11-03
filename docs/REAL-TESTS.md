@@ -2,6 +2,8 @@
 
 ## Checklist at a glance
 
+> Pages in the customer, shop, driver and admin areas re-read their data every 20 seconds while the tab is visible (and when it returns to the front), unless a field is being typed in. Manual check: approve something as admin and watch the other account's page update on its own within ~20 s.
+
 **A. Proven by automated tests in CI (real PostgreSQL, fake email/storage senders).** CI is green on `main`; these prove the LOGIC, not the real services.
 - [x] Password reset (email and phone paths): expiry, single use, newest code only, 5-guess limit, confirm rate limit, per-IP throttle, identical answers for real/unknown/suspended/admin accounts, concurrent double-use.
 - [x] Sign-up: activation only by the emailed code, neutral answers for taken phone/email, shop-created driver not hijackable, strong-password rule, robot-check verification (fake Cloudflare).
