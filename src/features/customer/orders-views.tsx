@@ -65,6 +65,7 @@ function SubOrderCard({ s, methods, complaints }: { s: SubOrderView; methods: Pa
         <div className="flex flex-wrap gap-2">
           <StatusBadge status={ORDER_STATUS[s.orderStatus]} />
           <StatusBadge status={DELIVERY_STATUS[s.deliveryStatus]} />
+          {s.driverName ? <span className="text-sm font-semibold text-ink-muted">السائق: {s.driverName}</span> : null}
           {s.refundStatus !== "NONE" ? <StatusBadge status={REFUND_STATUS[s.refundStatus]} /> : null}
         </div>
       </div>

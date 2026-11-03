@@ -12,7 +12,7 @@ const ASSIGNABLE_ORDER = ["APPROVED", "PREPARING", "READY", "OUT_FOR_DELIVERY"] 
 /** Delivery stages from which (re)assignment is allowed: nothing is on the road, or the last attempt failed. */
 const REASSIGNABLE: readonly DeliveryStatus[] = ["NOT_STARTED", "AWAITING_DRIVER", "DRIVER_ASSIGNED", "FAILED"];
 
-async function setDeliveryStatus(tx: Tx, order: OrderRow, to: DeliveryStatus, actorId: string, note: string | null): Promise<void> {
+export async function setDeliveryStatus(tx: Tx, order: OrderRow, to: DeliveryStatus, actorId: string, note: string | null): Promise<void> {
   const changed = await tx.order.updateMany({ where: { id: order.id, deliveryStatus: order.deliveryStatus }, data: { deliveryStatus: to } });
   if (changed.count !== 1) fail("CONFLICT");
   await tx.orderEvent.create({ data: { orderId: order.id, field: "deliveryStatus", fromValue: order.deliveryStatus, toValue: to, actorId, note } });

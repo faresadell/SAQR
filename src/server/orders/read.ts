@@ -21,6 +21,7 @@ const orderSelect = {
   cancelReason: true,
   createdAt: true,
   items: { select: { productId: true, nameSnapshot: true, unitPriceCents: true, unitDiscountCents: true, discountCents: true, offerId: true, quantity: true, lineTotalCents: true } },
+  delivery: { select: { driver: { select: { user: { select: { name: true } } } } } },
   payments: { select: { id: true, method: true, referenceNo: true, amountCents: true, submittedAt: true, confirmedAt: true, rejectedReason: true } },
 } satisfies Prisma.OrderSelect;
 
@@ -32,10 +33,17 @@ function visibility(actor: Actor): Prisma.OrderWhereInput {
   return { id: "__none__" };
 }
 
+type OrderRowRaw = Prisma.OrderGetPayload<{ select: typeof orderSelect }>;
+
+/** The driver's name is shared with the customer, the shop and admins once a driver holds the order (nothing else about the driver). */
+function withDriverName({ delivery, ...order }: OrderRowRaw) {
+  return { ...order, driverName: delivery?.driver?.user.name ?? null };
+}
+
 export async function getOrderForActor(actor: Actor, orderId: string) {
   const order = await db.order.findFirst({ where: { id: orderId, ...visibility(actor) }, select: orderSelect });
   if (!order) throw new NotFoundError();
-  return order;
+  return withDriverName(order);
 }
 
 export interface Page<T> {
@@ -53,6 +61,6 @@ export async function listOrdersForActor(actor: Actor, opts: { cursor?: string; 
     take: limit + 1,
     ...(opts.cursor ? { cursor: { id: opts.cursor }, skip: 1 } : {}),
   });
-  const items = rows.slice(0, limit);
+  const items = rows.slice(0, limit).map(withDriverName);
   return { items, nextCursor: rows.length > limit ? (items[items.length - 1]?.id ?? null) : null };
 }

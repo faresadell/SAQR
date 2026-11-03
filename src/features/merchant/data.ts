@@ -72,6 +72,7 @@ export async function loadMerchantOrders(user: U): Promise<Loaded<MerchantOrderR
         orderStatus: o.orderStatus,
         paymentStatus: o.paymentStatus,
         deliveryStatus: o.deliveryStatus,
+        ...(o.driverName ? { driverName: o.driverName } : {}),
         ...(nameByOrder.get(o.id) ? { customerName: nameByOrder.get(o.id)! } : {}),
         ...(pay ? { payment: { methodLabel: pay.method, amountCents: pay.amountCents, ...(pay.referenceNo ? { referenceNo: pay.referenceNo } : {}), ...(receiptUploadId ? { receiptUploadId } : {}), ...(pay.rejectedReason ? { rejectedReason: pay.rejectedReason } : {}) } } : {}),
         actions: merchantActionsFor(o),
