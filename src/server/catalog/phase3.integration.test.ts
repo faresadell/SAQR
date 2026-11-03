@@ -259,7 +259,7 @@ describe("public catalog (what customers may see)", () => {
 
     const shops = await listPublicMerchants();
     expect(shops.map((s) => s.name)).toEqual(["متجر ظاهر"]);
-    expect(Object.keys(shops[0] ?? {}).sort()).toEqual(["address", "businessType", "description", "id", "isOpen", "name"]);
+    expect(Object.keys(shops[0] ?? {}).sort()).toEqual(["address", "businessType", "description", "hasImage", "id", "isOpen", "name"]);
     expect(live.id).toBeTruthy();
   });
 
