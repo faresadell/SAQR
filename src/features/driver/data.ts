@@ -3,6 +3,7 @@ import type { SessionUser } from "@/server/auth/session";
 import { listMyDeliveries } from "@/server/orders/delivery";
 import { listBoard } from "@/server/orders/driver-board";
 import { failed, ready, type Loaded } from "@/features/shared/loaded";
+import type { BoardRow } from "./board-view";
 import { mapNotifications, mapPackages, mapStars } from "@/features/shared/server-mappers";
 import type { CurrentPackage, NotificationItem, PackageOption, PaymentInstruction, StarsOverview } from "@/features/shared/types";
 
@@ -94,6 +95,6 @@ export async function loadDriverNotifications(user: U): Promise<Loaded<Notificat
 }
 
 /** The open board: accepted and paid orders still without a driver. Customer details are not part of it. */
-export async function loadBoard(user: U): Promise<Loaded<import("./board-view").BoardRow[]>> {
+export async function loadBoard(user: U): Promise<Loaded<BoardRow[]>> {
   return load(async () => (await listBoard(user)).map((r) => ({ ...r, createdAt: r.createdAt.toISOString() })));
 }
