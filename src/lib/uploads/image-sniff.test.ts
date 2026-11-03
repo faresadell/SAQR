@@ -23,6 +23,8 @@ describe("detectImage", () => {
 describe("storage key pattern", () => {
   it("accepts server-made keys and refuses traversal", () => {
     expect(STORAGE_KEY_PATTERN.test("receipts/clabcdefgh123/123e4567-e89b-12d3-a456-426614174000.jpg")).toBe(true);
+    for (const kind of ["product-images", "shop-images"]) expect(STORAGE_KEY_PATTERN.test(`${kind}/clabcdefgh123/123e4567-e89b-12d3-a456-426614174000.png`)).toBe(true); // every folder the server writes to
+    expect(STORAGE_KEY_PATTERN.test("other-images/clabcdefgh123/123e4567-e89b-12d3-a456-426614174000.png")).toBe(false);
     expect(STORAGE_KEY_PATTERN.test("receipts/../../etc/passwd")).toBe(false);
     expect(STORAGE_KEY_PATTERN.test("receipts/clabcdefgh123/../x.jpg")).toBe(false);
     expect(STORAGE_KEY_PATTERN.test("/receipts/clabcdefgh123/123e4567-e89b-12d3-a456-426614174000.jpg")).toBe(false);
