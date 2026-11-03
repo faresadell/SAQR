@@ -9,7 +9,7 @@ import { invalidateSettingsCache } from "@/lib/settings";
 import { AuthorizationError } from "@/server/errors";
 import { excludeParticipant, getStandings, proposeFromStandings, restoreParticipant } from "@/server/contest/service";
 import { approveLegalPage } from "@/server/legal/service";
-import { createOffer, listPublicOffers, stopOffer } from "@/server/offers/service";
+import { createOffer, createOfferAsAdmin, listPublicOffers, stopOffer } from "@/server/offers/service";
 import { placeOrder } from "@/server/orders/checkout";
 import { applyStarMove } from "@/server/stars/ledger";
 
@@ -191,5 +191,40 @@ describe("contest standings", () => {
     const awards = await db.contestAward.findMany({ where: { monthKey: "2026-09" }, orderBy: { rank: "asc" } });
     expect(awards.map((x) => [x.rank, x.userId, x.prizeCents, x.status])).toEqual([[1, a.id, 100_000, "PROPOSED"], [2, b.id, 50_000, "PROPOSED"]]);
     expect(await proposeFromStandings(superAdmin, "2026-09", after)).toEqual({ ok: false, error: "AWARDS_EXIST" });
+  });
+});
+
+describe("admin creates an offer on behalf of a shop", () => {
+  it("publishes a plain offer for the chosen shop, audited as by-admin with both identities, and tells the owner", async () => {
+    const r = await createOfferAsAdmin(superAdmin, shopId, { title: "عرض الإدارة", description: "وصف" });
+    if (!r.ok) throw new Error("setup");
+    expect((await db.offer.findUniqueOrThrow({ where: { id: r.offerId } })).merchantId).toBe(shopId);
+    const entry = await db.auditLog.findFirstOrThrow({ where: { entityId: r.offerId } });
+    expect(entry).toMatchObject({ action: "OFFER_CREATED_BY_ADMIN", actorId: superAdmin.id, after: { onBehalfOfMerchantId: shopId, createdByAdminId: superAdmin.id } });
+    expect(await db.notification.count({ where: { userId: owner.id, type: "OFFER_CREATED_BY_ADMIN" } })).toBe(1);
+    expect((await db.starAccount.findUniqueOrThrow({ where: { userId: owner.id } })).balance).toBe(20); // free, nothing charged
+  });
+
+  it("needs offers.manage and an existing, approved shop", async () => {
+    await expect(createOfferAsAdmin(limited, shopId, { title: "عرض الإدارة" })).rejects.toBeInstanceOf(AuthorizationError);
+    await expect(createOfferAsAdmin(owner, shopId, { title: "عرض الإدارة" })).rejects.toBeInstanceOf(AuthorizationError);
+    await expect(createOfferAsAdmin(superAdmin, "missing", { title: "عرض الإدارة" })).rejects.toThrow();
+    await db.merchant.update({ where: { id: shopId }, data: { status: "SUSPENDED" } });
+    expect(await createOfferAsAdmin(superAdmin, shopId, { title: "عرض الإدارة" })).toEqual({ ok: false, error: "SHOP_NOT_APPROVED" });
+  });
+
+  it("cannot get around the discount rules: off by default, ceiling, active cap, own products only, no duplicates", async () => {
+    const d = (value: number, ids: string[]) => ({ title: "خصم الإدارة", discount: { type: "PERCENT" as const, value }, productIds: ids });
+    expect(await createOfferAsAdmin(superAdmin, shopId, d(1000, [p1.id]))).toEqual({ ok: false, error: "DISCOUNTS_DISABLED" });
+    await setting("offers.discount.enabled", 1);
+    await setting("offers.discount.max_percent", 30);
+    await setting("offers.discount.max_active_per_shop", 1);
+    expect(await createOfferAsAdmin(superAdmin, shopId, d(3100, [p1.id]))).toEqual({ ok: false, error: "DISCOUNT_ABOVE_LIMIT" });
+    const other = await user("MERCHANT");
+    const otherShop = await db.merchant.create({ data: { ownerId: other.id, name: "محل آخر", businessType: "restaurant", status: "APPROVED" } });
+    expect(await createOfferAsAdmin(superAdmin, otherShop.id, d(1000, [p1.id]))).toEqual({ ok: false, error: "INVALID_REQUEST" }); // another shop's product
+    expect((await createOfferAsAdmin(superAdmin, shopId, d(1000, [p1.id]))).ok).toBe(true);
+    expect(await createOfferAsAdmin(superAdmin, shopId, d(1000, [p2.id]))).toEqual({ ok: false, error: "TOO_MANY_DISCOUNTED_OFFERS" }); // counts the owner's and admin's offers together
+    expect(await createOffer(owner, d(1000, [p2.id]))).toEqual({ ok: false, error: "TOO_MANY_DISCOUNTED_OFFERS" });
   });
 });

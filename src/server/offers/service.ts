@@ -66,7 +66,22 @@ const ACTIVE_DISCOUNTED = (now: Date): Prisma.OfferWhereInput => ({ status: "ACT
  * is accepted while discounts are switched off.
  */
 export async function createOffer(actor: Actor, input: OfferInput): Promise<OfferResult<{ offerId: string; endsAt: Date }>> {
-  const shop = await ownShop(actor);
+  return createOfferForShop(actor, await ownShop(actor), input, false);
+}
+
+/**
+ * An administrator (offers.manage) creates an offer on behalf of a chosen shop. EXACTLY the same checks and limits as the
+ * owner's own path (discounts off by default, percent/fixed ceilings, active-offer cap, no zero price); the audit row says
+ * it was created by the admin on behalf of that shop, and the owner is notified.
+ */
+export async function createOfferAsAdmin(actor: Actor, merchantId: string, input: OfferInput): Promise<OfferResult<{ offerId: string; endsAt: Date }>> {
+  if (!hasPermission(actor, "offers.manage")) throw new AuthorizationError();
+  const shop = await db.merchant.findUnique({ where: { id: merchantId } });
+  if (!shop) throw new NotFoundError();
+  return createOfferForShop(actor, shop, input, true);
+}
+
+async function createOfferForShop(actor: Actor, shop: Awaited<ReturnType<typeof ownShop>>, input: OfferInput, byAdmin: boolean): Promise<OfferResult<{ offerId: string; endsAt: Date }>> {
   if (shop.status !== "APPROVED") return { ok: false, error: "SHOP_NOT_APPROVED" };
   const title = cleanText(input.title, 3, 80);
   const description = input.description == null || input.description === "" ? null : cleanText(input.description, 1, 500);
@@ -97,7 +112,8 @@ export async function createOffer(actor: Actor, input: OfferInput): Promise<Offe
         ...(discount ? { discountType: discount.type, discountValue: discount.value, products: { create: productIds.map((productId) => ({ productId })) } } : {}),
       },
     });
-    await writeAudit({ actorId: actor.id, action: "OFFER_CREATED", entityType: "Offer", entityId: created.id, after: { title, hours, ...(discount ? { discountType: discount.type, discountValue: discount.value, productIds } : {}) } }, tx);
+    await writeAudit({ actorId: actor.id, action: byAdmin ? "OFFER_CREATED_BY_ADMIN" : "OFFER_CREATED", entityType: "Offer", entityId: created.id, after: { title, hours, ...(byAdmin ? { onBehalfOfMerchantId: shop.id, createdByAdminId: actor.id } : {}), ...(discount ? { discountType: discount.type, discountValue: discount.value, productIds } : {}) } }, tx);
+    if (byAdmin) await notifyInTx(tx, { userId: shop.ownerId, type: "OFFER_CREATED_BY_ADMIN", title: "أنشأت الإدارة عرضاً لنشاطك", body: `أنشأت الإدارة العرض "${title}" نيابةً عنك.`, data: { offerId: created.id }, dedupeKey: `offer-created-admin:${created.id}` });
     return { ok: true, offerId: created.id, endsAt: created.endsAt };
   });
 }
