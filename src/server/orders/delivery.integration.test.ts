@@ -335,7 +335,7 @@ describe("open driver board", () => {
     await claimOrder(a, id);
     await advanceOrder(w.owner, id, "PREPARING");
     await advanceOrder(w.owner, id, "READY");
-    await expect(pickUp(b, id)).rejects.toBeInstanceOf(NotFoundError);
+    await expect(pickUp(b, id)).rejects.toBeInstanceOf(AuthorizationError); // b has never held an order, so no driver profile exists yet
     expect(await listMyDeliveries(b, "ACTIVE")).toEqual([]);
     expect((await pickUp(a, id)).ok).toBe(true);
     const mine = await listMyDeliveries(a, "ACTIVE");
