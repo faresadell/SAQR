@@ -5,12 +5,14 @@ import { Card } from "@/components/ui/card";
 import { getEnv } from "@/lib/env";
 import { RegisterForm } from "./register-form";
 
+export const dynamic = "force-dynamic";
+
 export const metadata: Metadata = { title: "إنشاء حساب" };
 
 export default async function RegisterPage() {
+  const nonce = (await headers()).get("x-nonce") ?? undefined; // reading request headers makes the page dynamic: the environment is read per request, never at build time
   const env = getEnv();
   const siteKey = env.CAPTCHA_PROVIDER === "turnstile" ? (env.TURNSTILE_SITE_KEY ?? null) : null;
-  const nonce = (await headers()).get("x-nonce") ?? undefined;
   return (
     <Card className="flex flex-col gap-5">
       <h1 className="text-xl font-bold">إنشاء حساب جديد</h1>
