@@ -54,7 +54,9 @@ test("a full order: stars bought, order placed and paid, shop accepts and prepar
     const approve = admin.page.getByRole("button", { name: "اعتماد الدفع" }).first();
     await expect(approve).toBeVisible();
     await approve.click();
-    await expect(admin.page.getByRole("button", { name: "اعتماد الدفع" })).toHaveCount(1 - i);
+    await expect(admin.page.getByRole("button", { name: "اعتماد الدفع" })).toHaveCount(1 - i, { timeout: 20_000 }).catch(async (error: unknown) => {
+      throw new Error(`approval ${i + 1} did not go through. Page said:\n${(await admin.page.locator("main").innerText()).slice(0, 1500)}\n${String(error).slice(0, 200)}`);
+    });
   }
 
   // The customer now has stars and places an order with the seeded shop.
