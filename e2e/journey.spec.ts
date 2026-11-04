@@ -95,7 +95,9 @@ test("a full order: stars bought, order placed and paid, shop accepts and prepar
   await expect(card).toBeHidden({ timeout: 60_000 }); // a claimed order leaves the open board
   await driver.page.goto("/driver/tasks");
   await driver.page.getByRole("button", { name: "استلمت الطلب من النشاط" }).click();
-  await expect(driver.page.getByRole("button", { name: "تم التسليم" })).toBeVisible();
+  await expect(driver.page.getByRole("button", { name: "تم التسليم" })).toBeVisible({ timeout: 30_000 }).catch(async (error: unknown) => {
+    throw new Error(`pickup did not lead to delivery. Page said:\n${(await driver.page.locator("main").innerText()).slice(0, 1500)}\n${String(error).slice(0, 200)}`);
+  });
   await driver.page.getByRole("button", { name: "تم التسليم" }).click();
   await expect(driver.page.getByRole("button", { name: "تم التسليم" })).toBeHidden();
 
