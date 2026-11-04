@@ -3,7 +3,7 @@ import { defineConfig, devices } from "@playwright/test";
 /** Real-browser checks of the running site, on a phone-sized and a desktop-sized screen. */
 export default defineConfig({
   testDir: ".",
-  testMatch: /.*\.spec\.ts/,
+  testMatch: "**/*.spec.ts",
   timeout: 180_000,
   expect: { timeout: 30_000 },
   retries: 0, // authenticator codes cannot be replayed, so a retry would only hide the first failure

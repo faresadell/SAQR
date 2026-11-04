@@ -57,7 +57,7 @@ jobs:
   # Real browser (Chromium) on a phone-sized and a desktop-sized screen against the running site and a real database.
   # Development mode on purpose: the production build refuses the console email sender that prints the sign-up codes.
   e2e:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     services:
       postgres:
         image: postgres:16
@@ -90,19 +90,19 @@ jobs:
             echo "E2E_USER_PASSWORD=Us1-$(openssl rand -hex 12)"
             echo "E2E_TOTP_SECRET=$(openssl rand -base64 20)"
           } >> "$GITHUB_ENV"
-      - run: npm ci
-      - run: npx prisma generate
-      - run: npx prisma migrate deploy
-      - run: npx tsx e2e/seed.ts
-      - run: npm install --no-save --no-package-lock @playwright/test@1.52.0
-      - run: npx playwright install --with-deps chromium
+      - run: npm ci --ignore-scripts
+      - run: ./node_modules/.bin/prisma generate
+      - run: ./node_modules/.bin/prisma migrate deploy
+      - run: ./node_modules/.bin/tsx e2e/seed.ts
+      - run: npm install --no-save --no-package-lock --ignore-scripts @playwright/test@1.52.0
+      - run: ./node_modules/.bin/playwright install --with-deps chromium
       - name: Start the site (development mode)
         run: |
-          nohup npx next dev -p 3000 > "$DEV_LOG" 2>&1 &
+          nohup ./node_modules/.bin/next dev -p 3000 > "$DEV_LOG" 2>&1 &
           for i in $(seq 1 60); do curl -fs -o /dev/null http://localhost:3000/login && break; sleep 2; done
           curl -fs -o /dev/null http://localhost:3000/login
       - name: Browser tests
-        run: npx playwright test -c e2e/playwright.config.ts
+        run: ./node_modules/.bin/playwright test -c e2e/playwright.config.ts
       - name: Server log (last lines)
         if: always()
         run: tail -n 80 "$DEV_LOG" || true
