@@ -39,7 +39,6 @@ async function run(work: (user: Awaited<ReturnType<typeof requireUser>>["user"])
 }
 
 export async function reviewPurchaseAction(_prev: FormState, formData: FormData): Promise<FormState> {
-  console.info("[diag] reviewPurchaseAction keys=" + [...formData.keys()].join(",") + " decision=" + String(formData.get("decision")));
   const decision = get(formData, "decision") === "APPROVE" ? "APPROVE" : "REJECT";
   return run((u) => decidePlanPurchase(u, get(formData, "id"), decision, get(formData, "reason")), ["/admin/payments"], decision === "APPROVE" ? "تم اعتماد الدفع وتفعيل الباقة." : "تم رفض الطلب.");
 }
