@@ -23,13 +23,15 @@ export async function expectNoHorizontalScroll(page: Page): Promise<void> {
 
 /** The development server prints each emailed code to its log. This reads the newest one for an address. */
 export async function emailedCode(email: string): Promise<string> {
-  const file = process.env.DEV_LOG ?? "/tmp/saqr-dev.log";
-  const pattern = new RegExp(`email code for ${email.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}: (\\d{6})`, "g");
+  const file = process.env.DEV_LOG;
+  if (!file) throw new Error("DEV_LOG must point at the development server log");
+  const marker = `email code for ${email}: `;
   let code = "";
   await expect
     .poll(() => {
-      const all = [...readFileSync(file, "utf8").matchAll(pattern)];
-      code = all.at(-1)?.[1] ?? "";
+      const line = readFileSync(file, "utf8").split("\n").filter((l) => l.includes(marker)).at(-1) ?? "";
+      const candidate = line.slice(line.indexOf(marker) + marker.length).trim();
+      code = candidate.length === 6 && [...candidate].every((c) => c >= "0" && c <= "9") ? candidate : "";
       return code;
     }, { timeout: 30_000, message: `no emailed code for ${email} in the server log` })
     .not.toBe("");

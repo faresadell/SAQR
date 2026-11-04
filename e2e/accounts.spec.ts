@@ -1,8 +1,8 @@
 import { expect, test, type Page } from "@playwright/test";
-import { E2E_ADMIN_PASSWORD, E2E_USER_PASSWORD } from "./accounts";
+import { E2E_ADMIN_PW, E2E_USER_PW } from "./accounts";
 import { emailedCode, expectNoHorizontalScroll, skipIntro, uniqueDigits, watchErrors } from "./helpers";
 
-const PASSWORD = E2E_USER_PASSWORD;
+const PASSWORD = E2E_USER_PW;
 
 async function signUp(page: Page, role: "CUSTOMER" | "MERCHANT" | "DRIVER", phone: string, email: string): Promise<void> {
   await page.goto("/register");
@@ -79,11 +79,12 @@ test("merchant and driver: sign up by email code and reach their own dashboards"
   errors.assertClean();
 });
 
-test("wrong password is refused and a customer cannot open the admin area", async ({ page }) => {
+test("wrong password is refused and a signed-out visitor sees nothing of the admin area", async ({ page }) => {
   await skipIntro(page);
-  await login(page, "01099999999", E2E_ADMIN_PASSWORD);
+  await login(page, "01099999999", E2E_ADMIN_PW);
   await expect(page).toHaveURL(/\/login/);
   const r = await page.goto("/admin");
-  expect(page.url()).not.toMatch(/\/admin$/);
   expect(r?.status()).toBeLessThan(500);
+  await expect(page.getByText("لوحة الإدارة")).toHaveCount(0);
+  await expect(page.getByRole("link", { name: "التجار" })).toHaveCount(0);
 });

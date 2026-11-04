@@ -6,7 +6,7 @@
 import { PrismaClient } from "@prisma/client";
 import { hashPassword } from "../src/lib/auth/password";
 import { encryptSecret, parseEncryptionKey } from "../src/lib/auth/secret-box";
-import { E2E_ACCOUNTS, E2E_ADMIN_PASSWORD, E2E_PROJECTS, E2E_TOTP_SECRET, type E2eProject } from "./accounts";
+import { E2E_ACCOUNTS, E2E_ADMIN_PW, E2E_PROJECTS, E2E_TOTP_SECRET, type E2eProject } from "./accounts";
 
 async function seedProject(db: PrismaClient, project: E2eProject, categoryId: string, key: Buffer, passwordHash: string): Promise<void> {
   const a = E2E_ACCOUNTS[project];
@@ -26,9 +26,9 @@ async function seedProject(db: PrismaClient, project: E2eProject, categoryId: st
 async function main(): Promise<void> {
   const db = new PrismaClient();
   try {
-    if (!E2E_ADMIN_PASSWORD || E2E_TOTP_SECRET.length < 16) throw new Error("E2E_ADMIN_PASSWORD and E2E_TOTP_SECRET must be set");
+    if (!E2E_ADMIN_PW || E2E_TOTP_SECRET.length < 16) throw new Error("E2E_ADMIN_PW and E2E_TOTP_SECRET must be set");
     const key = parseEncryptionKey(process.env.DATA_ENCRYPTION_KEY ?? "");
-    const passwordHash = await hashPassword(E2E_ADMIN_PASSWORD);
+    const passwordHash = await hashPassword(E2E_ADMIN_PW);
     const category = await db.category.create({ data: { nameAr: "مشويات" } });
     await Promise.all(E2E_PROJECTS.map((project) => seedProject(db, project, category.id, key, passwordHash)));
     console.log("e2e seed done");

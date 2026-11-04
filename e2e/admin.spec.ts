@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 import { totpAt } from "../src/lib/auth/totp";
-import { E2E_ACCOUNTS, E2E_ADMIN_PASSWORD, E2E_TOTP_SECRET, type E2eProject } from "./accounts";
+import { E2E_ACCOUNTS, E2E_ADMIN_PW, E2E_TOTP_SECRET, type E2eProject } from "./accounts";
 import { expectNoHorizontalScroll, skipIntro, TINY_PNG, watchErrors } from "./helpers";
 
 test("admin: sign in with the authenticator code, open every page, add a shop with an owner and a picture, publish an offer for it", async ({ page }, testInfo) => {
@@ -13,7 +13,7 @@ test("admin: sign in with the authenticator code, open every page, add a shop wi
 
   await page.goto("/login");
   await page.locator("input[name=phone]").fill(acc.adminPhone.replace("+20", "0"));
-  await page.locator("input[name=password]").fill(E2E_ADMIN_PASSWORD);
+  await page.locator("input[name=password]").fill(E2E_ADMIN_PW);
   await page.locator("input[name=totp]").fill(totpAt(E2E_TOTP_SECRET, Math.floor(Date.now() / 1000 / 30)));
   await page.getByRole("button", { name: "دخول" }).click();
   await expect(page).toHaveURL(/\/admin/);
