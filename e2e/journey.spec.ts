@@ -92,7 +92,7 @@ test("a full order: stars bought, order placed and paid, shop accepts and prepar
   await expect(card).toBeVisible({ timeout: 60_000 });
   await expect(card.getByText("شارع 9 المعادي")).toHaveCount(0); // the customer's address is not shown before accepting
   await card.getByRole("button", { name: "قبول الطلب" }).click();
-  await expect(driver.page.getByText("قبلت الطلب")).toBeVisible();
+  await expect(card).toBeHidden({ timeout: 60_000 }); // a claimed order leaves the open board
   await driver.page.goto("/driver/tasks");
   await driver.page.getByRole("button", { name: "استلمت الطلب من النشاط" }).click();
   await expect(driver.page.getByRole("button", { name: "تم التسليم" })).toBeVisible();
