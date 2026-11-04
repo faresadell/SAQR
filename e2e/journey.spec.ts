@@ -1,4 +1,5 @@
 import { expect, test, type Browser, type BrowserContext, type Page } from "@playwright/test";
+import { readFileSync } from "node:fs";
 import { totpAt } from "../src/lib/auth/totp";
 import { E2E_ACCOUNTS, E2E_ADMIN_PW, E2E_TOTP_SECRET, type E2eProject } from "./accounts";
 import { expectNoHorizontalScroll, login, signUp, skipIntro, TINY_PNG, uniqueDigits, watchErrors } from "./helpers";
@@ -55,7 +56,7 @@ test("a full order: stars bought, order placed and paid, shop accepts and prepar
     await expect(approve).toBeVisible();
     await approve.click();
     await expect(admin.page.getByRole("button", { name: "اعتماد الدفع" })).toHaveCount(1 - i, { timeout: 20_000 }).catch(async (error: unknown) => {
-      throw new Error(`approval ${i + 1} did not go through. Page said:\n${(await admin.page.locator("main").innerText()).slice(0, 1500)}\n${String(error).slice(0, 200)}`);
+      throw new Error(`approval ${i + 1} did not go through. Page said:\n${(await admin.page.locator("main").innerText()).slice(0, 1500)}\n${String(error).slice(0, 200)}\n${readFileSync(process.env.DEV_LOG ?? "", "utf8").split("\n").filter((l) => l.includes("[diag]")).join("\n")}`);
     });
   }
 
