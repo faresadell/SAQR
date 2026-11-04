@@ -25,23 +25,23 @@ export function OrderControls({ order, drivers }: { order: MerchantOrderRow; dri
         <input name="reason" maxLength={300} placeholder="السبب (مطلوب عند الرفض أو الإلغاء)" aria-label="السبب" className="rounded-control border border-line bg-surface px-3 py-2 text-sm" />
       ) : null}
       <div className="flex flex-wrap gap-1.5">
-        {a.confirmPayment ? <Button size="sm" name="command" value="confirmPayment" loading={pending}>تأكيد استلام التحويل</Button> : null}
-        {a.rejectPayment ? <Button size="sm" variant="danger" name="command" value="rejectPayment" loading={pending}>رفض الإيصال</Button> : null}
-        {a.approve ? <Button size="sm" name="command" value="approve" loading={pending}>قبول الطلب</Button> : null}
-        {a.reject ? <Button size="sm" variant="danger" name="command" value="reject" loading={pending}>رفض الطلب</Button> : null}
+        {a.confirmPayment ? <Button type="submit" size="sm" name="command" value="confirmPayment" loading={pending}>تأكيد استلام التحويل</Button> : null}
+        {a.rejectPayment ? <Button type="submit" size="sm" variant="danger" name="command" value="rejectPayment" loading={pending}>رفض الإيصال</Button> : null}
+        {a.approve ? <Button type="submit" size="sm" name="command" value="approve" loading={pending}>قبول الطلب</Button> : null}
+        {a.reject ? <Button type="submit" size="sm" variant="danger" name="command" value="reject" loading={pending}>رفض الطلب</Button> : null}
         {a.advanceTo ? (
           <>
             <input type="hidden" name="to" value={a.advanceTo} />
-            <Button size="sm" name="command" value="advance" loading={pending}>{ADVANCE_LABEL[a.advanceTo]}</Button>
+            <Button type="submit" size="sm" name="command" value="advance" loading={pending}>{ADVANCE_LABEL[a.advanceTo]}</Button>
           </>
         ) : null}
         {a.resolveCancellation ? (
           <>
-            <Button size="sm" name="command" value="acceptCancellation" loading={pending}>الموافقة على الإلغاء</Button>
-            <Button size="sm" variant="outline" name="command" value="declineCancellation" loading={pending}>رفض طلب الإلغاء</Button>
+            <Button type="submit" size="sm" name="command" value="acceptCancellation" loading={pending}>الموافقة على الإلغاء</Button>
+            <Button type="submit" size="sm" variant="outline" name="command" value="declineCancellation" loading={pending}>رفض طلب الإلغاء</Button>
           </>
         ) : null}
-        {a.cancel ? <Button size="sm" variant="danger" name="command" value="cancel" loading={pending}>إلغاء الطلب</Button> : null}
+        {a.cancel ? <Button type="submit" size="sm" variant="danger" name="command" value="cancel" loading={pending}>إلغاء الطلب</Button> : null}
       </div>
       {a.assignDriver ? (
         drivers.length === 0 ? (
@@ -51,7 +51,7 @@ export function OrderControls({ order, drivers }: { order: MerchantOrderRow; dri
             <Select label="السائق" name="driverId" defaultValue={drivers[0]?.id}>
               {drivers.map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}
             </Select>
-            <Button size="sm" variant="outline" name="command" value="assignDriver" loading={pending}>إسناد</Button>
+            <Button type="submit" size="sm" variant="outline" name="command" value="assignDriver" loading={pending}>إسناد</Button>
           </div>
         )
       ) : null}
