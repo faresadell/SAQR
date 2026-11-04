@@ -51,12 +51,19 @@ test("a full order: stars bought, order placed and paid, shop accepts and prepar
   await login(admin.page, acc.adminPhone.replace("+20", "0"), E2E_ADMIN_PW, totpAt(E2E_TOTP_SECRET, Math.floor(Date.now() / 1000 / 30) + 1));
   await expect(admin.page).toHaveURL(/\/admin/);
   await admin.page.goto("/admin/payments");
+  await admin.page.evaluate(() => {
+    document.addEventListener("submit", (e) => {
+      const form = e.target as HTMLFormElement;
+      const sub = (e as SubmitEvent).submitter;
+      (window as unknown as { __diag: unknown }).__diag = { submitter: sub ? sub.outerHTML.slice(0, 200) : null, keys: [...new FormData(form, sub).keys()].filter((k) => !k.startsWith("$")) };
+    }, true);
+  });
   for (let i = 0; i < 2; i += 1) {
     const approve = admin.page.getByRole("button", { name: "اعتماد الدفع" }).first();
     await expect(approve).toBeVisible();
     await approve.click();
     await expect(admin.page.getByRole("button", { name: "اعتماد الدفع" })).toHaveCount(1 - i, { timeout: 20_000 }).catch(async (error: unknown) => {
-      throw new Error(`approval ${i + 1} did not go through. Page said:\n${(await admin.page.locator("main").innerText()).slice(0, 1500)}\n${String(error).slice(0, 200)}\n${readFileSync(process.env.DEV_LOG ?? "", "utf8").split("\n").filter((l) => l.includes("[diag]")).join("\n")}`);
+      throw new Error(`approval ${i + 1} did not go through. Page said:\n${(await admin.page.locator("main").innerText()).slice(0, 1500)}\n${String(error).slice(0, 200)}\nbrowser saw: ${JSON.stringify(await admin.page.evaluate(() => (window as unknown as { __diag: unknown }).__diag))}\n${readFileSync(process.env.DEV_LOG ?? "", "utf8").split("\n").filter((l) => l.includes("[diag]")).join("\n")}`);
     });
   }
 
