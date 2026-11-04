@@ -23,12 +23,22 @@ async function seedProject(db: PrismaClient, project: E2eProject, categoryId: st
   });
 }
 
+/** What an administrator sets up before launch: a delivery zone with its fee, the merchant response window, and where payments are received. */
+async function seedPlatform(db: PrismaClient): Promise<void> {
+  const past = new Date(Date.now() - 86_400_000);
+  const zone = await db.deliveryZone.create({ data: { name: "المعادي" } });
+  await db.deliveryFeeVersion.create({ data: { zoneId: zone.id, feeCents: 2000, effectiveFrom: past, createdById: "e2e" } });
+  await db.platformSettingVersion.create({ data: { key: "orders.merchant_response_minutes", value: { v: 30 }, effectiveFrom: past, createdById: "e2e" } });
+  await db.paymentMethodConfig.updateMany({ data: { isEnabled: true, receiverNumber: "01000000999" } });
+}
+
 async function main(): Promise<void> {
   const db = new PrismaClient();
   try {
     if (!E2E_ADMIN_PW || E2E_TOTP_SECRET.length < 16) throw new Error("E2E_ADMIN_PW and E2E_TOTP_SECRET must be set");
     const key = parseEncryptionKey(process.env.DATA_ENCRYPTION_KEY ?? "");
     const passwordHash = await hashPassword(E2E_ADMIN_PW);
+    await seedPlatform(db);
     const category = await db.category.create({ data: { nameAr: "مشويات" } });
     await Promise.all(E2E_PROJECTS.map((project) => seedProject(db, project, category.id, key, passwordHash)));
     console.log("e2e seed done");
