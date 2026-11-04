@@ -1,37 +1,8 @@
-import { expect, test, type Page } from "@playwright/test";
-import { E2E_ADMIN_PW, E2E_USER_PW } from "./accounts";
-import { emailedCode, expectNoHorizontalScroll, skipIntro, uniqueDigits, watchErrors } from "./helpers";
+import { expect, test } from "@playwright/test";
+import { E2E_ADMIN_PW } from "./accounts";
+import { expectNoHorizontalScroll, login, logout, signUp, skipIntro, USER_PASSWORD, uniqueDigits, watchErrors } from "./helpers";
 
-const PASSWORD = E2E_USER_PW;
-
-async function signUp(page: Page, role: "CUSTOMER" | "MERCHANT" | "DRIVER", phone: string, email: string): Promise<void> {
-  await page.goto("/register");
-  await page.locator(`input[name=role][value=${role}]`).check();
-  await page.locator("input[name=firstName]").fill("اختبار");
-  await page.locator("input[name=lastName]").fill("آلي");
-  await page.locator("input[name=phone]").fill(phone);
-  await page.locator("input[name=email]").fill(email);
-  await page.locator("input[name=password]").fill(PASSWORD);
-  await page.locator("input[name=consent]").check();
-  await page.getByRole("button", { name: "إنشاء الحساب" }).click();
-  await expect(page).toHaveURL(/\/verify/);
-  await page.locator("input[name=code]").fill(await emailedCode(email));
-  await page.getByRole("button", { name: "تأكيد" }).click();
-}
-
-/** On a phone the sign-out button lives in the side menu; on desktop it is always on screen. */
-async function logout(page: Page): Promise<void> {
-  const button = page.locator('button[aria-label="تسجيل الخروج"]:visible');
-  if ((await button.count()) === 0) await page.getByRole("button", { name: "فتح القائمة" }).click();
-  await button.click();
-}
-
-async function login(page: Page, phone: string, password: string): Promise<void> {
-  await page.goto("/login");
-  await page.locator("input[name=phone]").fill(phone);
-  await page.locator("input[name=password]").fill(password);
-  await page.getByRole("button", { name: "دخول" }).click();
-}
+const PASSWORD = USER_PASSWORD;
 
 test("customer: sign up with an emailed code, change phone with the password, sign out, sign in with the new number", async ({ page }, testInfo) => {
   await skipIntro(page);
