@@ -19,6 +19,13 @@ async function signUp(page: Page, role: "CUSTOMER" | "MERCHANT" | "DRIVER", phon
   await page.getByRole("button", { name: "تأكيد" }).click();
 }
 
+/** On a phone the sign-out button lives in the side menu; on desktop it is always on screen. */
+async function logout(page: Page): Promise<void> {
+  const button = page.locator('button[aria-label="تسجيل الخروج"]:visible');
+  if ((await button.count()) === 0) await page.getByRole("button", { name: "فتح القائمة" }).click();
+  await button.click();
+}
+
 async function login(page: Page, phone: string, password: string): Promise<void> {
   await page.goto("/login");
   await page.locator("input[name=phone]").fill(phone);
@@ -46,7 +53,7 @@ test("customer: sign up with an emailed code, change phone with the password, si
   await form.getByRole("button", { name: "تغيير الرقم" }).click();
   await expect(page.getByText("تم تغيير الرقم")).toBeVisible();
 
-  await page.getByRole("button", { name: "تسجيل الخروج" }).first().click();
+  await logout(page);
   await login(page, newPhone, PASSWORD);
   await expect(page).toHaveURL(/\/account/);
   for (const path of ["/account", "/account/orders", "/account/stars", "/account/packages", "/account/notifications", "/account/addresses", "/account/rewards"]) {
