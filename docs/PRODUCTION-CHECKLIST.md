@@ -22,7 +22,7 @@ The app refuses to start in production with the console email sender or a disabl
 - [ ] Scheduler: one call hourly (daily is enough): `POST https://<domain>/api/internal/jobs/all` with header `Authorization: Bearer <CRON_SECRET>`. Expect HTTP 200 and a JSON result per job.
 
 ## 4. First-run admin setup (from `/admin`)
-- [ ] Payment methods: set the real Vodafone Cash / InstaPay receiving numbers and enable them.
+- [ ] Payment methods: either set `VODAFONE_CASH_RECEIVER` and `INSTAPAY_RECEIVER` in the environment BEFORE the first `npm run db:seed` (fills and enables an empty method once), or enter the numbers in `/admin/settings` and enable them. Then open the customer payment screen and confirm the number shown is the right one.
 - [ ] Delivery zones and fees; categories/business types; add the first shops (owner chosen from merchant accounts).
 - [ ] Support contact details and the legal pages: these stay **unapproved** until you review and approve them. No placeholder support data is shown.
 - [ ] Offers/discounts and the contest stay OFF until you approve their rules.

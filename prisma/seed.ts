@@ -30,6 +30,15 @@ async function main() {
     // Disabled until an admin enables them from the dashboard.
     await db.paymentMethodConfig.upsert({ where: { code: method.code }, update: {}, create: { ...method, isEnabled: false } });
   }
+  // Optional first-run setup: the receiving numbers come from the environment (never from the repository).
+  // Only fills a method that has no number yet, and only then enables it; later edits by admins are never overwritten.
+  const receivers = { vodafone_cash: process.env.VODAFONE_CASH_RECEIVER, instapay: process.env.INSTAPAY_RECEIVER } as const;
+  for (const [code, raw] of Object.entries(receivers)) {
+    const value = raw?.replace(/[\s-]/g, "");
+    if (!value) continue;
+    if (!/^[0-9+]{8,15}$/.test(value)) throw new Error(`${code} receiver number is not a valid phone number`);
+    await db.paymentMethodConfig.updateMany({ where: { code, receiverNumber: null }, data: { receiverNumber: value, isEnabled: true } });
+  }
   // Starting business kinds. Admins can add or hide kinds from the dashboard (nothing here is hardcoded in the app).
   const businessTypes = [
     { code: "restaurant", nameAr: "مطاعم", sortOrder: 1 },
