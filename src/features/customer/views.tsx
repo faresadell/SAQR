@@ -8,6 +8,7 @@ import { Progress } from "@/components/ui/progress";
 import { SectionTitle } from "@/components/ui/page-header";
 import { StatCard } from "@/components/ui/stat-card";
 import { StarBalance } from "@/components/saqr/star-balance";
+import { NameForm } from "@/features/shared/name-panel";
 import { SectionGate } from "@/features/shared/section-gate";
 import type { Loaded } from "@/features/shared/loaded";
 import { PACKAGE_STATE } from "@/features/shared/status";
@@ -182,7 +183,7 @@ export function ProfileView({ name, phone, roleLabel }: { name: string; phone: s
           <Badge tone="info">{roleLabel}</Badge>
         </div>
         <p className="ltr-isolate text-start text-ink-muted">{phone}</p>
-        <p className="text-xs text-ink-muted">تعديل البيانات الشخصية غير متاح حالياً.</p>
+        <NameForm name={name} />
       </Card>
       <Card className="flex flex-col gap-3">
         <h2 className="text-lg font-bold">الدعم</h2>

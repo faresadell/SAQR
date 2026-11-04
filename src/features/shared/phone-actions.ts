@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { getClientIp } from "@/lib/client-ip";
 import type { FormState } from "@/lib/form-state";
+import { changeName } from "@/server/auth/change-name";
 import { changePhone } from "@/server/auth/change-phone";
 import { requireUser } from "@/server/auth/guards";
 import { GENERIC_ERROR } from "./messages";
@@ -28,6 +29,21 @@ export async function changePhoneAction(_prev: FormState, formData: FormData): P
     }
     for (const base of ["/account", "/merchant", "/driver", "/admin"]) revalidatePath(base, "layout");
     return { message: "تم تغيير الرقم. الرقم الجديد غير متحقق منه." };
+  } catch (error) {
+    console.error(error);
+    return { error: GENERIC_ERROR };
+  }
+}
+
+export async function changeNameAction(_prev: FormState, formData: FormData): Promise<FormState> {
+  const { user } = await requireUser();
+  try {
+    const result = await changeName(user, text(formData, "name"));
+    if (!result.ok) {
+      return result.error === "SAME_NAME" ? { fieldErrors: { name: "هذا هو اسمك الحالي." } } : { fieldErrors: { name: "اكتب اسماً من حرفين إلى 60 حرفاً." } };
+    }
+    for (const base of ["/account", "/merchant", "/driver", "/admin"]) revalidatePath(base, "layout");
+    return { message: "تم تحديث الاسم." };
   } catch (error) {
     console.error(error);
     return { error: GENERIC_ERROR };

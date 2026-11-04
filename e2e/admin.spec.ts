@@ -22,7 +22,7 @@ test("admin: sign in with the authenticator code, open every page, add a shop wi
   for (const path of pages) {
     const r = await page.goto(path);
     expect(r?.status(), path).toBeLessThan(400);
-    await expect(page.locator("main")).toBeVisible();
+    await expect(page.locator("main").first()).toBeVisible();
     await expectNoHorizontalScroll(page);
   }
 

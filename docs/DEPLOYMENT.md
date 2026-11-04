@@ -16,7 +16,7 @@
 | `UPLOAD_DIR` | only with `STORAGE_PROVIDER=local`: persistent volume OUTSIDE the web root |
 
 ## Scheduled jobs (call with `Authorization: Bearer $CRON_SECRET`)
-`POST /api/internal/jobs/{daily-stars | monthly-rewards | plan-reminders | refund-overdue | membership-maintenance | settlements}` — daily is enough for all; `settlements` and `monthly-rewards` act only on the Cairo month boundary.
+`POST /api/internal/jobs/{daily-stars | monthly-rewards | plan-reminders | refund-overdue | membership-maintenance | settlements}` — or just `POST /api/internal/jobs/all` (runs every job once; a failing job does not stop the others; all are idempotent). Schedule that ONE call hourly with your host's scheduler (or any cron service) sending the `Authorization` header. Daily is enough; `settlements` and `monthly-rewards` act only on the Cairo month boundary.
 
 ## First-run admin tasks
 1. Create the main administrator and enrol TOTP.
