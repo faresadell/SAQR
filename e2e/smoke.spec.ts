@@ -45,6 +45,11 @@ test("settings: grouped rows with working links", async ({ page }) => {
   await expect(page).toHaveURL(/\/legal\/support/);
 });
 
+test("first-admin setup page does not exist unless it was switched on", async ({ page }) => {
+  const response = await page.goto("/setup");
+  expect(response?.status()).toBe(404);
+});
+
 test("bottom bar: five sections on a phone, hidden on desktop", async ({ page }, testInfo) => {
   await skipIntro(page);
   await page.goto("/");

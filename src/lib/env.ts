@@ -32,6 +32,8 @@ const schema = z
     R2_BUCKET: z.preprocess((v) => (v === "" ? undefined : v), z.string().regex(/^[a-z0-9][a-z0-9-]{2,62}$/).optional()),
     R2_ACCESS_KEY_ID: z.preprocess((v) => (v === "" ? undefined : v), z.string().min(8).optional()),
     R2_SECRET_ACCESS_KEY: z.preprocess((v) => (v === "" ? undefined : v), z.string().min(16).optional()),
+    // One-time first-administrator page (/setup). Unset = the page does not exist. Remove it again after the admin is created.
+    SETUP_TOKEN: z.preprocess((v) => (v === "" ? undefined : v), z.string().min(32).optional()),
     // Trial deployment on a *.vercel.app address BEFORE the real domain exists: emails are printed to the server log
     // and the robot check may be off. Refused on any other address, so it can never run on the real domain.
     PREVIEW_MODE: z
