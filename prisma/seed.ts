@@ -5,7 +5,7 @@
  *   npm run db:seed
  */
 import { PrismaClient } from "@prisma/client";
-import { applySupportContact } from "../src/lib/legal/support-contact";
+import { SUPPORT_PLACEHOLDER, applySupportContact } from "../src/lib/legal/support-contact";
 import { DEFAULT_PLANS } from "../src/lib/stars/rules";
 import { DEFAULT_MEMBERSHIP_PLANS } from "../src/lib/memberships/rules";
 
@@ -47,6 +47,12 @@ async function main() {
     const filled = applySupportContact(support.body, { whatsapp: process.env.SUPPORT_WHATSAPP, email: process.env.SUPPORT_EMAIL });
     if (filled !== null) await db.legalPage.update({ where: { slug: "support" }, data: { body: filled } });
   }
+  // Approve the agreed legal drafts (privacy, terms, cancellation, refund) once, only if untouched (version 1, unapproved).
+  // The contest rules stay unapproved. Support is approved only after its contact placeholder was filled.
+  const supportNow = await db.legalPage.findUnique({ where: { slug: "support" } });
+  const approveSlugs = ["privacy", "terms", "cancellation", "refund"];
+  if (supportNow && supportNow.approvedAt === null && !supportNow.body.includes(SUPPORT_PLACEHOLDER)) approveSlugs.push("support");
+  await db.legalPage.updateMany({ where: { slug: { in: approveSlugs }, approvedAt: null, version: 1 }, data: { approvedAt: new Date() } });
   // Starting business kinds. Admins can add or hide kinds from the dashboard (nothing here is hardcoded in the app).
   const businessTypes = [
     { code: "restaurant", nameAr: "مطاعم", sortOrder: 1 },

@@ -26,11 +26,11 @@ for (const path of PUBLIC_PAGES) {
   });
 }
 
-test("privacy policy: full draft text, readable sections, still labelled as an unapproved draft", async ({ page }) => {
+test("privacy policy: full draft text, readable sections, no draft label once approved", async ({ page }) => {
   await skipIntro(page);
   await page.goto("/legal/privacy");
   await expect(page.getByRole("heading", { level: 1, name: "سياسة الخصوصية" })).toBeVisible();
-  await expect(page.getByText("مسودة غير معتمدة")).toBeVisible();
+  await expect(page.getByText("مسودة غير معتمدة")).toHaveCount(0);
   for (const section of ["البيانات التي نجمعها", "حقوقك", "مدة الاحتفاظ"]) await expect(page.getByRole("heading", { level: 2, name: section })).toBeVisible();
   await expectNoHorizontalScroll(page);
 });

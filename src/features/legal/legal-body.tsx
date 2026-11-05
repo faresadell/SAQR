@@ -6,6 +6,7 @@ import type { ReactNode } from "react";
  */
 export function LegalBody({ body }: { body: string }) {
   const blocks: ReactNode[] = [];
+  const headings: string[] = [];
   let bullets: string[] = [];
   const flush = () => {
     if (bullets.length === 0) return;
@@ -23,7 +24,8 @@ export function LegalBody({ body }: { body: string }) {
       flush();
     } else if (line.startsWith("## ")) {
       flush();
-      blocks.push(<h2 key={`h-${blocks.length}`} className="mt-4 text-lg font-bold text-ink">{line.slice(3)}</h2>);
+      headings.push(line.slice(3));
+      blocks.push(<h2 key={`h-${blocks.length}`} id={`section-${headings.length + 1}`} className="mt-4 scroll-mt-20 border-s-4 border-brand ps-3 text-lg font-bold text-ink">{line.slice(3)}</h2>);
     } else if (line.startsWith("- ")) {
       bullets.push(line.slice(2));
     } else {
@@ -32,5 +34,19 @@ export function LegalBody({ body }: { body: string }) {
     }
   }
   flush();
-  return <div className="flex flex-col gap-3 text-base leading-8 text-ink">{blocks}</div>;
+  return (
+    <div className="flex flex-col gap-3 text-base leading-8 text-ink">
+      {headings.length > 2 ? (
+        <nav aria-label="محتويات الصفحة" className="rounded-sheet border border-line bg-canvas p-4">
+          <p className="mb-2 text-sm font-bold">المحتويات</p>
+          <ol className="flex list-decimal flex-col gap-1 ps-6 text-sm">
+            {headings.map((h, i) => (
+              <li key={i}><a href={`#section-${i + 1}`} className="text-brand hover:underline">{h}</a></li>
+            ))}
+          </ol>
+        </nav>
+      ) : null}
+      {blocks}
+    </div>
+  );
 }

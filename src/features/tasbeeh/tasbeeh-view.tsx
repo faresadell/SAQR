@@ -11,6 +11,7 @@ import { Progress } from "@/components/ui/progress";
 import { Select } from "@/components/ui/select";
 import { cn } from "@/lib/cn";
 import { formatDateTime, formatNumber } from "@/lib/format";
+import { AdhkarSection } from "./adhkar-section";
 import { useTasbeeh } from "./use-tasbeeh";
 import {
   DHIKR_OPTIONS,
@@ -127,7 +128,14 @@ export function TasbeehView() {
 
         <button
           type="button"
-          onClick={() => dispatch({ type: "tap", now: Date.now() })}
+          onClick={() => {
+            dispatch({ type: "tap", now: Date.now() });
+            try {
+              navigator.vibrate?.(10);
+            } catch {
+              /* optional */
+            }
+          }}
           className="flex min-h-28 w-full touch-manipulation select-none items-center justify-center gap-3 rounded-sheet bg-white text-3xl font-bold text-navy-900 transition-transform active:scale-[0.98] hover:bg-silver"
         >
           <Icon name="plus" className="size-8" />
@@ -145,6 +153,8 @@ export function TasbeehView() {
           </Button>
         </div>
       </Card>
+
+      <AdhkarSection />
 
       {/* Settings */}
       <Card className="flex flex-col gap-5">
