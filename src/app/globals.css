@@ -28,6 +28,23 @@
     display: none;
   }
 
+  /* Smooth, tactile feel: pressed buttons shrink slightly, links and cards ease, pages fade in. */
+  html {
+    scroll-behavior: smooth;
+  }
+  button:not(:disabled):active,
+  a[role="button"]:active {
+    transform: scale(0.97);
+  }
+  button,
+  a {
+    transition-property: color, background-color, border-color, transform, box-shadow, opacity;
+    transition-duration: 160ms;
+  }
+  main {
+    animation: rise-in 280ms ease-out both;
+  }
+
   /* Latin digits and codes stay left-to-right inside RTL text. */
   /* Tabular figures keep stats, balances and counters from jittering as they change. */
   .num {
