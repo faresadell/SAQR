@@ -1,5 +1,7 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { parseEnv } from "@/lib/env";
+
+vi.mock("server-only", () => ({}));
 
 const base = {
   DATABASE_URL: "postgresql://u:p@localhost:5432/db",
