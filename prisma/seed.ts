@@ -5,6 +5,7 @@
  *   npm run db:seed
  */
 import { PrismaClient } from "@prisma/client";
+import { applySupportContact } from "../src/lib/legal/support-contact";
 import { DEFAULT_PLANS } from "../src/lib/stars/rules";
 import { DEFAULT_MEMBERSHIP_PLANS } from "../src/lib/memberships/rules";
 
@@ -38,6 +39,13 @@ async function main() {
     if (!value) continue;
     if (!/^[0-9+]{8,15}$/.test(value)) throw new Error(`${code} receiver number is not a valid phone number`);
     await db.paymentMethodConfig.updateMany({ where: { code, receiverNumber: null }, data: { receiverNumber: value, isEnabled: true } });
+  }
+  // Optional first-run setup: the official support contact comes from the environment (never from the repository).
+  // Only fills the placeholder of a support page that is still an unapproved, untouched draft.
+  const support = await db.legalPage.findUnique({ where: { slug: "support" } });
+  if (support && support.approvedAt === null) {
+    const filled = applySupportContact(support.body, { whatsapp: process.env.SUPPORT_WHATSAPP, email: process.env.SUPPORT_EMAIL });
+    if (filled !== null) await db.legalPage.update({ where: { slug: "support" }, data: { body: filled } });
   }
   // Starting business kinds. Admins can add or hide kinds from the dashboard (nothing here is hardcoded in the app).
   const businessTypes = [
