@@ -2,7 +2,7 @@ import { expect, test } from "@playwright/test";
 import { E2E_ACCOUNTS, type E2eProject } from "./accounts";
 import { expectNoHorizontalScroll, skipIntro, watchErrors } from "./helpers";
 
-const PUBLIC_PAGES = ["/", "/explore", "/offers", "/tasbeeh", "/settings", "/search", "/login", "/register", "/forgot-password", "/privacy"];
+const PUBLIC_PAGES = ["/", "/explore", "/offers", "/tasbeeh", "/settings", "/search", "/login", "/register", "/forgot-password", "/privacy", "/legal/terms", "/legal/cancellation", "/legal/refund", "/legal/support"];
 
 test("opening screen shows once and can be skipped", async ({ page }) => {
   await page.goto("/");
@@ -25,6 +25,25 @@ for (const path of PUBLIC_PAGES) {
     errors.assertClean();
   });
 }
+
+test("privacy policy: full draft text, readable sections, still labelled as an unapproved draft", async ({ page }) => {
+  await skipIntro(page);
+  await page.goto("/legal/privacy");
+  await expect(page.getByRole("heading", { level: 1, name: "سياسة الخصوصية" })).toBeVisible();
+  await expect(page.getByText("مسودة غير معتمدة")).toBeVisible();
+  for (const section of ["البيانات التي نجمعها", "حقوقك", "مدة الاحتفاظ"]) await expect(page.getByRole("heading", { level: 2, name: section })).toBeVisible();
+  await expectNoHorizontalScroll(page);
+});
+
+test("settings: grouped rows with working links", async ({ page }) => {
+  await skipIntro(page);
+  await page.goto("/settings");
+  const main = page.locator("main");
+  await expect(main.getByRole("link", { name: "سياسة الخصوصية" })).toBeVisible();
+  await expect(main.getByRole("switch")).toBeVisible();
+  await main.getByRole("link", { name: "الدعم" }).click();
+  await expect(page).toHaveURL(/\/legal\/support/);
+});
 
 test("bottom bar: five sections on a phone, hidden on desktop", async ({ page }, testInfo) => {
   await skipIntro(page);

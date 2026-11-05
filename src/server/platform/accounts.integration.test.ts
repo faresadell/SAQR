@@ -171,7 +171,7 @@ describe("legal pages", () => {
   it("start as unapproved drafts; editing needs content.manage, is version-checked, and removes approval", async () => {
     const pages = await listLegalPages();
     expect(pages.map((p) => p.slug).sort()).toEqual(["cancellation", "contest", "privacy", "refund", "support", "terms"]);
-    expect(pages.every((p) => !p.approved && p.body.includes("مسودة"))).toBe(true);
+    expect(pages.every((p) => !p.approved)).toBe(true); // the page itself labels unapproved text as a draft
     await expect(getLegalPage("nope")).rejects.toBeInstanceOf(NotFoundError);
     await expect(updateLegalPage(limited, "terms", { title: "t", body: "b", expectedVersion: 1 })).rejects.toBeInstanceOf(AuthorizationError);
     await expect(approveLegalPage(limited, "terms", 1)).rejects.toBeInstanceOf(AuthorizationError);

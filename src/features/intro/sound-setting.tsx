@@ -1,10 +1,10 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/cn";
 import { isSoundOn, playFalcon, setSoundOn } from "./falcon-sound";
 
-/** Sound on/off for the opening screen, remembered on this device. */
+/** Sound on/off for the opening screen, remembered on this device. Shown as a settings row with a switch. */
 export function SoundSetting() {
   const [on, setOn] = useState(true);
   useEffect(() => setOn(isSoundOn()), []);
@@ -15,12 +15,20 @@ export function SoundSetting() {
     if (next) playFalcon();
   }
   return (
-    <div className="flex flex-wrap items-center justify-between gap-3">
-      <div className="min-w-0">
-        <p className="font-semibold">صوت الصقر عند فتح الموقع</p>
-        <p className="text-sm text-ink-muted">{on ? "مفعّل على هذا الجهاز." : "مكتوم على هذا الجهاز."}</p>
-      </div>
-      <Button type="button" variant="outline" className="shrink-0 whitespace-nowrap" onClick={toggle} aria-pressed={on}>{on ? "كتم الصوت" : "تشغيل الصوت"}</Button>
-    </div>
+    <button
+      type="button"
+      role="switch"
+      aria-checked={on}
+      onClick={toggle}
+      className="flex min-h-14 w-full items-center justify-between gap-3 px-4 py-3 text-start hover:bg-canvas"
+    >
+      <span className="min-w-0">
+        <span className="block font-semibold text-ink">صوت الصقر عند فتح الموقع</span>
+        <span className="block text-sm text-ink-muted">{on ? "مفعّل على هذا الجهاز" : "مكتوم على هذا الجهاز"}</span>
+      </span>
+      <span aria-hidden="true" className={cn("relative h-7 w-12 shrink-0 rounded-full transition-colors", on ? "bg-brand" : "bg-line-strong")}>
+        <span className={cn("absolute top-1 size-5 rounded-full bg-white shadow transition-all", on ? "end-1" : "start-1")} />
+      </span>
+    </button>
   );
 }

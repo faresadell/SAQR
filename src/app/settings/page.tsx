@@ -1,64 +1,77 @@
 import type { Metadata } from "next";
-import Link from "next/link";
 import { logoutAction } from "@/app/(auth)/actions";
 import { SiteShell } from "@/components/layout/site-shell";
-import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
 import { LinkButton } from "@/components/ui/link-button";
-import { PageHeader } from "@/components/ui/page-header";
 import { SoundSetting } from "@/features/intro/sound-setting";
+import { SettingsAction, SettingsGroup, SettingsLink } from "@/features/settings/settings-parts";
 import { getCurrentSession } from "@/server/auth/session";
 
 export const metadata: Metadata = { title: "الإعدادات" };
 
-const roleHome = { CUSTOMER: ["/account", "حسابي"], MERCHANT: ["/merchant", "لوحة التاجر"], DRIVER: ["/driver", "لوحة السائق"], ADMIN: ["/admin", "لوحة الإدارة"] } as const;
-const LEGAL = [
-  ["privacy", "سياسة الخصوصية"],
-  ["terms", "الشروط والأحكام"],
-  ["cancellation", "سياسة الإلغاء"],
-  ["refund", "سياسة الاسترجاع"],
-  ["support", "الدعم"],
-] as const;
+const ROLE = {
+  CUSTOMER: { home: "/account", orders: "/account/orders", label: "عميل", homeLabel: "حسابي" },
+  MERCHANT: { home: "/merchant", orders: "/merchant/orders", label: "تاجر", homeLabel: "لوحة التاجر" },
+  DRIVER: { home: "/driver", orders: "/driver/tasks", label: "سائق", homeLabel: "لوحة السائق" },
+  ADMIN: { home: "/admin", orders: "/admin/orders", label: "إدارة", homeLabel: "لوحة الإدارة" },
+} as const;
 
 export default async function SettingsPage() {
   const session = await getCurrentSession();
-  const home = session ? roleHome[session.user.role] : null;
+  const role = session ? ROLE[session.user.role] : null;
   return (
     <SiteShell>
-      <div className="mx-auto flex w-full max-w-2xl flex-col gap-5 px-4 py-8 sm:px-6">
-        <PageHeader title="الإعدادات" description="الحساب والصوت والصفحات القانونية." />
-        <Card className="flex flex-col gap-3">
-          <h2 className="font-bold">الحساب</h2>
-          {session && home ? (
-            <>
-              <p className="text-sm text-ink-muted">مسجّل الدخول باسم {session.user.name}.</p>
-              <div className="flex flex-wrap gap-2">
-                <LinkButton href={home[0]}>{home[1]}</LinkButton>
-                <form action={logoutAction}><Button type="submit" variant="outline">تسجيل الخروج</Button></form>
-              </div>
-            </>
-          ) : (
-            <>
+      <div className="mx-auto flex w-full max-w-xl flex-col gap-6 px-4 py-6 sm:px-6">
+        <h1 className="text-2xl font-bold">الإعدادات</h1>
+
+        {session && role ? (
+          <div className="flex items-center gap-4 rounded-card border border-line bg-surface p-4 shadow-card">
+            <span aria-hidden="true" className="flex size-14 shrink-0 items-center justify-center rounded-full bg-navy-900 text-xl font-bold text-white">
+              {Array.from(session.user.name)[0] ?? "؟"}
+            </span>
+            <div className="min-w-0">
+              <p className="truncate text-lg font-bold">{session.user.name}</p>
+              <p className="text-sm text-ink-muted">{role.label}</p>
+            </div>
+          </div>
+        ) : (
+          <div className="flex flex-col gap-3 rounded-card border border-line bg-surface p-4 shadow-card">
+            <div>
+              <p className="text-lg font-bold">مرحباً بك في صقر</p>
               <p className="text-sm text-ink-muted">سجّل دخولك لمتابعة طلباتك، أو أنشئ حساباً كعميل أو تاجر أو سائق.</p>
-              <div className="flex flex-col gap-2 sm:flex-row">
-                <LinkButton href="/login" className="w-full sm:w-auto">تسجيل الدخول</LinkButton>
-                <LinkButton href="/register" variant="outline" className="w-full sm:w-auto">إنشاء حساب</LinkButton>
-              </div>
-            </>
-          )}
-        </Card>
-        <Card className="flex flex-col gap-3">
-          <h2 className="font-bold">الصوت</h2>
-          <SoundSetting />
-        </Card>
-        <Card className="flex flex-col gap-3">
-          <h2 className="font-bold">صفحات قانونية</h2>
-          <ul className="flex flex-col gap-2 text-sm">
-            {LEGAL.map(([slug, label]) => (
-              <li key={slug}><Link href={`/legal/${slug}`} className="font-semibold text-brand underline">{label}</Link></li>
-            ))}
-          </ul>
-        </Card>
+            </div>
+            <div className="flex flex-col gap-2 sm:flex-row">
+              <LinkButton href="/login" className="w-full sm:flex-1">تسجيل الدخول</LinkButton>
+              <LinkButton href="/register" variant="outline" className="w-full sm:flex-1">إنشاء حساب</LinkButton>
+            </div>
+          </div>
+        )}
+
+        {session && role ? (
+          <SettingsGroup title="حسابي">
+            <SettingsLink href={role.home} icon="user" label={role.homeLabel} />
+            <SettingsLink href={role.orders} icon="box" label="الطلبات" />
+          </SettingsGroup>
+        ) : null}
+
+        <SettingsGroup title="التفضيلات">
+          <li><SoundSetting /></li>
+        </SettingsGroup>
+
+        <SettingsGroup title="المساعدة والمعلومات">
+          <SettingsLink href="/legal/support" icon="help" label="الدعم" />
+          <SettingsLink href="/legal/privacy" icon="shield" label="سياسة الخصوصية" />
+          <SettingsLink href="/legal/terms" icon="receipt" label="الشروط والأحكام" />
+          <SettingsLink href="/legal/cancellation" icon="xCircle" label="سياسة الإلغاء" />
+          <SettingsLink href="/legal/refund" icon="undo" label="سياسة الاسترجاع" />
+        </SettingsGroup>
+
+        {session ? (
+          <SettingsGroup title="الجلسة">
+            <SettingsAction action={logoutAction} icon="logout" label="تسجيل الخروج" danger />
+          </SettingsGroup>
+        ) : null}
+
+        <p className="text-center text-xs text-ink-muted">صقر | SAQR</p>
       </div>
     </SiteShell>
   );
