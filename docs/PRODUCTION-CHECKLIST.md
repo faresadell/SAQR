@@ -24,6 +24,7 @@ The app refuses to start in production with the console email sender or a disabl
 ## 4. First-run admin setup (from `/admin`)
 - [ ] Payment methods: either set `VODAFONE_CASH_RECEIVER` and `INSTAPAY_RECEIVER` in the environment BEFORE the first `npm run db:seed` (fills and enables an empty method once), or enter the numbers in `/admin/settings` and enable them. Then open the customer payment screen and confirm the number shown is the right one.
 - [ ] Delivery zones and fees; categories/business types; add the first shops (owner chosen from merchant accounts).
+- [ ] Support contact: set `SUPPORT_WHATSAPP` and `SUPPORT_EMAIL` in the environment before the seed runs (it fills the placeholder of the still-unapproved support page), or edit the support page in `/admin/legal`. Check `/legal/support` shows them.
 - [ ] Support contact details and the legal pages: these stay **unapproved** until you review and approve them. No placeholder support data is shown.
 - [ ] Offers/discounts and the contest stay OFF until you approve their rules.
 
