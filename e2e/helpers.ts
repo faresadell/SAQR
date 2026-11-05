@@ -66,7 +66,10 @@ export async function login(page: Page, phone: string, password: string, totp?: 
   await page.goto("/login");
   await page.locator("input[name=phone]").fill(phone);
   await page.locator("input[name=password]").fill(password);
-  if (totp) await page.locator("input[name=totp]").fill(totp);
+  if (totp) {
+    await page.getByText("دخول المشرفين").click();
+    await page.locator("input[name=totp]").fill(totp);
+  }
   await page.getByRole("button", { name: "دخول" }).click();
 }
 

@@ -14,21 +14,13 @@ export function LoginForm() {
 
   return (
     <form action={formAction} className="flex flex-col gap-4">
-      <Field label="رقم الموبايل" name="phone" type="tel" inputMode="tel" autoComplete="tel" dir="ltr" placeholder="01012345678" required />
+      <Field label="رقم الموبايل" name="phone" type="tel" inputMode="tel" autoComplete="tel" dir="ltr" placeholder="01xxxxxxxxx" required />
       <Field label="كلمة المرور" name="password" type="password" autoComplete="current-password" required />
-      <Field
-        label="رمز المصادقة (للمشرفين فقط)"
-        name="totp"
-        inputMode="numeric"
-        autoComplete="one-time-code"
-        maxLength={6}
-        dir="ltr"
-        placeholder="123456"
-      />
       <details className="rounded-control border border-line p-3 text-sm">
-        <summary className="cursor-pointer font-semibold">فقدت جهاز المصادقة؟ (للمشرفين)</summary>
-        <div className="mt-3 flex flex-col gap-2">
-          <p className="text-ink-muted">استخدم أحد رموز الاسترداد التي حفظتها. كل رمز يُستخدم مرة واحدة، وبعده أنشئ رموزاً جديدة من صفحة الأمان.</p>
+        <summary className="cursor-pointer font-semibold">دخول المشرفين</summary>
+        <div className="mt-3 flex flex-col gap-3">
+          <Field label="رمز المصادقة" name="totp" inputMode="numeric" autoComplete="one-time-code" maxLength={6} dir="ltr" placeholder="123456" />
+          <p className="text-ink-muted">فقدت جهاز المصادقة؟ استخدم أحد رموز الاسترداد التي حفظتها. كل رمز يُستخدم مرة واحدة، وبعده أنشئ رموزاً جديدة من صفحة الأمان.</p>
           <Field label="رمز استرداد" name="recoveryCode" dir="ltr" autoComplete="off" maxLength={20} placeholder="XXXXX-XXXXX" />
         </div>
       </details>

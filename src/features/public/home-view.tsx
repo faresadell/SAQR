@@ -29,9 +29,9 @@ export function HomeView({ types, shops, offers, signedIn }: { types: BusinessTy
           <div className="flex flex-col gap-5">
             <h1 className="text-3xl font-bold leading-snug sm:text-4xl">اطلب من أكثر من نشاط في سلة واحدة</h1>
             <p className="max-w-xl text-lg text-silver">مطاعم ومحلات وعطارات من منطقتك، تختار منها وتتابع كل طلب على حدة، وسائق يقبل طلبك ويوصله.</p>
-            <div className="flex flex-wrap gap-3">
-              <LinkButton href="/explore" size="lg" className="bg-white text-navy-900 hover:bg-silver">ابدأ التسوق</LinkButton>
-              <LinkButton href="/offers" size="lg" variant="outline" className="border-white/30 bg-transparent text-white hover:bg-white/10">العروض النشطة</LinkButton>
+            <div className="flex flex-col gap-3 sm:flex-row">
+              <LinkButton href="/explore" size="lg" className="w-full whitespace-nowrap bg-white text-navy-900 hover:bg-silver sm:w-auto">ابدأ التسوق</LinkButton>
+              <LinkButton href="/offers" size="lg" variant="outline" className="w-full whitespace-nowrap border-white/60 bg-transparent text-white hover:bg-white/10 sm:w-auto">العروض النشطة</LinkButton>
             </div>
           </div>
           <div aria-hidden="true" className="relative mx-auto hidden aspect-square w-full max-w-xs items-center justify-center lg:flex">

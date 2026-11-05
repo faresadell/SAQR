@@ -40,9 +40,9 @@ export default async function SettingsPage() {
           ) : (
             <>
               <p className="text-sm text-ink-muted">سجّل دخولك لمتابعة طلباتك، أو أنشئ حساباً كعميل أو تاجر أو سائق.</p>
-              <div className="flex flex-wrap gap-2">
-                <LinkButton href="/login">تسجيل الدخول</LinkButton>
-                <LinkButton href="/register" variant="outline">إنشاء حساب</LinkButton>
+              <div className="flex flex-col gap-2 sm:flex-row">
+                <LinkButton href="/login" className="w-full sm:w-auto">تسجيل الدخول</LinkButton>
+                <LinkButton href="/register" variant="outline" className="w-full sm:w-auto">إنشاء حساب</LinkButton>
               </div>
             </>
           )}

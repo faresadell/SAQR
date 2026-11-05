@@ -46,7 +46,7 @@ export function RegisterForm({ siteKey, nonce }: { siteKey: string | null; nonce
         inputMode="tel"
         autoComplete="tel"
         dir="ltr"
-        placeholder="01012345678"
+        placeholder="01xxxxxxxxx"
         required
         error={errors.phone}
       />
