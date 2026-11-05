@@ -22,7 +22,7 @@
     "db:seed": "tsx --env-file=.env prisma/seed.ts",
     "test:integration": "vitest run --config vitest.integration.config.ts",
     "postinstall": "prisma generate",
-    "vercel-build": "if [ \"$VERCEL_ENV\" = \"production\" ]; then prisma migrate deploy && tsx prisma/seed.ts; fi && next build"
+    "vercel-build": "if [ \"$VERCEL_ENV\" = \"production\" ]; then if [ -n \"$DATABASE_URL\" ]; then prisma migrate deploy && tsx prisma/seed.ts; else echo \"WARNING: DATABASE_URL is not set, skipping migrations. Set it in Vercel Environment Variables and redeploy.\"; fi; fi && next build"
   },
   "dependencies": {
     "@prisma/client": "^6.0.0",
