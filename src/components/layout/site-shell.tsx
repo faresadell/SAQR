@@ -25,11 +25,11 @@ export function SiteFrame({ children, accountHref, ordersHref = "/login", signed
       <a href="#main" className="sr-only focus:not-sr-only focus:fixed focus:start-3 focus:top-3 focus:z-50 focus:rounded-control focus:bg-white focus:px-4 focus:py-2 focus:font-semibold">
         تخطي إلى المحتوى
       </a>
-      <header className="sticky top-0 z-30 border-b border-white/10 bg-navy-900 text-white">
+      <header className="sticky top-0 z-30 border-b border-line bg-surface/95 text-ink shadow-sm backdrop-blur">
         <div className="mx-auto flex w-full max-w-page flex-wrap items-center gap-x-3 gap-y-2 px-4 py-3 sm:px-6">
           <Link href="/" className="flex shrink-0 items-center gap-2 font-bold">
             <Logo size={36} priority />
-            <span className="text-lg">صقر</span>
+            <span className="text-xl text-navy-900">صقر</span>
           </Link>
           <SiteHeaderControls signedIn={signedIn} accountHref={accountHref} ordersHref={ordersHref} />
         </div>
