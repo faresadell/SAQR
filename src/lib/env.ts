@@ -32,27 +32,45 @@ const schema = z
     R2_BUCKET: z.preprocess((v) => (v === "" ? undefined : v), z.string().regex(/^[a-z0-9][a-z0-9-]{2,62}$/).optional()),
     R2_ACCESS_KEY_ID: z.preprocess((v) => (v === "" ? undefined : v), z.string().min(8).optional()),
     R2_SECRET_ACCESS_KEY: z.preprocess((v) => (v === "" ? undefined : v), z.string().min(16).optional()),
+    // Trial deployment on a *.vercel.app address BEFORE the real domain exists: emails are printed to the server log
+    // and the robot check may be off. Refused on any other address, so it can never run on the real domain.
+    PREVIEW_MODE: z
+      .enum(["true", "false"])
+      .default("false")
+      .transform((v) => v === "true"),
     TRUST_PROXY: z
       .enum(["true", "false"])
       .default("false")
       .transform((v) => v === "true"),
   })
   .superRefine((env, ctx) => {
-    if (env.NODE_ENV === "production" && env.OTP_PROVIDER === "console") {
+    const previewHost = (() => {
+      try {
+        return new URL(env.APP_URL).hostname.endsWith(".vercel.app");
+      } catch {
+        return false;
+      }
+    })();
+    if (env.PREVIEW_MODE && !previewHost) {
+      ctx.addIssue({ code: "custom", path: ["PREVIEW_MODE"], message: "PREVIEW_MODE is only allowed when APP_URL is a *.vercel.app address" });
+    }
+    // The three production guards below are skipped ONLY in a valid preview.
+    const strict = env.NODE_ENV === "production" && !(env.PREVIEW_MODE && previewHost);
+    if (strict && env.OTP_PROVIDER === "console") {
       ctx.addIssue({ code: "custom", path: ["OTP_PROVIDER"], message: "console OTP sender is not allowed in production" });
     }
     if (env.OTP_PROVIDER === "http") {
       if (!env.SMS_API_URL?.startsWith("https://")) ctx.addIssue({ code: "custom", path: ["SMS_API_URL"], message: "SMS_API_URL (https) is required when OTP_PROVIDER=http" });
       if (!env.SMS_API_TOKEN) ctx.addIssue({ code: "custom", path: ["SMS_API_TOKEN"], message: "SMS_API_TOKEN is required when OTP_PROVIDER=http" });
     }
-    if (env.NODE_ENV === "production" && env.EMAIL_PROVIDER === "console") {
+    if (strict && env.EMAIL_PROVIDER === "console") {
       ctx.addIssue({ code: "custom", path: ["EMAIL_PROVIDER"], message: "console email sender is not allowed in production" });
     }
     if (env.CAPTCHA_PROVIDER === "turnstile") {
       if (!env.TURNSTILE_SECRET_KEY) ctx.addIssue({ code: "custom", path: ["TURNSTILE_SECRET_KEY"], message: "TURNSTILE_SECRET_KEY is required when CAPTCHA_PROVIDER=turnstile" });
       if (!env.TURNSTILE_SITE_KEY) ctx.addIssue({ code: "custom", path: ["TURNSTILE_SITE_KEY"], message: "TURNSTILE_SITE_KEY is required when CAPTCHA_PROVIDER=turnstile" });
     }
-    if (env.NODE_ENV === "production" && env.CAPTCHA_PROVIDER === "disabled") {
+    if (strict && env.CAPTCHA_PROVIDER === "disabled") {
       ctx.addIssue({ code: "custom", path: ["CAPTCHA_PROVIDER"], message: "the sign-up robot check cannot be disabled in production" });
     }
     if (env.EMAIL_PROVIDER === "resend") {
@@ -71,12 +89,17 @@ const schema = z
 
 export type Env = z.infer<typeof schema>;
 
+/** Validate an environment source. Pure (no caching) so it can be tested. */
+export function parseEnv(source: NodeJS.ProcessEnv | Record<string, string | undefined>) {
+  return schema.safeParse(source);
+}
+
 let cached: Env | undefined;
 
 /** Validated server environment. Fails fast with a clear message instead of running misconfigured. */
 export function getEnv(): Env {
   if (cached) return cached;
-  const parsed = schema.safeParse(process.env);
+  const parsed = parseEnv(process.env);
   if (!parsed.success) {
     const fields = parsed.error.issues.map((i) => i.path.join(".")).join(", ");
     throw new Error(`Invalid environment configuration: ${fields}`);
