@@ -18,7 +18,8 @@ The app refuses to start in production with the console email sender or a disabl
 ## 3. Deploy
 - [ ] Node 22 runtime. `npm ci && npm run build`.
 - [ ] `npx prisma migrate deploy` (never `db push` / `migrate dev`). Then `npm run db:seed` once (commission rates 8% / 5%, payment methods, plans, business types).
-- [ ] Create the main admin: `ADMIN_PASSWORD='…12+ chars…' npm run admin:create -- --phone 01XXXXXXXXX --name "…"`. Add the printed key to an authenticator app immediately (shown once). Save the recovery codes offline.
+- [ ] Create the main admin WITHOUT a computer: set `SETUP_TOKEN` (any random value of 32+ characters) in the environment, redeploy, open `/setup`, fill the form, add the shown key to the authenticator app, then DELETE `SETUP_TOKEN` and redeploy. The page is a 404 whenever the token is unset or an admin already exists.
+- [ ] (Alternative, from a computer) Create the main admin: `ADMIN_PASSWORD='…12+ chars…' npm run admin:create -- --phone 01XXXXXXXXX --name "…"`. Add the printed key to an authenticator app immediately (shown once). Save the recovery codes offline.
 - [ ] Scheduler: one call hourly (daily is enough): `POST https://<domain>/api/internal/jobs/all` with header `Authorization: Bearer <CRON_SECRET>`. Expect HTTP 200 and a JSON result per job.
 
 ## 4. First-run admin setup (from `/admin`)

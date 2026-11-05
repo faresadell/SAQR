@@ -45,6 +45,13 @@ test("settings: grouped rows with working links", async ({ page }) => {
   await expect(page).toHaveURL(/\/legal\/support/);
 });
 
+test("first-admin setup page does not exist unless it was switched on", async ({ page }) => {
+  await page.goto("/setup");
+  // the page streams, so judge by content: no setup form is ever rendered unless SETUP_TOKEN is set
+  await expect(page.getByRole("heading", { name: "إنشاء المدير الأول" })).toHaveCount(0);
+  await expect(page.locator("input[name=token]")).toHaveCount(0);
+});
+
 test("bottom bar: five sections on a phone, hidden on desktop", async ({ page }, testInfo) => {
   await skipIntro(page);
   await page.goto("/");
