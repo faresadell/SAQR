@@ -21,7 +21,8 @@
     "admin:reset-totp": "tsx --env-file=.env scripts/reset-admin-totp.ts",
     "db:seed": "tsx --env-file=.env prisma/seed.ts",
     "test:integration": "vitest run --config vitest.integration.config.ts",
-    "postinstall": "prisma generate"
+    "postinstall": "prisma generate",
+    "vercel-build": "if [ \"$VERCEL_ENV\" = \"production\" ]; then prisma migrate deploy && tsx prisma/seed.ts; fi && next build"
   },
   "dependencies": {
     "@prisma/client": "^6.0.0",
