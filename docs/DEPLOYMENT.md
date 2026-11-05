@@ -41,3 +41,9 @@
 - Push notifications provider (in-app notifications only).
 - Legal review and approval of the five legal pages and the contest rules page (they ship as drafts).
 - Official support phone/email (not invented; added from the admin panel after approval).
+
+## Vercel notes
+- Set every variable from the table above in Vercel > Project > Settings > Environment Variables (Production), then **redeploy** (variables apply only to new deployments).
+- Build runs `prisma generate` automatically (postinstall). The database tables are NOT created by the build: run `npx prisma migrate deploy` once from a computer that has Node 22, using the production `DATABASE_URL` (the DIRECT connection string if your provider offers a pooled one too), then `npm run db:seed`.
+- Check the deployment: open `https://<your-app>/api/health`. `{"ok":true}` = configured. `{"ok":false,"problem":"ENV"}` = a variable is missing or invalid (the exact names are in Vercel > Logs, search "health:"). `"DATABASE"` = cannot connect (wrong URL, or the provider blocks Vercel). `"MIGRATIONS"` = connected but the tables do not exist yet (run `migrate deploy`).
+- The generic "حدث خطأ غير متوقع" page means a server error; the real message is in Vercel > Logs.
