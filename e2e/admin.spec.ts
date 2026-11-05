@@ -14,6 +14,7 @@ test("admin: sign in with the authenticator code, open every page, add a shop wi
   await page.goto("/login");
   await page.locator("input[name=phone]").fill(acc.adminPhone.replace("+20", "0"));
   await page.locator("input[name=password]").fill(E2E_ADMIN_PW);
+  await page.getByText("دخول المشرفين").click();
   await page.locator("input[name=totp]").fill(totpAt(E2E_TOTP_SECRET, Math.floor(Date.now() / 1000 / 30)));
   await page.getByRole("button", { name: "دخول" }).click();
   await expect(page).toHaveURL(/\/admin/);

@@ -62,10 +62,12 @@ export function SiteHeaderControls({ signedIn, accountHref, ordersHref }: Props)
             <span className="num absolute -end-0.5 -top-0.5 flex min-w-5 items-center justify-center rounded-full bg-brand px-1 text-[11px] font-bold text-white">{formatNumber(count)}</span>
           </Link>
         ) : null}
-        <Link href={signedIn ? ordersHref : "/login"} aria-label="طلباتي" className="inline-flex items-center gap-1.5 rounded-control p-2 text-white hover:bg-white/10 sm:px-3">
-          <Icon name="box" />
-          <span className="hidden text-sm font-semibold sm:inline">طلباتي</span>
-        </Link>
+        {signedIn ? (
+          <Link href={ordersHref} aria-label="طلباتي" className="inline-flex items-center gap-1.5 rounded-control p-2 text-white hover:bg-white/10 sm:px-3">
+            <Icon name="box" />
+            <span className="hidden text-sm font-semibold sm:inline">طلباتي</span>
+          </Link>
+        ) : null}
         {signedIn ? (
           <Link href={accountHref} className="inline-flex shrink-0 items-center gap-2 rounded-control bg-white px-3 py-2 text-sm font-bold text-navy-900 hover:bg-silver sm:px-4">
             <Icon name="user" className="size-4" />
