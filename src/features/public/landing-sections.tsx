@@ -81,6 +81,49 @@ export function LandingSections() {
       </Reveal>
 
       <Reveal>
+      <section aria-labelledby="merchant-title" className="relative overflow-hidden rounded-sheet bg-gradient-to-br from-navy-900 to-navy-700 p-6 text-white shadow-pop sm:p-10">
+        <span aria-hidden="true" className="absolute -end-16 -top-16 size-64 rounded-full bg-brand/30 blur-2xl" />
+        <div className="relative grid items-center gap-6 md:grid-cols-2">
+          <div className="flex flex-col gap-4">
+            <span className="w-fit rounded-full bg-white/15 px-3 py-1 text-xs font-bold">للتاجر</span>
+            <h2 id="merchant-title" className="text-2xl font-bold leading-snug sm:text-3xl">أدر نشاطك وطلباتك من لوحة واحدة</h2>
+            <ul className="flex flex-col gap-2 text-sm text-silver">
+              {["استقبل الطلبات وقرّر قبولها", "أكّد استلام التحويل بعد مراجعة الإيصال", "أضف منتجاتك وعروضك بحدود واضحة", "أضف سائقيك وأسند لهم التوصيل", "تابع تسوياتك وعمولتك"].map((t) => (
+                <li key={t} className="flex items-center gap-2"><Icon name="check" className="size-4 shrink-0 text-emerald-300" />{t}</li>
+              ))}
+            </ul>
+            <LinkButton href="/register" className="w-fit rounded-full bg-white text-navy-900 hover:bg-silver">سجّل نشاطك</LinkButton>
+          </div>
+          <div aria-hidden="true" className="flex flex-col gap-3 rounded-card bg-surface p-4 text-ink shadow-pop">
+            <div className="flex items-center justify-between"><span className="font-bold">طلبات اليوم</span><span className="rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-bold text-emerald-700">مفتوح</span></div>
+            {[["طلب جديد", "بانتظار القبول", "bg-amber-100 text-amber-700"], ["قيد التجهيز", "تم تأكيد التحويل", "bg-sky-100 text-sky-700"], ["خرج للتوصيل", "مع السائق", "bg-emerald-100 text-emerald-700"]].map(([a, b, c]) => (
+              <div key={a} className="flex items-center justify-between rounded-control border border-line p-3 text-sm">
+                <span className="font-semibold">{a}</span>
+                <span className={`rounded-full px-2 py-0.5 text-xs font-bold ${c}`}>{b}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+      </Reveal>
+
+      <Reveal>
+      <section aria-labelledby="driver-title" className="relative overflow-hidden rounded-sheet bg-gradient-to-br from-emerald-500 to-emerald-700 p-6 text-white shadow-pop sm:p-10">
+        <span aria-hidden="true" className="absolute -start-16 -bottom-16 size-64 rounded-full bg-white/15 blur-2xl" />
+        <div className="relative flex flex-col gap-4 md:max-w-xl">
+          <span className="w-fit rounded-full bg-white/20 px-3 py-1 text-xs font-bold">للسائق</span>
+          <h2 id="driver-title" className="text-2xl font-bold leading-snug sm:text-3xl">اقبل المشاوير القريبة منك وتابع توصيلاتك</h2>
+          <ul className="flex flex-col gap-2 text-sm text-emerald-50">
+            {["اختر من الطلبات المتاحة على اللوحة المفتوحة", "اعرف عنوان الاستلام والتسليم قبل أن تبدأ", "سجّل كل توصيلة وتابع مشاويرك"].map((t) => (
+              <li key={t} className="flex items-center gap-2"><Icon name="check" className="size-4 shrink-0" />{t}</li>
+            ))}
+          </ul>
+          <LinkButton href="/register" className="w-fit rounded-full bg-white text-emerald-800 hover:bg-emerald-50">سجّل كسائق</LinkButton>
+        </div>
+      </section>
+      </Reveal>
+
+      <Reveal>
       <section className="flex flex-col gap-4" aria-labelledby="steps-title">
         <SectionTitle><span id="steps-title">كيف تطلب من صقر؟</span></SectionTitle>
         <ol className="grid gap-4 md:grid-cols-3">
