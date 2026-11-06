@@ -24,9 +24,10 @@ export function PublicBottomNav() {
             key={item.href}
             href={item.href}
             aria-current={active ? "page" : undefined}
-            className={cn("flex min-h-14 flex-col items-center justify-center gap-0.5 text-[11px] font-semibold", active ? "text-brand" : "text-ink-muted")}
+            className={cn("relative flex min-h-14 flex-col items-center justify-center gap-0.5 text-[11px] font-semibold transition-colors active:scale-95", active ? "text-brand" : "text-ink-muted")}
           >
-            <Icon name={item.icon} className="size-5" />
+            {active ? <span aria-hidden="true" className="absolute inset-x-5 top-0 h-0.5 rounded-b bg-brand" /> : null}
+            <Icon name={item.icon} className={cn("size-5 transition-transform", active && "scale-110")} />
             {item.label}
           </Link>
         );
