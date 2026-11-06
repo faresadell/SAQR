@@ -5,6 +5,7 @@ import { Card } from "@/components/ui/card";
 import { AvatarPanel } from "@/features/shared/avatar-panel";
 import { EmailSection } from "@/features/shared/email-section";
 import { NameForm } from "@/features/shared/name-panel";
+import { PasswordPanel } from "@/features/shared/password-panel";
 import { PhonePanel } from "@/features/shared/phone-panel";
 import { avatarVersion } from "@/server/auth/avatar";
 import { getCurrentSession } from "@/server/auth/session";
@@ -28,6 +29,7 @@ export default async function AccountSettingsPage() {
         </Card>
         <EmailSection userId={user.id} />
         <PhonePanel phone={user.phone} />
+        <PasswordPanel />
       </div>
     </SiteShell>
   );
