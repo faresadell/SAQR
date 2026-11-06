@@ -3,6 +3,7 @@ import { Icon, type IconName } from "@/components/ui/icon";
 import { LinkButton } from "@/components/ui/link-button";
 import { SectionTitle } from "@/components/ui/page-header";
 import { Reveal } from "@/components/ui/reveal";
+import { TickerClient } from "./ticker-client";
 
 const AUDIENCES: { icon: IconName; title: string; text: string; cta: string; href: string; tint: string }[] = [
   { icon: "cart", title: "عميل", text: "اطلب من أكثر من نشاط في سلة واحدة وتابع كل طلب على حدة.", cta: "ابدأ التسوق", href: "/explore", tint: "bg-brand-soft text-navy-700" },
@@ -19,6 +20,12 @@ const WHY: { icon: IconName; title: string; text: string }[] = [
   { icon: "tag", title: "عروض حقيقية", text: "عروض الأنشطة بحدود واضحة، وتختفي تلقائياً عند انتهائها." },
 ];
 
+const STEPS = [
+  { n: "١", title: "اختر النشاط والمنتجات", text: "تصفّح المطاعم والمحلات وأضف ما تريد إلى سلتك." },
+  { n: "٢", title: "حوّل المبلغ وأرفق الإيصال", text: "فودافون كاش أو إنستا باي، ويراجع النشاط إيصالك." },
+  { n: "٣", title: "تابع طلبك حتى يصلك", text: "تعرف حالة كل طلب، وسائق يوصله إلى عنوانك." },
+] as const;
+
 const FAQ: { q: string; a: string }[] = [
   { q: "كيف أطلب من صقر؟", a: "اختر النشاط، أضف المنتجات إلى السلة، أكّد العنوان، ثم حوّل المبلغ وأرفق الإيصال ليراجعه النشاط." },
   { q: "كيف أدفع؟", a: "الدفع حالياً بالتحويل اليدوي عبر فودافون كاش أو إنستا باي. لا يوجد دفع بالبطاقة." },
@@ -30,25 +37,9 @@ const FAQ: { q: string; a: string }[] = [
 /** Marketing sections under the home page: audiences, why SAQR, tasbeeh teaser, FAQ. Content only from real platform behaviour; no invented numbers. */
 const TICKER = ["سلة واحدة من أكثر من نشاط", "تتبع كل طلب خطوة بخطوة", "دفع بفودافون كاش وإنستا باي", "مطاعم ومحلات وعطارات", "سبّح واقرأ أذكارك"];
 
-/** Slow scrolling strip of real platform highlights. Decorative: hidden from assistive tech. */
+/** One highlight at a time, fading in and out. Decorative: hidden from assistive tech. */
 export function Ticker() {
-  const items = [...TICKER, ...TICKER];
-  return (
-    <div aria-hidden="true" className="overflow-hidden rounded-full bg-navy-900 py-2.5 text-sm font-semibold text-white">
-      <div className="flex w-max animate-marquee gap-8 whitespace-nowrap">
-        {[0, 1].map((n) => (
-          <div key={n} className="flex gap-8">
-            {items.map((t, i) => (
-              <span key={i} className="flex items-center gap-8">
-                {t}
-                <span className="text-brand">●</span>
-              </span>
-            ))}
-          </div>
-        ))}
-      </div>
-    </div>
-  );
+  return <TickerClient items={TICKER} />;
 }
 
 export function LandingSections() {
@@ -86,6 +77,21 @@ export function LandingSections() {
             </li>
           ))}
         </ul>
+      </section>
+      </Reveal>
+
+      <Reveal>
+      <section className="flex flex-col gap-4" aria-labelledby="steps-title">
+        <SectionTitle><span id="steps-title">كيف تطلب من صقر؟</span></SectionTitle>
+        <ol className="grid gap-4 md:grid-cols-3">
+          {STEPS.map((st) => (
+            <li key={st.n} className="relative flex flex-col gap-2 rounded-card border border-line bg-surface p-5 pt-9 shadow-card">
+              <span className="absolute -top-5 start-5 flex size-11 items-center justify-center rounded-full bg-brand text-xl font-bold text-white shadow-pop">{st.n}</span>
+              <h3 className="font-bold">{st.title}</h3>
+              <p className="text-sm text-ink-muted">{st.text}</p>
+            </li>
+          ))}
+        </ol>
       </section>
       </Reveal>
 
