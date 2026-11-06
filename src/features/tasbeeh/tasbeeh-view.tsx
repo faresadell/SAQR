@@ -7,8 +7,6 @@ import { ConfirmDialog, Modal } from "@/components/ui/modal";
 import { Field } from "@/components/ui/field";
 import { Icon } from "@/components/ui/icon";
 import { Notice } from "@/components/ui/states";
-import { Progress } from "@/components/ui/progress";
-import { Select } from "@/components/ui/select";
 import { cn } from "@/lib/cn";
 import { formatDateTime, formatNumber } from "@/lib/format";
 import { AdhkarSection } from "./adhkar-section";
@@ -110,24 +108,35 @@ export function TasbeehView() {
         <Notice tone="warning">تعذّر حفظ العدّاد على هذا المتصفح، لذلك لن يبقى بعد إغلاق الصفحة.</Notice>
       ) : null}
 
+      {/* Dhikr picker */}
+      <div role="radiogroup" aria-label="الذكر" className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-1 sm:mx-0 sm:px-0">
+        {DHIKR_OPTIONS.map((d) => {
+          const active = (editingCustom ? "custom" : state.dhikrId) === d.id;
+          return (
+            <button
+              key={d.id}
+              type="button"
+              role="radio"
+              aria-checked={active}
+              onClick={() => onSelect(d.id)}
+              className={cn(
+                "h-10 shrink-0 rounded-full border px-4 text-sm font-semibold transition-all duration-200 active:scale-95",
+                active ? "border-navy-900 bg-navy-900 text-white shadow-card" : "border-line bg-surface text-ink hover:bg-canvas",
+              )}
+            >
+              {d.label}
+            </button>
+          );
+        })}
+      </div>
+
       {/* Counter */}
-      <Card className="flex flex-col items-center gap-5 bg-navy-900 p-6 text-white sm:p-8">
-        <p className="text-center text-xl font-bold leading-relaxed sm:text-2xl">{text || dhikrLabel(state)}</p>
-
-        <div role="status" aria-live="polite" aria-label={`العدّاد ${formatNumber(state.count)}`} className="flex flex-col items-center">
-          <span key={state.count} className="num animate-count-pop font-latin text-8xl font-bold leading-none sm:text-9xl">{state.count.toLocaleString("en-US")}</span>
-          <span className="mt-2 text-sm text-silver">الهدف: {formatNumber(state.goal)}</span>
-        </div>
-
-        <div className="flex w-full flex-col gap-1.5">
-          <Progress value={state.count} max={state.goal} label="التقدم نحو الهدف" tone={reached ? "success" : "brand"} className="bg-white/15" />
-          <p className="num text-center text-xs text-silver">
-            {reached ? "بلغت الهدف" : `${formatNumber(state.count)} من ${formatNumber(state.goal)}`}
-          </p>
-        </div>
+      <Card className="flex flex-col items-center gap-5 overflow-hidden bg-gradient-to-b from-navy-900 to-navy-800 p-6 text-white sm:p-8">
+        <p className="text-center text-2xl font-bold leading-relaxed sm:text-3xl">{text || dhikrLabel(state)}</p>
 
         <button
           type="button"
+          aria-label={`سبّح. العدّاد ${formatNumber(state.count)} من ${formatNumber(state.goal)}`}
           onClick={() => {
             dispatch({ type: "tap", now: Date.now() });
             try {
@@ -136,20 +145,38 @@ export function TasbeehView() {
               /* optional */
             }
           }}
-          className="flex min-h-28 w-full touch-manipulation select-none items-center justify-center gap-3 rounded-sheet bg-white text-3xl font-bold text-navy-900 transition-transform active:scale-[0.98] hover:bg-silver"
+          className="group relative flex aspect-square w-full max-w-72 touch-manipulation select-none items-center justify-center rounded-full transition-transform duration-100 active:scale-95"
         >
-          <Icon name="plus" className="size-8" />
-          سبّح
+          <svg viewBox="0 0 200 200" className="absolute inset-0 size-full -rotate-90" aria-hidden="true">
+            <circle cx="100" cy="100" r="90" fill="rgba(255,255,255,0.06)" stroke="rgba(255,255,255,0.15)" strokeWidth="10" />
+            <circle
+              cx="100"
+              cy="100"
+              r="90"
+              fill="none"
+              stroke={reached ? "#34d399" : "#ffffff"}
+              strokeWidth="10"
+              strokeLinecap="round"
+              strokeDasharray={2 * Math.PI * 90}
+              strokeDashoffset={2 * Math.PI * 90 * (1 - Math.min(state.count / state.goal, 1))}
+              className="transition-[stroke-dashoffset] duration-300 ease-out"
+            />
+          </svg>
+          <span role="status" aria-live="polite" className="relative flex flex-col items-center">
+            <span key={state.count} className="num animate-count-pop font-latin text-7xl font-bold leading-none sm:text-8xl">{state.count.toLocaleString("en-US")}</span>
+            <span className="mt-2 text-sm text-silver">{reached ? "بلغت الهدف" : `من ${formatNumber(state.goal)}`}</span>
+          </span>
         </button>
+        <p className="text-xs text-silver">المس الدائرة للتسبيح</p>
 
-        <div className="grid w-full gap-3 sm:grid-cols-2">
+        <div className="grid w-full grid-cols-2 gap-3">
           <Button variant="outline" className="border-white/30 bg-transparent text-white hover:bg-white/10" onClick={() => dispatch({ type: "undo" })} disabled={state.count === 0}>
             <Icon name="undo" className="size-4" />
-            تراجع عن آخر تسبيحة
+            تراجع
           </Button>
           <Button variant="outline" className="border-white/30 bg-transparent text-white hover:bg-white/10" onClick={() => setConfirmReset(true)} disabled={state.count === 0}>
             <Icon name="refresh" className="size-4" />
-            تصفير العدّاد
+            تصفير
           </Button>
         </div>
       </Card>
@@ -159,11 +186,6 @@ export function TasbeehView() {
       {/* Settings */}
       <Card className="flex flex-col gap-5">
         <div className="flex flex-col gap-3">
-          <Select label="الذكر" value={editingCustom ? "custom" : state.dhikrId} onChange={(e) => onSelect(e.target.value)}>
-            {DHIKR_OPTIONS.map((d) => (
-              <option key={d.id} value={d.id}>{d.label}</option>
-            ))}
-          </Select>
           {editingCustom || state.dhikrId === "custom" ? (
             <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
               <div className="flex-1">
