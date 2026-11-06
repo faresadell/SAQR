@@ -1,7 +1,7 @@
 import Link from "next/link";
 import type { ComponentProps } from "react";
 import { cn } from "@/lib/cn";
-import { buttonSizes, buttonVariants, type ButtonSize, type ButtonVariant } from "./button";
+import { buttonSizes, buttonVariants, type ButtonSize, type ButtonVariant } from "./button-styles";
 
 interface LinkButtonProps extends Omit<ComponentProps<typeof Link>, "className"> {
   variant?: ButtonVariant;

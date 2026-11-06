@@ -3,7 +3,6 @@ import { notFound } from "next/navigation";
 import { SiteShell } from "@/components/layout/site-shell";
 import { Notice } from "@/components/ui/states";
 import { LegalBody } from "@/features/legal/legal-body";
-import { formatDate } from "@/lib/format";
 import { getLegalPage, isLegalSlug } from "@/server/legal/service";
 import { NotFoundError } from "@/server/errors";
 
@@ -33,11 +32,7 @@ export default async function LegalPage({ params }: { params: Promise<{ slug: st
     <SiteShell>
       <article className="mx-auto flex w-full max-w-2xl flex-col gap-5 px-5 py-8 sm:py-10">
         <h1 className="text-2xl font-bold">{page.title}</h1>
-        {page.approved ? (
-          <p className="text-xs text-ink-muted">النسخة <span className="num">{page.version}</span> · اعتُمدت في <span className="num">{formatDate(page.approvedAt!)}</span></p>
-        ) : (
-          <Notice tone="warning">مسودة غير معتمدة. هذا النص قيد المراجعة ولا يُعتدّ به كنص قانوني نهائي.</Notice>
-        )}
+        {page.approved ? null : <Notice tone="warning">مسودة غير معتمدة. هذا النص قيد المراجعة ولا يُعتدّ به كنص قانوني نهائي.</Notice>}
         <LegalBody body={page.body} />
       </article>
     </SiteShell>
