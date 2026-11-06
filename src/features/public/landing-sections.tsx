@@ -20,6 +20,12 @@ const WHY: { icon: IconName; title: string; text: string }[] = [
   { icon: "tag", title: "عروض حقيقية", text: "عروض الأنشطة بحدود واضحة، وتختفي تلقائياً عند انتهائها." },
 ];
 
+const STEPS = [
+  { n: "١", title: "اختر النشاط والمنتجات", text: "تصفّح المطاعم والمحلات وأضف ما تريد إلى سلتك." },
+  { n: "٢", title: "حوّل المبلغ وأرفق الإيصال", text: "فودافون كاش أو إنستا باي، ويراجع النشاط إيصالك." },
+  { n: "٣", title: "تابع طلبك حتى يصلك", text: "تعرف حالة كل طلب، وسائق يوصله إلى عنوانك." },
+] as const;
+
 const FAQ: { q: string; a: string }[] = [
   { q: "كيف أطلب من صقر؟", a: "اختر النشاط، أضف المنتجات إلى السلة، أكّد العنوان، ثم حوّل المبلغ وأرفق الإيصال ليراجعه النشاط." },
   { q: "كيف أدفع؟", a: "الدفع حالياً بالتحويل اليدوي عبر فودافون كاش أو إنستا باي. لا يوجد دفع بالبطاقة." },
@@ -71,6 +77,21 @@ export function LandingSections() {
             </li>
           ))}
         </ul>
+      </section>
+      </Reveal>
+
+      <Reveal>
+      <section className="flex flex-col gap-4" aria-labelledby="steps-title">
+        <SectionTitle><span id="steps-title">كيف تطلب من صقر؟</span></SectionTitle>
+        <ol className="grid gap-4 md:grid-cols-3">
+          {STEPS.map((st) => (
+            <li key={st.n} className="relative flex flex-col gap-2 rounded-card border border-line bg-surface p-5 pt-9 shadow-card">
+              <span className="absolute -top-5 start-5 flex size-11 items-center justify-center rounded-full bg-brand text-xl font-bold text-white shadow-pop">{st.n}</span>
+              <h3 className="font-bold">{st.title}</h3>
+              <p className="text-sm text-ink-muted">{st.text}</p>
+            </li>
+          ))}
+        </ol>
       </section>
       </Reveal>
 
