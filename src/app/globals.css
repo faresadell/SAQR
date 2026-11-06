@@ -64,5 +64,11 @@
       animation-iteration-count: 1 !important;
       transition-duration: 0.01ms !important;
     }
+
+    /* The slow, decorative home ticker keeps moving; phones in power-saver otherwise freeze it. */
+    .keep-motion {
+      animation-duration: 40s !important;
+      animation-iteration-count: infinite !important;
+    }
   }
 }

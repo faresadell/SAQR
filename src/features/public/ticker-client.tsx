@@ -1,13 +1,13 @@
 "use client";
 
-/** A slow, endless strip of highlights with faded edges, so no word is ever cut off hard. Decorative. Still for reduced motion. */
+/** A slow, endless strip of highlights with faded edges, so no word is ever cut off hard. Decorative. It keeps drifting even when the phone asks for less motion, because it is slow and purely decorative. */
 export function TickerClient({ items }: { items: readonly string[] }) {
   return (
     <div
       aria-hidden="true"
       className="overflow-hidden rounded-full bg-navy-900 py-2.5 text-sm font-semibold text-white [mask-image:linear-gradient(to_right,transparent,black_12%,black_88%,transparent)]"
     >
-      <div className="flex w-max animate-marquee motion-reduce:animate-none">
+      <div className="flex w-max animate-marquee keep-motion">
         {[0, 1].map((n) => (
           <div key={n} className="flex shrink-0 items-center gap-8 pe-8">
             {[...items, ...items].map((t, i) => (
