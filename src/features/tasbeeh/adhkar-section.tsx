@@ -8,8 +8,13 @@ import { formatNumber } from "@/lib/format";
 import { ADHKAR } from "./adhkar-data";
 
 /** Adhkar lists with a tap-to-count button per item. Progress lives in memory only (it resets when the page closes). */
-export function AdhkarSection() {
-  const [tab, setTab] = useState<string>(ADHKAR[0]!.id);
+export function AdhkarSection({ tab: controlledTab, onTab }: { tab?: string; onTab?: (id: string) => void }) {
+  const [ownTab, setOwnTab] = useState<string>(ADHKAR[0]!.id);
+  const tab = controlledTab ?? ownTab;
+  const setTab = (id: string) => {
+    setOwnTab(id);
+    onTab?.(id);
+  };
   const [done, setDone] = useState<Record<string, number>>({});
   const category = ADHKAR.find((c) => c.id === tab) ?? ADHKAR[0]!;
   const finished = category.items.filter((i) => (done[i.id] ?? 0) >= i.repeat).length;
