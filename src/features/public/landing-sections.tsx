@@ -2,6 +2,7 @@ import Link from "next/link";
 import { Icon, type IconName } from "@/components/ui/icon";
 import { LinkButton } from "@/components/ui/link-button";
 import { SectionTitle } from "@/components/ui/page-header";
+import { Reveal } from "@/components/ui/reveal";
 
 const AUDIENCES: { icon: IconName; title: string; text: string; cta: string; href: string; tint: string }[] = [
   { icon: "cart", title: "عميل", text: "اطلب من أكثر من نشاط في سلة واحدة وتابع كل طلب على حدة.", cta: "ابدأ التسوق", href: "/explore", tint: "bg-brand-soft text-navy-700" },
@@ -27,9 +28,33 @@ const FAQ: { q: string; a: string }[] = [
 ];
 
 /** Marketing sections under the home page: audiences, why SAQR, tasbeeh teaser, FAQ. Content only from real platform behaviour; no invented numbers. */
+const TICKER = ["سلة واحدة من أكثر من نشاط", "تتبع كل طلب خطوة بخطوة", "دفع بفودافون كاش وإنستا باي", "مطاعم ومحلات وعطارات", "سبّح واقرأ أذكارك"];
+
+/** Slow scrolling strip of real platform highlights. Decorative: hidden from assistive tech. */
+export function Ticker() {
+  const items = [...TICKER, ...TICKER];
+  return (
+    <div aria-hidden="true" className="overflow-hidden rounded-full bg-navy-900 py-2.5 text-sm font-semibold text-white">
+      <div className="flex w-max animate-marquee gap-8 whitespace-nowrap">
+        {[0, 1].map((n) => (
+          <div key={n} className="flex gap-8">
+            {items.map((t, i) => (
+              <span key={i} className="flex items-center gap-8">
+                {t}
+                <span className="text-brand">●</span>
+              </span>
+            ))}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export function LandingSections() {
   return (
     <>
+      <Reveal>
       <section className="flex flex-col gap-4" aria-labelledby="aud-title">
         <SectionTitle><span id="aud-title">صقر لكل طرف</span></SectionTitle>
         <ul className="grid gap-4 md:grid-cols-3">
@@ -45,7 +70,9 @@ export function LandingSections() {
           ))}
         </ul>
       </section>
+      </Reveal>
 
+      <Reveal>
       <section className="flex flex-col gap-4" aria-labelledby="why-title">
         <SectionTitle><span id="why-title">ليه صقر؟</span></SectionTitle>
         <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
@@ -60,7 +87,9 @@ export function LandingSections() {
           ))}
         </ul>
       </section>
+      </Reveal>
 
+      <Reveal>
       <section aria-labelledby="tasbeeh-title">
         <Link href="/tasbeeh" className="relative flex items-center justify-between gap-4 overflow-hidden rounded-sheet bg-gradient-to-l from-emerald-700 to-emerald-900 p-6 text-white shadow-card transition-transform hover:-translate-y-0.5">
           <span aria-hidden="true" className="absolute -start-10 -top-10 size-40 rounded-full bg-white/10" />
@@ -71,7 +100,9 @@ export function LandingSections() {
           <span className="relative flex size-12 shrink-0 items-center justify-center rounded-full bg-white/15"><Icon name="sun" className="size-6" /></span>
         </Link>
       </section>
+      </Reveal>
 
+      <Reveal>
       <section className="flex flex-col gap-4" aria-labelledby="faq-title">
         <SectionTitle><span id="faq-title">أسئلة شائعة</span></SectionTitle>
         <div className="flex flex-col gap-2">
@@ -86,6 +117,7 @@ export function LandingSections() {
           ))}
         </div>
       </section>
+      </Reveal>
     </>
   );
 }

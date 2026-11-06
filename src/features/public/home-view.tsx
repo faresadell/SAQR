@@ -6,7 +6,7 @@ import { SectionTitle } from "@/components/ui/page-header";
 import { EmptyState } from "@/components/ui/states";
 import { formatDateTime } from "@/lib/format";
 import type { PublicOfferView } from "./data";
-import { LandingSections } from "./landing-sections";
+import { LandingSections, Ticker } from "./landing-sections";
 import { categoryStyle } from "./category-style";
 import { ShopCard } from "./shop-card";
 import type { BusinessTypeOption, ShopSummary } from "./types";
@@ -42,11 +42,13 @@ export function HomeView({ types, shops, offers, signedIn }: { types: BusinessTy
             </div>
             <div aria-hidden="true" className="relative mx-auto hidden aspect-square w-full max-w-[14rem] items-center justify-center lg:flex">
               <span className="absolute inset-0 rounded-full bg-white/5" />
-              <Logo size={150} priority className="relative animate-[falcon-in_900ms_ease-out_both]" />
+              <span className="animate-float"><Logo size={150} priority className="relative animate-[falcon-in_900ms_ease-out_both]" /></span>
             </div>
           </div>
         </div>
       </section>
+
+      <div className="mx-auto mt-4 w-full max-w-page px-4 sm:px-6"><Ticker /></div>
 
       <div className="mx-auto flex w-full max-w-page flex-col gap-10 px-4 py-8 sm:px-6">
         {types.length > 0 ? (
