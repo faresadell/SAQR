@@ -125,6 +125,7 @@ model User {
   createdAt       DateTime   @default(now())
   updatedAt       DateTime   @updatedAt
 
+  avatar         UserAvatar?
   sessions       Session[]
   addresses      Address[]
   admin          AdminPermission[]
@@ -1020,4 +1021,12 @@ model ContestExclusion {
   createdAt    DateTime @default(now())
 
   @@unique([monthKey, userId])
+}
+
+/// A small profile picture (a client-resized JPEG of at most 80 KB), kept apart from User so session reads never load it.
+model UserAvatar {
+  userId    String   @id
+  bytes     Bytes
+  updatedAt DateTime @updatedAt
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 }

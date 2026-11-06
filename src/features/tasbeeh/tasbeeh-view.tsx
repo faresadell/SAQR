@@ -10,6 +10,7 @@ import { Notice } from "@/components/ui/states";
 import { cn } from "@/lib/cn";
 import { formatDateTime, formatNumber } from "@/lib/format";
 import { AdhkarSection } from "./adhkar-section";
+import { NamesCard } from "./names-card";
 import { useTasbeeh } from "./use-tasbeeh";
 import {
   DHIKR_OPTIONS,
@@ -38,6 +39,8 @@ export function TasbeehView() {
   const [pending, setPending] = useState<PendingDhikr | null>(null);
   const [confirmReset, setConfirmReset] = useState(false);
   const [confirmClear, setConfirmClear] = useState(false);
+  const [adhkarTab, setAdhkarTab] = useState("morning");
+  const evening = Number(new Intl.DateTimeFormat("en-GB", { hour: "2-digit", hourCycle: "h23", timeZone: "Africa/Cairo" }).format(new Date())) >= 12;
 
   const reached = state.count >= state.goal;
   const goalIsPreset = (GOAL_PRESETS as readonly number[]).includes(state.goal);
@@ -108,6 +111,33 @@ export function TasbeehView() {
         <Notice tone="warning">تعذّر حفظ العدّاد على هذا المتصفح، لذلك لن يبقى بعد إغلاق الصفحة.</Notice>
       ) : null}
 
+      {/* Greeting and quick entries */}
+      <section aria-label="أذكار اليوم" className="flex flex-col gap-3">
+        <div className={cn("relative overflow-hidden rounded-sheet p-6 text-white shadow-card", evening ? "bg-gradient-to-br from-indigo-700 to-violet-900" : "bg-gradient-to-br from-emerald-500 to-teal-700")}>
+          <span aria-hidden="true" className="absolute -start-10 -top-10 size-40 rounded-full bg-white/10" />
+          <h2 className="relative text-3xl font-bold">{evening ? "مساء الخير" : "صباح الخير"}</h2>
+          <p className="relative mt-1 text-base text-white/90">{evening ? "اختم يومك بأذكار المساء." : "ابدأ يومك بأذكار الصباح."}</p>
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          {[
+            { id: "morning", label: "ورد الصباح", icon: "sun", tint: "from-amber-400 to-orange-400" },
+            { id: "evening", label: "ورد المساء", icon: "star", tint: "from-violet-500 to-purple-700" },
+            { id: "prayer", label: "بعد الصلاة", icon: "check", tint: "from-emerald-500 to-green-700" },
+            { id: "sleep", label: "النوم والاستيقاظ", icon: "bell", tint: "from-sky-500 to-blue-700" },
+          ].map((t) => (
+            <a
+              key={t.id}
+              href="#adhkar"
+              onClick={() => setAdhkarTab(t.id)}
+              className={cn("flex h-20 items-center justify-between gap-2 rounded-card bg-gradient-to-br px-4 text-lg font-bold text-white shadow-card transition-transform active:scale-95", t.tint)}
+            >
+              {t.label}
+              <Icon name={t.icon as never} className="size-7 opacity-90" />
+            </a>
+          ))}
+        </div>
+      </section>
+
       {/* Dhikr picker */}
       <div role="radiogroup" aria-label="الذكر" className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-1 sm:mx-0 sm:px-0">
         {DHIKR_OPTIONS.map((d) => {
@@ -132,7 +162,7 @@ export function TasbeehView() {
 
       {/* Counter */}
       <Card className="flex flex-col items-center gap-5 overflow-hidden bg-gradient-to-b from-navy-900 to-navy-800 p-6 text-white sm:p-8">
-        <p className="text-center text-2xl font-bold leading-relaxed sm:text-3xl">{text || dhikrLabel(state)}</p>
+        <h2 className="text-center text-2xl font-bold leading-relaxed sm:text-3xl">{text || dhikrLabel(state)}</h2>
 
         <button
           type="button"
@@ -181,7 +211,9 @@ export function TasbeehView() {
         </div>
       </Card>
 
-      <AdhkarSection />
+      <AdhkarSection tab={adhkarTab} onTab={setAdhkarTab} />
+
+      <NamesCard />
 
       {/* Settings */}
       <Card className="flex flex-col gap-5">
