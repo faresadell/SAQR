@@ -4,18 +4,47 @@ import { logoutAction } from "@/app/(auth)/actions";
 import { SiteShell } from "@/components/layout/site-shell";
 import { LinkButton } from "@/components/ui/link-button";
 import { SoundSetting } from "@/features/intro/sound-setting";
+import type { IconName } from "@/components/ui/icon";
 import { SettingsAction, SettingsGroup, SettingsLink } from "@/features/settings/settings-parts";
 import { avatarVersion } from "@/server/auth/avatar";
 import { getCurrentSession } from "@/server/auth/session";
 
 export const metadata: Metadata = { title: "الإعدادات" };
 
-const ROLE = {
-  CUSTOMER: { home: "/account", orders: "/account/orders", label: "عميل", homeLabel: "حسابي" },
-  MERCHANT: { home: "/merchant", orders: "/merchant/orders", label: "تاجر", homeLabel: "لوحة التاجر" },
-  DRIVER: { home: "/driver", orders: "/driver/tasks", label: "سائق", homeLabel: "لوحة السائق" },
-  ADMIN: { home: "/admin", orders: "/admin/orders", label: "إدارة", homeLabel: "لوحة الإدارة" },
-} as const;
+type Extra = { href: string; icon: IconName; label: string };
+
+const ROLE: Record<string, { home: string; orders: string; label: string; homeLabel: string; extras: Extra[] }> = {
+  CUSTOMER: {
+    home: "/account",
+    orders: "/account/orders",
+    label: "عميل",
+    homeLabel: "حسابي",
+    extras: [
+      { href: "/account/addresses", icon: "pin", label: "عناويني" },
+      { href: "/account/notifications", icon: "bell", label: "الإشعارات" },
+      { href: "/account/stars", icon: "star", label: "نجومي" },
+      { href: "/account/rewards", icon: "gift", label: "المكافآت" },
+    ],
+  },
+  MERCHANT: {
+    home: "/merchant",
+    orders: "/merchant/orders",
+    label: "تاجر",
+    homeLabel: "لوحة التاجر",
+    extras: [
+      { href: "/merchant/profile", icon: "store", label: "بيانات المتجر" },
+      { href: "/merchant/notifications", icon: "bell", label: "الإشعارات" },
+    ],
+  },
+  DRIVER: {
+    home: "/driver",
+    orders: "/driver/tasks",
+    label: "سائق",
+    homeLabel: "لوحة السائق",
+    extras: [{ href: "/driver/profile", icon: "truck", label: "بيانات السائق" }],
+  },
+  ADMIN: { home: "/admin", orders: "/admin/orders", label: "إدارة", homeLabel: "لوحة الإدارة", extras: [] },
+};
 
 export default async function SettingsPage() {
   const session = await getCurrentSession();
@@ -60,15 +89,37 @@ export default async function SettingsPage() {
             <SettingsLink href="/settings/account" icon="user" label="بياناتي (الاسم والإيميل والرقم والصورة)" />
             <SettingsLink href={role.home} icon="home" label={role.homeLabel} />
             <SettingsLink href={role.orders} icon="box" label="الطلبات" />
+            {role.extras.map((e) => (
+              <SettingsLink key={e.href} href={e.href} icon={e.icon} label={e.label} />
+            ))}
+          </SettingsGroup>
+        ) : null}
+
+        {session && role ? (
+          <SettingsGroup title="الأمان">
+            <SettingsLink href="/settings/account" icon="lock" label="تغيير كلمة المرور" hint="من صفحة بياناتي" />
+            <SettingsLink href="/settings/account" icon="phone" label="تغيير رقم الهاتف والإيميل" />
           </SettingsGroup>
         ) : null}
 
         <SettingsGroup title="التفضيلات">
           <li><SoundSetting /></li>
+          <li className="flex min-h-14 items-center justify-between gap-3 px-4 py-3">
+            <span className="font-semibold text-ink">اللغة</span>
+            <span className="text-sm text-ink-muted">العربية</span>
+          </li>
+          <SettingsLink href="/tasbeeh" icon="heart" label="التسبيح والأذكار" />
+        </SettingsGroup>
+
+        <SettingsGroup title="تصفّح">
+          <SettingsLink href="/" icon="home" label="الصفحة الرئيسية" />
+          <SettingsLink href="/explore" icon="search" label="استكشف المتاجر" />
+          <SettingsLink href="/offers" icon="tag" label="العروض" />
+          <SettingsLink href="/cart" icon="cart" label="السلة" />
         </SettingsGroup>
 
         <SettingsGroup title="المساعدة والمعلومات">
-          <SettingsLink href="/legal/support" icon="help" label="الدعم" />
+          <SettingsLink href="/legal/support" icon="help" label="الدعم والتواصل معنا" hint="للمساعدة أو لطلب حذف حسابك وبياناتك" />
           <SettingsLink href="/legal/privacy" icon="shield" label="سياسة الخصوصية" />
           <SettingsLink href="/legal/terms" icon="receipt" label="الشروط والأحكام" />
           <SettingsLink href="/legal/cancellation" icon="xCircle" label="سياسة الإلغاء" />
@@ -81,7 +132,7 @@ export default async function SettingsPage() {
           </SettingsGroup>
         ) : null}
 
-        <p className="text-center text-xs text-ink-muted">صقر | SAQR</p>
+        <p className="text-center text-xs text-ink-muted">صقر | SAQR · الإصدار 0.1</p>
       </div>
     </SiteShell>
   );

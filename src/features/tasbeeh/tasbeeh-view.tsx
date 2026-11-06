@@ -218,6 +218,41 @@ export function TasbeehView() {
             تراجع
           </button>
         </div>
+        <fieldset className="flex flex-col gap-2 rounded-control bg-canvas p-3">
+          <legend className="px-1 text-sm font-bold text-pink-600">الهدف</legend>
+          <div className="flex flex-wrap gap-2">
+            {GOAL_PRESETS.map((g) => (
+              <button
+                key={g}
+                type="button"
+                aria-pressed={state.goal === g}
+                onClick={() => applyGoal(g)}
+                className={cn(
+                  "num h-9 min-w-14 rounded-full border px-3 text-sm font-semibold",
+                  state.goal === g ? "border-navy-900 bg-navy-900 text-white" : "border-line bg-surface text-ink hover:bg-canvas",
+                )}
+              >
+                {formatNumber(g)}
+              </button>
+            ))}
+            <button
+              type="button"
+              aria-pressed={!goalIsPreset}
+              onClick={() => setGoalCustomOpen((v) => !v)}
+              className={cn("h-9 rounded-full border px-3 text-sm font-semibold", !goalIsPreset ? "border-navy-900 bg-navy-900 text-white" : "border-line bg-surface text-ink hover:bg-canvas")}
+            >
+              {!goalIsPreset ? `مخصص: ${formatNumber(state.goal)}` : "هدف مخصص"}
+            </button>
+          </div>
+          {goalCustomOpen ? (
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
+              <div className="flex-1">
+                <Field label="الهدف المخصص" type="number" inputMode="numeric" min={MIN_GOAL} max={MAX_GOAL} value={goalDraft} onChange={(e) => setGoalDraft(e.target.value)} error={goalError ?? undefined} dir="ltr" />
+              </div>
+              <Button onClick={applyCustomGoal} variant="secondary">اعتماد الهدف</Button>
+            </div>
+          ) : null}
+        </fieldset>
         <p className="text-center text-xs text-ink-faint">المس الدائرة للتسبيح</p>
       </Card>
 
@@ -249,42 +284,6 @@ export function TasbeehView() {
             </div>
           ) : null}
         </div>
-
-        <fieldset className="flex flex-col gap-2">
-          <legend className="mb-1 text-sm font-semibold text-ink">الهدف</legend>
-          <div className="flex flex-wrap gap-2">
-            {GOAL_PRESETS.map((g) => (
-              <button
-                key={g}
-                type="button"
-                aria-pressed={state.goal === g}
-                onClick={() => applyGoal(g)}
-                className={cn(
-                  "num h-10 min-w-16 rounded-full border px-4 text-sm font-semibold",
-                  state.goal === g ? "border-navy-900 bg-navy-900 text-white" : "border-line bg-surface text-ink hover:bg-canvas",
-                )}
-              >
-                {formatNumber(g)}
-              </button>
-            ))}
-            <button
-              type="button"
-              aria-pressed={!goalIsPreset}
-              onClick={() => setGoalCustomOpen((v) => !v)}
-              className={cn("h-10 rounded-full border px-4 text-sm font-semibold", !goalIsPreset ? "border-navy-900 bg-navy-900 text-white" : "border-line bg-surface text-ink hover:bg-canvas")}
-            >
-              {!goalIsPreset ? `مخصص: ${formatNumber(state.goal)}` : "هدف مخصص"}
-            </button>
-          </div>
-          {goalCustomOpen ? (
-            <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
-              <div className="flex-1">
-                <Field label="الهدف المخصص" type="number" inputMode="numeric" min={MIN_GOAL} max={MAX_GOAL} value={goalDraft} onChange={(e) => setGoalDraft(e.target.value)} error={goalError ?? undefined} dir="ltr" />
-              </div>
-              <Button onClick={applyCustomGoal} variant="secondary">اعتماد الهدف</Button>
-            </div>
-          ) : null}
-        </fieldset>
 
         <p className="text-xs text-ink-muted">
           هذا العدّاد للاستخدام الشخصي فقط، ولا علاقة له بنجوم صقر أو الباقات أو الطلبات أو المكافآت.
