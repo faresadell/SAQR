@@ -10,6 +10,7 @@ import { Notice } from "@/components/ui/states";
 import { cn } from "@/lib/cn";
 import { formatDateTime, formatNumber } from "@/lib/format";
 import { AdhkarSection } from "./adhkar-section";
+import { DuaCards } from "./dua-cards";
 import { NamesCard } from "./names-card";
 import { useTasbeeh } from "./use-tasbeeh";
 import {
@@ -138,82 +139,93 @@ export function TasbeehView() {
         </div>
       </section>
 
-      {/* Dhikr picker */}
-      <div role="radiogroup" aria-label="الذكر" className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-1 sm:mx-0 sm:px-0">
-        {DHIKR_OPTIONS.map((d) => {
-          const active = (editingCustom ? "custom" : state.dhikrId) === d.id;
-          return (
-            <button
-              key={d.id}
-              type="button"
-              role="radio"
-              aria-checked={active}
-              onClick={() => onSelect(d.id)}
-              className={cn(
-                "h-10 shrink-0 rounded-full border px-4 text-sm font-semibold transition-all duration-200 active:scale-95",
-                active ? "border-navy-900 bg-navy-900 text-white shadow-card" : "border-line bg-surface text-ink hover:bg-canvas",
-              )}
-            >
-              {d.label}
-            </button>
-          );
-        })}
-      </div>
-
-      {/* Counter */}
-      <Card className="flex flex-col items-center gap-5 overflow-hidden bg-gradient-to-b from-navy-900 to-navy-800 p-6 text-white sm:p-8">
-        <h2 className="text-center text-2xl font-bold leading-relaxed sm:text-3xl">{text || dhikrLabel(state)}</h2>
-
-        <button
-          type="button"
-          aria-label={`سبّح. العدّاد ${formatNumber(state.count)} من ${formatNumber(state.goal)}`}
-          onClick={() => {
-            dispatch({ type: "tap", now: Date.now() });
-            try {
-              navigator.vibrate?.(10);
-            } catch {
-              /* optional */
-            }
-          }}
-          className="group relative flex aspect-square w-full max-w-72 touch-manipulation select-none items-center justify-center rounded-full transition-transform duration-100 active:scale-95"
-        >
-          <svg viewBox="0 0 200 200" className="absolute inset-0 size-full -rotate-90" aria-hidden="true">
-            <circle cx="100" cy="100" r="90" fill="rgba(255,255,255,0.06)" stroke="rgba(255,255,255,0.15)" strokeWidth="10" />
-            <circle
-              cx="100"
-              cy="100"
-              r="90"
-              fill="none"
-              stroke={reached ? "#34d399" : "#ffffff"}
-              strokeWidth="10"
-              strokeLinecap="round"
-              strokeDasharray={2 * Math.PI * 90}
-              strokeDashoffset={2 * Math.PI * 90 * (1 - Math.min(state.count / state.goal, 1))}
-              className="transition-[stroke-dashoffset] duration-300 ease-out"
-            />
-          </svg>
-          <span role="status" aria-live="polite" className="relative flex flex-col items-center">
-            <span key={state.count} className="num animate-count-pop font-latin text-7xl font-bold leading-none sm:text-8xl">{state.count.toLocaleString("en-US")}</span>
-            <span className="mt-2 text-sm text-silver">{reached ? "بلغت الهدف" : `من ${formatNumber(state.goal)}`}</span>
-          </span>
-        </button>
-        <p className="text-xs text-silver">المس الدائرة للتسبيح</p>
-
-        <div className="grid w-full grid-cols-2 gap-3">
-          <Button variant="outline" className="border-white/30 bg-transparent text-white hover:bg-white/10" onClick={() => dispatch({ type: "undo" })} disabled={state.count === 0}>
+      {/* Tasbeeh ring: the circle on one side, the dhikr pills on the other */}
+      <Card className="flex flex-col gap-4 border-t-4 border-t-pink-500 p-4 sm:p-6">
+        <div className="flex items-center justify-between gap-3">
+          <h2 className="text-xl font-bold text-pink-600">حلقة التسبيح</h2>
+          <button type="button" aria-label="تصفير العدّاد" disabled={state.count === 0} onClick={() => setConfirmReset(true)} className="flex size-10 items-center justify-center rounded-full text-ink-muted transition-transform hover:bg-canvas active:scale-90 disabled:opacity-40">
+            <Icon name="refresh" className="size-5" />
+          </button>
+        </div>
+        <div className="flex items-center gap-3 sm:gap-6">
+          <button
+            type="button"
+            aria-label={`سبّح. العدّاد ${formatNumber(state.count)} من ${formatNumber(state.goal)}`}
+            onClick={() => {
+              dispatch({ type: "tap", now: Date.now() });
+              try {
+                navigator.vibrate?.(10);
+              } catch {
+                /* optional */
+              }
+            }}
+            className="relative flex aspect-square min-w-0 flex-1 touch-manipulation select-none items-center justify-center rounded-full transition-transform duration-100 active:scale-95"
+          >
+            <svg viewBox="0 0 200 200" className="absolute inset-0 size-full -rotate-90" aria-hidden="true">
+              <circle cx="100" cy="100" r="92" fill="none" stroke="currentColor" strokeWidth="12" className="text-line" />
+              <circle
+                cx="100"
+                cy="100"
+                r="92"
+                fill="none"
+                stroke={reached ? "#10b981" : "#ec4899"}
+                strokeWidth="12"
+                strokeLinecap="round"
+                strokeDasharray={2 * Math.PI * 92}
+                strokeDashoffset={2 * Math.PI * 92 * (1 - Math.min(state.count / state.goal, 1))}
+                className="transition-[stroke-dashoffset] duration-300 ease-out"
+              />
+            </svg>
+            <span role="status" aria-live="polite" className="relative flex w-[72%] flex-col items-center rounded-full bg-surface py-6 text-center shadow-card">
+              <span className="text-lg font-bold leading-snug text-pink-600 sm:text-2xl">{text || dhikrLabel(state)}</span>
+              <span key={state.count} className="num animate-count-pop mt-2 font-latin text-4xl font-bold leading-none text-ink sm:text-5xl">{state.count.toLocaleString("en-US")}</span>
+              <span className="mt-1 text-xs text-ink-muted">{reached ? "بلغت الهدف" : `من ${formatNumber(state.goal)}`}</span>
+            </span>
+          </button>
+          <div role="radiogroup" aria-label="الذكر" className="flex w-[38%] shrink-0 flex-col gap-2.5">
+            {DHIKR_OPTIONS.filter((d) => d.id !== "custom" && d.id !== "salat").map((d, i) => {
+              const active = (editingCustom ? "custom" : state.dhikrId) === d.id;
+              const tones = ["border-pink-500 text-pink-600", "border-violet-500 text-violet-600", "border-sky-500 text-sky-600", "border-amber-500 text-amber-600", "border-emerald-500 text-emerald-600"];
+              const fills = ["bg-pink-500", "bg-violet-500", "bg-sky-500", "bg-amber-500", "bg-emerald-500"];
+              return (
+                <button
+                  key={d.id}
+                  type="button"
+                  role="radio"
+                  aria-checked={active}
+                  onClick={() => onSelect(d.id)}
+                  className={cn(
+                    "min-h-12 rounded-full border-2 px-2 text-sm font-bold leading-tight transition-all duration-200 active:scale-95",
+                    active ? `${fills[i]} ${tones[i]?.split(" ")[0]} text-white shadow-card` : `bg-surface ${tones[i]}`,
+                  )}
+                >
+                  {d.label}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div className="flex flex-wrap gap-2">
+            {DHIKR_OPTIONS.filter((d) => d.id === "custom" || d.id === "salat").map((d) => (
+              <button key={d.id} type="button" role="radio" aria-checked={(editingCustom ? "custom" : state.dhikrId) === d.id} onClick={() => onSelect(d.id)} className={cn("h-9 rounded-full border px-3 text-xs font-semibold active:scale-95", (editingCustom ? "custom" : state.dhikrId) === d.id ? "border-navy-900 bg-navy-900 text-white" : "border-line bg-surface text-ink")}>
+                {d.label}
+              </button>
+            ))}
+          </div>
+          <button type="button" onClick={() => dispatch({ type: "undo" })} disabled={state.count === 0} className="inline-flex h-9 items-center gap-1.5 rounded-full border border-line px-3 text-xs font-semibold text-ink-muted active:scale-95 disabled:opacity-40">
             <Icon name="undo" className="size-4" />
             تراجع
-          </Button>
-          <Button variant="outline" className="border-white/30 bg-transparent text-white hover:bg-white/10" onClick={() => setConfirmReset(true)} disabled={state.count === 0}>
-            <Icon name="refresh" className="size-4" />
-            تصفير
-          </Button>
+          </button>
         </div>
+        <p className="text-center text-xs text-ink-faint">المس الدائرة للتسبيح</p>
       </Card>
 
       <AdhkarSection tab={adhkarTab} onTab={setAdhkarTab} />
 
       <NamesCard />
+
+      <DuaCards />
 
       {/* Settings */}
       <Card className="flex flex-col gap-5">

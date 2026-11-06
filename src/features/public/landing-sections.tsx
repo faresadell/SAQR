@@ -3,6 +3,7 @@ import { Icon, type IconName } from "@/components/ui/icon";
 import { LinkButton } from "@/components/ui/link-button";
 import { SectionTitle } from "@/components/ui/page-header";
 import { Reveal } from "@/components/ui/reveal";
+import { TickerClient } from "./ticker-client";
 
 const AUDIENCES: { icon: IconName; title: string; text: string; cta: string; href: string; tint: string }[] = [
   { icon: "cart", title: "عميل", text: "اطلب من أكثر من نشاط في سلة واحدة وتابع كل طلب على حدة.", cta: "ابدأ التسوق", href: "/explore", tint: "bg-brand-soft text-navy-700" },
@@ -30,25 +31,9 @@ const FAQ: { q: string; a: string }[] = [
 /** Marketing sections under the home page: audiences, why SAQR, tasbeeh teaser, FAQ. Content only from real platform behaviour; no invented numbers. */
 const TICKER = ["سلة واحدة من أكثر من نشاط", "تتبع كل طلب خطوة بخطوة", "دفع بفودافون كاش وإنستا باي", "مطاعم ومحلات وعطارات", "سبّح واقرأ أذكارك"];
 
-/** Slow scrolling strip of real platform highlights. Decorative: hidden from assistive tech. */
+/** One highlight at a time, fading in and out. Decorative: hidden from assistive tech. */
 export function Ticker() {
-  const items = [...TICKER, ...TICKER];
-  return (
-    <div aria-hidden="true" className="overflow-hidden rounded-full bg-navy-900 py-2.5 text-sm font-semibold text-white">
-      <div className="flex w-max animate-marquee gap-8 whitespace-nowrap">
-        {[0, 1].map((n) => (
-          <div key={n} className="flex gap-8">
-            {items.map((t, i) => (
-              <span key={i} className="flex items-center gap-8">
-                {t}
-                <span className="text-brand">●</span>
-              </span>
-            ))}
-          </div>
-        ))}
-      </div>
-    </div>
-  );
+  return <TickerClient items={TICKER} />;
 }
 
 export function LandingSections() {
