@@ -6,6 +6,7 @@ import { SectionTitle } from "@/components/ui/page-header";
 import { EmptyState } from "@/components/ui/states";
 import { formatDateTime } from "@/lib/format";
 import type { PublicOfferView } from "./data";
+import { LandingSections } from "./landing-sections";
 import { categoryStyle } from "./category-style";
 import { ShopCard } from "./shop-card";
 import type { BusinessTypeOption, ShopSummary } from "./types";
@@ -115,6 +116,8 @@ export function HomeView({ types, shops, offers, signedIn }: { types: BusinessTy
             ))}
           </ol>
         </section>
+
+        <LandingSections />
 
         {signedIn ? null : (
           <section className="grid gap-3 rounded-card bg-navy-900 p-6 text-white sm:grid-cols-[1fr_auto] sm:items-center" aria-labelledby="join-title">
