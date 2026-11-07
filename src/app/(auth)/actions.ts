@@ -49,6 +49,7 @@ const registerSchema = z.object({
   phone: z.string().max(30),
   email: z.string().max(200),
   password: z.string().max(200),
+  confirmPassword: z.string().max(200),
   role: z.enum(["CUSTOMER", "MERCHANT", "DRIVER"], { message: "اختر نوع الحساب." }),
   consent: z.literal("on", { message: "يجب الموافقة على سياسة الخصوصية للمتابعة." }),
 });
@@ -61,6 +62,7 @@ export async function registerAction(_prev: FormState, formData: FormData): Prom
     return { fieldErrors };
   }
 
+  if (parsed.data.password !== parsed.data.confirmPassword) return { fieldErrors: { confirmPassword: "كلمتا المرور غير متطابقتين." } };
   const phone = normalizeEgyptPhone(parsed.data.phone);
   if (!phone) return { fieldErrors: { phone: "اكتب رقم موبايل مصري صحيح (مثال: 01012345678)." } };
   const email = normalizeEmail(parsed.data.email);
@@ -102,7 +104,8 @@ export async function verifyAction(_prev: FormState, formData: FormData): Promis
 
   await clearPendingPhone();
   await createSession(result.user, ip);
-  redirect(homeFor(result.user.role));
+  // A new shop owner starts by filling in the shop details.
+  redirect(result.user.role === "MERCHANT" ? "/merchant/profile" : homeFor(result.user.role));
 }
 
 export async function resendCodeAction(_prev: FormState, _formData: FormData): Promise<FormState> {

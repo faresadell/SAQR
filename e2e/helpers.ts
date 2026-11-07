@@ -54,6 +54,7 @@ export async function signUp(page: Page, role: "CUSTOMER" | "MERCHANT" | "DRIVER
   await page.locator("input[name=phone]").fill(phone);
   await page.locator("input[name=email]").fill(email);
   await page.locator("input[name=password]").fill(USER_PASSWORD);
+  await page.locator("input[name=confirmPassword]").fill(USER_PASSWORD);
   await page.locator("input[name=consent]").check();
   await page.getByRole("button", { name: "إنشاء الحساب" }).click();
   await expect(page).toHaveURL(/\/verify/);

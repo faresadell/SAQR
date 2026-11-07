@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useActionState, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Field } from "@/components/ui/field";
+import { PasswordField } from "@/components/ui/password-field";
 import { Notice } from "@/components/ui/states";
 import { cn } from "@/lib/cn";
 import { loginAction, type FormState } from "../actions";
@@ -35,7 +36,7 @@ export function LoginForm() {
       ) : (
         <Field key="phone" label="رقم الموبايل" name="identifier" type="tel" inputMode="tel" autoComplete="username" dir="ltr" placeholder="01xxxxxxxxx" required />
       )}
-      <Field label="كلمة المرور" name="password" type="password" autoComplete="current-password" required />
+      <PasswordField label="كلمة المرور" name="password" autoComplete="current-password" required />
       {state.error ? <Notice tone="danger">{state.error}</Notice> : null}
       <Button type="submit" loading={pending}>دخول</Button>
       <Link href="/forgot-password" className="text-center text-sm font-semibold text-brand underline">نسيت كلمة المرور؟</Link>

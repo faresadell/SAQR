@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useActionState } from "react";
 import { Button } from "@/components/ui/button";
 import { Field } from "@/components/ui/field";
+import { PasswordField } from "@/components/ui/password-field";
 import { Notice } from "@/components/ui/states";
 import { registerAction, type FormState } from "../(auth)/actions";
 import { Turnstile } from "./turnstile";
@@ -35,15 +36,8 @@ export function RegisterForm({ role, siteKey, nonce }: { role: "CUSTOMER" | "MER
         error={errors.phone}
       />
       <Field label="البريد الإلكتروني" name="email" type="email" inputMode="email" autoComplete="email" dir="ltr" placeholder="name@example.com" hint="سنرسل إليه رمز تفعيل الحساب." required error={errors.email} />
-      <Field
-        label="كلمة المرور"
-        name="password"
-        type="password"
-        autoComplete="new-password"
-        hint="8 أحرف على الأقل، حروف مع أرقام أو رموز."
-        required
-        error={errors.password}
-      />
+      <PasswordField label="كلمة المرور" name="password" autoComplete="new-password" hint="8 أحرف على الأقل، حروف مع أرقام أو رموز." meter required error={errors.password} />
+      <PasswordField label="تأكيد كلمة المرور" name="confirmPassword" autoComplete="new-password" required error={errors.confirmPassword} />
 
       <div className="flex flex-col gap-1.5">
         <label className="flex items-start gap-2 text-sm">
