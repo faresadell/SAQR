@@ -130,7 +130,7 @@ export function LandingSections() {
           text="افتح نشاطك، أضف منتجاتك وعروضك، واستقبل طلباتك من لوحة واحدة."
           bullets={["استقبل الطلبات وقرّر قبولها", "أكّد استلام التحويل بعد مراجعة الإيصال", "أضف منتجاتك وعروضك بحدود واضحة", "أضف سائقيك وأسند لهم التوصيل", "تابع تسوياتك وعمولتك"]}
           cta="سجّل نشاطك"
-          href="/register"
+          href="/register?role=merchant"
           image="/images/merchant.webp"
           alt="واجهة محل بشعار صقر وأمامه شاشة لوحة تحكم"
           flip
@@ -148,7 +148,7 @@ export function LandingSections() {
           accent="القريبة منك"
           text="اختر من الطلبات المتاحة، واعرف عنوان الاستلام والتسليم قبل أن تبدأ، وتابع توصيلاتك."
           cta="سجّل كسائق"
-          href="/register"
+          href="/register?role=driver"
           image="/images/driver.webp"
           alt="سائق توصيل بزي صقر يحمل هاتفه بجوار دراجته"
           width={640}
@@ -221,7 +221,7 @@ export function LandingSections() {
               </Link>
             </li>
             <li>
-              <Link href="/register" className="flex h-full flex-col gap-2 rounded-card bg-navy-900 p-6 text-white shadow-card transition-transform hover:-translate-y-0.5">
+              <Link href="/register?role=merchant" className="flex h-full flex-col gap-2 rounded-card bg-navy-900 p-6 text-white shadow-card transition-transform hover:-translate-y-0.5">
                 <span className="text-xs font-bold text-emerald-300">للتاجر</span>
                 <span className="text-2xl font-bold">سجّل نشاطك</span>
                 <span className="text-sm text-silver">افتح متجرك على صقر واستقبل طلباتك.</span>
@@ -229,7 +229,7 @@ export function LandingSections() {
               </Link>
             </li>
             <li>
-              <Link href="/register" className="flex h-full flex-col gap-2 rounded-card border border-line bg-surface p-6 shadow-card transition-transform hover:-translate-y-0.5">
+              <Link href="/register?role=driver" className="flex h-full flex-col gap-2 rounded-card border border-line bg-surface p-6 shadow-card transition-transform hover:-translate-y-0.5">
                 <span className="text-xs font-bold text-success">للسائق</span>
                 <span className="text-2xl font-bold text-navy-900">انضم إلى صقر</span>
                 <span className="text-sm text-ink-muted">وصّل الطلبات القريبة منك.</span>

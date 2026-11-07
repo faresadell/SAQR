@@ -16,8 +16,8 @@ const COLUMNS: { title: string; links: (signedIn: boolean) => FooterLink[] }[] =
   {
     title: "انضم إلينا",
     links: () => [
-      { href: "/register", label: "سجّل نشاطك كتاجر" },
-      { href: "/register", label: "اشتغل كسائق" },
+      { href: "/register?role=merchant", label: "سجّل نشاطك كتاجر" },
+      { href: "/register?role=driver", label: "اشتغل كسائق" },
     ],
   },
   {
