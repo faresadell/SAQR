@@ -46,7 +46,7 @@ export async function listProductsForAdmin(actor: Actor, filter: AdminProductFil
     },
     orderBy: [{ createdAt: "desc" }, { id: "desc" }],
     take: 100,
-    select: { id: true, nameAr: true, description: true, priceCents: true, isAvailable: true, archivedAt: true, categoryId: true, merchantId: true, merchant: { select: { name: true } }, category: { select: { nameAr: true } } },
+    select: { id: true, nameAr: true, description: true, priceCents: true, isAvailable: true, archivedAt: true, imageKey: true, categoryId: true, merchantId: true, merchant: { select: { name: true } }, category: { select: { nameAr: true } } },
   });
 }
 
