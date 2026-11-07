@@ -8,6 +8,7 @@ import { requirePermission } from "@/server/auth/guards";
 import { listProductsForAdmin, listShopOptions } from "@/server/catalog/admin-products";
 import { listUsableCategories } from "@/server/catalog/products";
 import { AdminCreateProductForm, AdminProductRow } from "./product-forms";
+import { ProductImageUploader } from "./product-image-uploader";
 
 export const metadata: Metadata = { title: "منتجات الأنشطة" };
 
@@ -61,6 +62,7 @@ export default async function AdminProductsPage({ searchParams }: { searchParams
                     {p.archivedAt ? <Badge tone="danger">مسحوب</Badge> : <Badge tone={p.isAvailable ? "success" : "neutral"}>{p.isAvailable ? "متاح" : "غير متاح"}</Badge>}
                   </div>
                 </div>
+                {p.archivedAt ? null : <ProductImageUploader productId={p.id} hasImage={p.imageKey !== null} />}
                 <AdminProductRow
                   p={{ id: p.id, name: p.nameAr, description: p.description ?? "", price: (p.priceCents / 100).toFixed(2), categoryId: p.categoryId, isAvailable: p.isAvailable, archived: p.archivedAt !== null }}
                   categories={categories}
@@ -69,7 +71,7 @@ export default async function AdminProductsPage({ searchParams }: { searchParams
             ))}
           </ul>
         )}
-        <p className="text-xs text-ink-faint">يعرض أحدث 100 منتج. استخدم التصفية للوصول لمنتج بعينه.</p>
+        <p className="text-xs text-ink-faint">الصورة تظهر للعملاء بعد أن يكون المنتج متاحاً والنشاط معتمداً. يعرض أحدث 100 منتج. استخدم التصفية للوصول لمنتج بعينه.</p>
       </Card>
     </div>
   );

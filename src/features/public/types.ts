@@ -16,6 +16,7 @@ export interface MenuProduct {
   priceCents: number;
   isAvailable: boolean;
   categoryId: string;
+  hasImage: boolean;
 }
 
 export interface BusinessTypeOption {

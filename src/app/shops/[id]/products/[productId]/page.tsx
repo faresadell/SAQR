@@ -28,7 +28,7 @@ export default async function ProductPage({ params }: { params: Promise<{ id: st
         </nav>
 
         <div className="grid gap-6 md:grid-cols-2">
-          <SafeImage alt={`صورة ${product.nameAr} غير متوفرة`} src={null} fallbackIcon="box" className="aspect-square w-full rounded-card" />
+          <SafeImage alt={product.nameAr} src={product.hasImage ? `/api/v1/products/${product.id}/image` : null} fallbackIcon="box" className="aspect-square w-full rounded-card" />
           <div className="flex flex-col gap-4">
             <div className="flex flex-wrap items-center gap-3">
               <h1 className="text-2xl font-bold">{product.nameAr}</h1>

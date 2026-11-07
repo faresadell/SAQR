@@ -56,7 +56,7 @@ export function SiteFooter({ signedIn }: { signedIn: boolean }) {
         <nav aria-label="روابط التذييل" className="grid grid-cols-2 gap-x-6 gap-y-8 sm:grid-cols-3 lg:grid-cols-5">
           {COLUMNS.filter((c) => c.links(signedIn).length > 0).map((c) => (
             <div key={c.title} className="flex flex-col gap-3">
-              <h2 className="text-sm font-bold text-emerald-300">{c.title}</h2>
+              <h2 className="text-sm font-bold text-accent">{c.title}</h2>
               <ul className="flex flex-col gap-2 text-sm text-silver">
                 {c.links(signedIn).map((l) => (
                   <li key={l.label}>
