@@ -26,14 +26,7 @@ const COLUMNS: { title: string; links: (signedIn: boolean) => FooterLink[] }[] =
   },
   {
     title: "حسابي",
-    links: (signedIn) =>
-      signedIn
-        ? [{ href: "/settings/account", label: "بياناتي" }]
-        : [
-            { href: "/login", label: "تسجيل الدخول" },
-            { href: "/register", label: "إنشاء حساب" },
-            { href: "/forgot-password", label: "نسيت كلمة المرور" },
-          ],
+    links: (signedIn) => (signedIn ? [{ href: "/settings/account", label: "بياناتي" }] : []),
   },
   {
     title: "قانوني",
@@ -61,7 +54,7 @@ export function SiteFooter({ signedIn }: { signedIn: boolean }) {
           </p>
         </div>
         <nav aria-label="روابط التذييل" className="grid grid-cols-2 gap-x-6 gap-y-8 sm:grid-cols-3 lg:grid-cols-5">
-          {COLUMNS.map((c) => (
+          {COLUMNS.filter((c) => c.links(signedIn).length > 0).map((c) => (
             <div key={c.title} className="flex flex-col gap-3">
               <h2 className="text-sm font-bold text-emerald-300">{c.title}</h2>
               <ul className="flex flex-col gap-2 text-sm text-silver">
