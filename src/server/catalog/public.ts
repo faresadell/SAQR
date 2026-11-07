@@ -30,7 +30,7 @@ export async function getPublicMenu(merchantId: string, filter: { q?: string; ca
   const shop = await db.merchant.findFirst({ where: { id: merchantId, status: "APPROVED" }, select: { id: true, name: true, description: true } });
   if (!shop) return null;
   const q = (filter.q ?? "").trim().slice(0, 60);
-  const products = await db.product.findMany({
+  const rows = await db.product.findMany({
     where: {
       merchantId: shop.id,
       archivedAt: null,
@@ -40,9 +40,10 @@ export async function getPublicMenu(merchantId: string, filter: { q?: string; ca
     },
     orderBy: [{ category: { sortOrder: "asc" } }, { nameAr: "asc" }],
     take: 300,
-    select: { id: true, nameAr: true, description: true, priceCents: true, isAvailable: true, categoryId: true },
+    select: { id: true, nameAr: true, description: true, priceCents: true, isAvailable: true, categoryId: true, imageKey: true },
   });
-  return { merchant: shop, products };
+  // The storage key stays private: shoppers only learn whether a picture exists.
+  return { merchant: shop, products: rows.map(({ imageKey, ...p }) => ({ ...p, hasImage: imageKey !== null })) };
 }
 
 /** Public contact details of an approved shop. Links are re-validated on the way out, so nothing unsafe can reach a page. */

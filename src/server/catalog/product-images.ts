@@ -2,17 +2,18 @@ import "server-only";
 import { randomUUID } from "node:crypto";
 import { db } from "@/lib/db";
 import { writeAudit } from "@/lib/audit";
-import type { Actor } from "@/lib/auth/permissions";
+import { hasPermission, type Actor } from "@/lib/auth/permissions";
 import { detectImage, MAX_RECEIPT_BYTES } from "@/lib/uploads/image-sniff";
 import { AuthorizationError, NotFoundError } from "@/server/errors";
 import { getStorage } from "@/server/uploads/storage";
 
 export type ProductImageResult = { ok: true } | { ok: false; error: "INVALID_FILE" | "FILE_TOO_LARGE" };
 
-/** The shop owner sets the picture of one of THEIR products. The file type is decided from its bytes, never from the name sent. */
+/** The shop owner sets the picture of one of THEIR products; an administrator with the catalog permission can set any product's. The file type is decided from its bytes, never from the name sent. */
 export async function uploadProductImage(actor: Actor, productId: string, bytes: Uint8Array): Promise<ProductImageResult> {
-  if (actor.role !== "MERCHANT") throw new AuthorizationError();
-  const product = await db.product.findFirst({ where: { id: productId, merchant: { ownerId: actor.id }, archivedAt: null } }); // owner-scoped
+  const isAdmin = actor.role === "ADMIN" && hasPermission(actor, "catalog.manage");
+  if (actor.role !== "MERCHANT" && !isAdmin) throw new AuthorizationError();
+  const product = await db.product.findFirst({ where: { id: productId, ...(isAdmin ? {} : { merchant: { ownerId: actor.id } }), archivedAt: null } }); // owner-scoped unless an administrator
   if (!product) throw new NotFoundError();
   if (bytes.length > MAX_RECEIPT_BYTES) return { ok: false, error: "FILE_TOO_LARGE" };
   const kind = detectImage(bytes);

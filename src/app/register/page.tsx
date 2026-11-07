@@ -64,7 +64,7 @@ export default async function RegisterPage({ searchParams }: { searchParams: Pro
               <span className="sm:hidden">المتجر</span>
               <span className="hidden sm:inline">العودة إلى المتجر</span>
             </Link>
-            <Link href="/login" className="rounded-full bg-emerald-400 px-4 py-2 font-bold text-navy-900 hover:bg-emerald-300">تسجيل الدخول</Link>
+            <Link href="/login" className="rounded-full bg-accent px-4 py-2 font-bold text-navy-900 hover:bg-accent-hover">تسجيل الدخول</Link>
           </nav>
         </div>
         <div className="mx-auto flex w-full max-w-page flex-col gap-4 px-4 pb-10 pt-6 sm:px-6">
@@ -81,7 +81,7 @@ export default async function RegisterPage({ searchParams }: { searchParams: Pro
               </Link>
             ))}
           </div>
-          <span className="w-fit whitespace-nowrap rounded-full bg-emerald-400/20 px-3 py-1 text-xs font-bold text-emerald-300">{c.tag}</span>
+          <span className="w-fit whitespace-nowrap rounded-full bg-accent/20 px-3 py-1 text-xs font-bold text-accent">{c.tag}</span>
           <h1 className="max-w-2xl text-3xl font-bold leading-snug sm:text-4xl">{c.title}</h1>
           <p className="max-w-2xl text-silver">{c.text}</p>
         </div>

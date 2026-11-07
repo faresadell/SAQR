@@ -1,18 +1,18 @@
 import type { IconName } from "@/components/ui/icon";
 
-/** Icon and soft tint per business kind (by code). Unknown kinds fall back to a neutral store tile. */
+/** Icon per business kind (by code); every kind shares ONE tint so the site keeps a single colour language. Unknown kinds fall back to a neutral store tile. */
 const STYLES: Record<string, { icon: IconName; tint: string }> = {
-  restaurant: { icon: "store", tint: "bg-orange-100 text-orange-700" },
-  supermarket: { icon: "cart", tint: "bg-emerald-100 text-emerald-700" },
-  phones: { icon: "phone", tint: "bg-sky-100 text-sky-700" },
-  pharmacy: { icon: "activity", tint: "bg-rose-100 text-rose-700" },
-  bakery: { icon: "gift", tint: "bg-amber-100 text-amber-700" },
-  greengrocer: { icon: "sun", tint: "bg-lime-100 text-lime-700" },
-  clothes: { icon: "tag", tint: "bg-fuchsia-100 text-fuchsia-700" },
-  electronics: { icon: "layers", tint: "bg-indigo-100 text-indigo-700" },
-  home: { icon: "home", tint: "bg-teal-100 text-teal-700" },
+  restaurant: { icon: "store", tint: "bg-brand-soft text-brand" },
+  supermarket: { icon: "cart", tint: "bg-brand-soft text-brand" },
+  phones: { icon: "phone", tint: "bg-brand-soft text-brand" },
+  pharmacy: { icon: "activity", tint: "bg-brand-soft text-brand" },
+  bakery: { icon: "gift", tint: "bg-brand-soft text-brand" },
+  greengrocer: { icon: "sun", tint: "bg-brand-soft text-brand" },
+  clothes: { icon: "tag", tint: "bg-brand-soft text-brand" },
+  electronics: { icon: "layers", tint: "bg-brand-soft text-brand" },
+  home: { icon: "home", tint: "bg-brand-soft text-brand" },
 };
-const FALLBACK = { icon: "store" as IconName, tint: "bg-brand-soft text-navy-700" };
+const FALLBACK = { icon: "store" as IconName, tint: "bg-brand-soft text-brand" };
 
 export function categoryStyle(code: string): { icon: IconName; tint: string } {
   return STYLES[code] ?? FALLBACK;
