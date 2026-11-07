@@ -24,7 +24,7 @@ export function NamesCard() {
   return (
     <Card className="flex flex-col items-center gap-4 text-center">
       <h2 className="text-xl font-bold text-ink-muted">أسماء الله الحسنى</h2>
-      <p key={i} className="animate-rise-in text-6xl font-bold leading-relaxed text-brand sm:text-7xl">{NAMES[i]}</p>
+      <p key={i} className="animate-rise-in text-6xl font-bold leading-relaxed text-sky-500 sm:text-7xl">{NAMES[i]}</p>
       <p className="num text-xs text-ink-muted">{(i + 1).toLocaleString("ar-EG")} / {NAMES.length.toLocaleString("ar-EG")}</p>
       <div className="flex items-center gap-3">
         <button type="button" aria-label="الاسم السابق" onClick={() => go(i - 1)} className="flex size-12 items-center justify-center rounded-full border border-line bg-surface shadow-card transition-transform active:scale-90">

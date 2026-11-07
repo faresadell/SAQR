@@ -26,7 +26,7 @@ function Cycler({ title, items, tone, icon }: { title: string; items: readonly s
       <span aria-hidden="true" className="absolute -start-8 top-10 size-24 rounded-full bg-white/10" />
       <span aria-hidden="true" className="absolute -end-6 bottom-6 size-20 rounded-full bg-white/10" />
       <span className="relative mx-auto mb-3 flex size-14 items-center justify-center rounded-full bg-white/20"><Icon name={icon} className="size-7" /></span>
-      <h2 className="relative text-xl font-bold text-accent">{title}</h2>
+      <h2 className="relative text-xl font-bold text-yellow-200">{title}</h2>
       <p key={i} className="relative mt-3 min-h-24 animate-rise-in text-xl leading-loose">{items[i]}</p>
       <button type="button" aria-label={`${title}: التالي`} onClick={() => setI((i + 1) % items.length)} className="relative mt-4 inline-flex size-12 items-center justify-center rounded-full bg-white text-ink-muted shadow-card transition-transform active:scale-90">
         <Icon name="refresh" className="size-6" />
@@ -39,8 +39,8 @@ function Cycler({ title, items, tone, icon }: { title: string; items: readonly s
 export function DuaCards() {
   return (
     <>
-      <Cycler title="صلوات" items={SALAWAT} tone="bg-gradient-to-b from-navy-800 to-navy-900" icon="star" />
-      <Cycler title="أدعية" items={DUAS} tone="bg-gradient-to-br from-navy-800 to-navy-900" icon="heart" />
+      <Cycler title="صلوات" items={SALAWAT} tone="bg-gradient-to-b from-sky-400 to-blue-500" icon="star" />
+      <Cycler title="أدعية" items={DUAS} tone="bg-gradient-to-br from-teal-400 to-indigo-500" icon="heart" />
     </>
   );
 }
