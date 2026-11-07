@@ -54,31 +54,34 @@ export default async function RegisterPage({ searchParams }: { searchParams: Pro
   return (
     <div className="min-h-dvh bg-canvas">
       <header className="bg-navy-900 text-white">
-        <div className="mx-auto flex w-full max-w-page items-center justify-between gap-3 px-4 py-3 sm:px-6">
-          <Link href="/" className="flex items-center gap-2 font-bold">
+        <div className="mx-auto flex w-full max-w-page items-center justify-between gap-2 px-4 py-3 sm:px-6">
+          <Link href="/" className="flex shrink-0 items-center gap-2 whitespace-nowrap font-bold">
             <Logo size={36} priority />
             <span className="text-xl">صقر</span>
           </Link>
-          <nav className="flex items-center gap-2 text-sm font-semibold">
-            <Link href="/" className="rounded-full px-3 py-2 text-silver hover:text-white">العودة إلى المتجر</Link>
-            <Link href="/login" className="rounded-full bg-white/10 px-4 py-2 hover:bg-white/20">تسجيل الدخول</Link>
+          <nav className="flex items-center gap-2 whitespace-nowrap text-sm font-semibold">
+            <Link href="/" className="rounded-full px-3 py-2 text-silver hover:text-white">
+              <span className="sm:hidden">المتجر</span>
+              <span className="hidden sm:inline">العودة إلى المتجر</span>
+            </Link>
+            <Link href="/login" className="rounded-full bg-emerald-400 px-4 py-2 font-bold text-navy-900 hover:bg-emerald-300">تسجيل الدخول</Link>
           </nav>
         </div>
         <div className="mx-auto flex w-full max-w-page flex-col gap-4 px-4 pb-10 pt-6 sm:px-6">
-          <div role="tablist" aria-label="نوع الحساب" className="flex w-fit gap-1 rounded-full bg-white/10 p-1">
+          <div role="tablist" aria-label="نوع الحساب" className="grid w-full max-w-sm grid-cols-3 gap-1 rounded-full bg-white/10 p-1">
             {(Object.keys(ROLES) as Role[]).map((r) => (
               <Link
                 key={r}
                 href={`/register?role=${SLUG[r]}`}
                 role="tab"
                 aria-selected={r === role}
-                className={cn("rounded-full px-5 py-2 text-sm font-bold transition-colors", r === role ? "bg-white text-navy-900" : "text-silver hover:text-white")}
+                className={cn("rounded-full px-3 py-2 text-center text-sm font-bold transition-colors", r === role ? "bg-white text-navy-900" : "text-silver hover:text-white")}
               >
                 {ROLES[r].tab}
               </Link>
             ))}
           </div>
-          <span className="w-fit rounded-full bg-emerald-400/20 px-3 py-1 text-xs font-bold text-emerald-300">{c.tag}</span>
+          <span className="w-fit whitespace-nowrap rounded-full bg-emerald-400/20 px-3 py-1 text-xs font-bold text-emerald-300">{c.tag}</span>
           <h1 className="max-w-2xl text-3xl font-bold leading-snug sm:text-4xl">{c.title}</h1>
           <p className="max-w-2xl text-silver">{c.text}</p>
         </div>
