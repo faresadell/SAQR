@@ -114,23 +114,23 @@ export function TasbeehView() {
 
       {/* Greeting and quick entries */}
       <section aria-label="أذكار اليوم" className="flex flex-col gap-3">
-        <div className="relative overflow-hidden rounded-sheet bg-gradient-to-br from-navy-800 to-navy-900 p-6 text-white shadow-card">
+        <div className={cn("relative overflow-hidden rounded-sheet p-6 text-white shadow-card", evening ? "bg-gradient-to-br from-indigo-700 to-violet-900" : "bg-gradient-to-br from-emerald-500 to-teal-700")}>
           <span aria-hidden="true" className="absolute -start-10 -top-10 size-40 rounded-full bg-white/10" />
           <h2 className="relative text-3xl font-bold">{evening ? "مساء الخير" : "صباح الخير"}</h2>
           <p className="relative mt-1 text-base text-white/90">{evening ? "اختم يومك بأذكار المساء." : "ابدأ يومك بأذكار الصباح."}</p>
         </div>
         <div className="grid grid-cols-2 gap-3">
           {[
-            { id: "morning", label: "ورد الصباح", icon: "sun" },
-            { id: "evening", label: "ورد المساء", icon: "star" },
-            { id: "prayer", label: "بعد الصلاة", icon: "check" },
-            { id: "sleep", label: "النوم والاستيقاظ", icon: "bell" },
+            { id: "morning", label: "ورد الصباح", icon: "sun", tint: "from-amber-400 to-orange-400" },
+            { id: "evening", label: "ورد المساء", icon: "star", tint: "from-violet-500 to-purple-700" },
+            { id: "prayer", label: "بعد الصلاة", icon: "check", tint: "from-emerald-500 to-green-700" },
+            { id: "sleep", label: "النوم والاستيقاظ", icon: "bell", tint: "from-sky-500 to-blue-700" },
           ].map((t) => (
             <a
               key={t.id}
               href="#adhkar"
               onClick={() => setAdhkarTab(t.id)}
-              className={cn("flex h-20 items-center justify-between gap-2 rounded-card bg-gradient-to-br from-navy-800 to-navy-900 px-4 text-lg font-bold text-white shadow-card transition-transform active:scale-95")}
+              className={cn("flex h-20 items-center justify-between gap-2 rounded-card bg-gradient-to-br px-4 text-lg font-bold text-white shadow-card transition-transform active:scale-95", t.tint)}
             >
               {t.label}
               <Icon name={t.icon as never} className="size-7 opacity-90" />
@@ -142,7 +142,7 @@ export function TasbeehView() {
       {/* Tasbeeh ring: the circle on one side, the dhikr pills on the other */}
       <Card className="flex flex-col gap-4 border-t-4 border-t-pink-500 p-4 sm:p-6">
         <div className="flex items-center justify-between gap-3">
-          <h2 className="text-xl font-bold text-brand">حلقة التسبيح</h2>
+          <h2 className="text-xl font-bold text-pink-600">حلقة التسبيح</h2>
           <button type="button" aria-label="تصفير العدّاد" disabled={state.count === 0} onClick={() => setConfirmReset(true)} className="flex size-10 items-center justify-center rounded-full text-ink-muted transition-transform hover:bg-canvas active:scale-90 disabled:opacity-40">
             <Icon name="refresh" className="size-5" />
           </button>
@@ -177,7 +177,7 @@ export function TasbeehView() {
               />
             </svg>
             <span role="status" aria-live="polite" className="relative flex w-[72%] flex-col items-center rounded-full bg-surface py-6 text-center shadow-card">
-              <span className="text-lg font-bold leading-snug text-brand sm:text-2xl">{text || dhikrLabel(state)}</span>
+              <span className="text-lg font-bold leading-snug text-pink-600 sm:text-2xl">{text || dhikrLabel(state)}</span>
               <span key={state.count} className="num animate-count-pop mt-2 font-latin text-4xl font-bold leading-none text-ink sm:text-5xl">{state.count.toLocaleString("en-US")}</span>
               <span className="mt-1 text-xs text-ink-muted">{reached ? "بلغت الهدف" : `من ${formatNumber(state.goal)}`}</span>
             </span>
@@ -185,8 +185,8 @@ export function TasbeehView() {
           <div role="radiogroup" aria-label="الذكر" className="flex w-[38%] shrink-0 flex-col gap-2.5">
             {DHIKR_OPTIONS.filter((d) => d.id !== "custom" && d.id !== "salat").map((d, i) => {
               const active = (editingCustom ? "custom" : state.dhikrId) === d.id;
-              const tones = ["border-brand text-brand", "border-brand text-brand", "border-brand text-brand", "border-brand text-brand", "border-brand text-brand"];
-              const fills = ["bg-brand", "bg-brand", "bg-brand", "bg-brand", "bg-brand"];
+              const tones = ["border-pink-500 text-pink-600", "border-violet-500 text-violet-600", "border-sky-500 text-sky-600", "border-amber-500 text-amber-600", "border-emerald-500 text-emerald-600"];
+              const fills = ["bg-pink-500", "bg-violet-500", "bg-sky-500", "bg-amber-500", "bg-emerald-500"];
               return (
                 <button
                   key={d.id}
@@ -219,7 +219,7 @@ export function TasbeehView() {
           </button>
         </div>
         <fieldset className="flex flex-col gap-2 rounded-control bg-canvas p-3">
-          <legend className="px-1 text-sm font-bold text-brand">الهدف</legend>
+          <legend className="px-1 text-sm font-bold text-pink-600">الهدف</legend>
           <div className="flex flex-wrap gap-2">
             {GOAL_PRESETS.map((g) => (
               <button
