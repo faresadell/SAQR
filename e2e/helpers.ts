@@ -48,8 +48,7 @@ export const USER_PASSWORD = E2E_USER_PW;
 
 /** Registers through the real form and activates with the code the server "emailed" (printed in the dev log). */
 export async function signUp(page: Page, role: "CUSTOMER" | "MERCHANT" | "DRIVER", phone: string, email: string): Promise<void> {
-  await page.goto("/register");
-  await page.locator(`input[name=role][value=${role}]`).check();
+  await page.goto(`/register?role=${role.toLowerCase()}`);
   await page.locator("input[name=firstName]").fill("اختبار");
   await page.locator("input[name=lastName]").fill("آلي");
   await page.locator("input[name=phone]").fill(phone);

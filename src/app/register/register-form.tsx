@@ -5,35 +5,19 @@ import { useActionState } from "react";
 import { Button } from "@/components/ui/button";
 import { Field } from "@/components/ui/field";
 import { Notice } from "@/components/ui/states";
-import { registerAction, type FormState } from "../actions";
+import { registerAction, type FormState } from "../(auth)/actions";
 import { Turnstile } from "./turnstile";
 
 const initial: FormState = {};
 
-export function RegisterForm({ siteKey, nonce }: { siteKey: string | null; nonce?: string }) {
+export function RegisterForm({ role, siteKey, nonce }: { role: "CUSTOMER" | "MERCHANT" | "DRIVER"; siteKey: string | null; nonce?: string }) {
   const [state, formAction, pending] = useActionState(registerAction, initial);
   const errors = state.fieldErrors ?? {};
 
   return (
     <form action={formAction} className="flex flex-col gap-4">
-      <fieldset className="flex flex-col gap-2">
-        <legend className="mb-1 text-sm font-semibold">نوع الحساب</legend>
-        <div className="grid grid-cols-3 gap-3">
-          <label className="flex cursor-pointer items-center gap-2 rounded-control border border-line bg-surface p-3 has-[:checked]:border-brand has-[:checked]:bg-brand-soft">
-            <input type="radio" name="role" value="CUSTOMER" defaultChecked />
-            <span className="font-semibold">عميل</span>
-          </label>
-          <label className="flex cursor-pointer items-center gap-2 rounded-control border border-line bg-surface p-3 has-[:checked]:border-brand has-[:checked]:bg-brand-soft">
-            <input type="radio" name="role" value="MERCHANT" />
-            <span className="font-semibold">تاجر</span>
-          </label>
-          <label className="flex cursor-pointer items-center gap-2 rounded-control border border-line bg-surface p-3 has-[:checked]:border-brand has-[:checked]:bg-brand-soft">
-            <input type="radio" name="role" value="DRIVER" />
-            <span className="font-semibold">سائق</span>
-          </label>
-        </div>
-        {errors.role ? <p role="alert" className="text-sm font-medium text-danger-ink">{errors.role}</p> : null}
-      </fieldset>
+      <input type="hidden" name="role" value={role} />
+      {errors.role ? <p role="alert" className="text-sm font-medium text-danger-ink">{errors.role}</p> : null}
 
       <div className="grid gap-4 sm:grid-cols-2">
         <Field label="الاسم الأول" name="firstName" autoComplete="given-name" required error={errors.firstName} />
@@ -65,7 +49,7 @@ export function RegisterForm({ siteKey, nonce }: { siteKey: string | null; nonce
         <label className="flex items-start gap-2 text-sm">
           <input type="checkbox" name="consent" className="mt-1" required />
           <span>
-            أوافق على <Link href="/privacy" className="font-semibold text-brand underline">سياسة الخصوصية</Link> ومعالجة بياناتي لتشغيل الخدمة.
+            أوافق على <Link href="/legal/terms" className="font-semibold text-brand underline">الشروط والأحكام</Link> و<Link href="/legal/privacy" className="font-semibold text-brand underline">سياسة الخصوصية</Link> ومعالجة بياناتي لتشغيل الخدمة.
           </span>
         </label>
         {errors.consent ? <p role="alert" className="text-sm font-medium text-danger-ink">{errors.consent}</p> : null}
@@ -73,7 +57,7 @@ export function RegisterForm({ siteKey, nonce }: { siteKey: string | null; nonce
 
       <Turnstile siteKey={siteKey} nonce={nonce} />
       {state.error ? <Notice tone="danger">{state.error}</Notice> : null}
-      <Button type="submit" loading={pending}>إنشاء الحساب</Button>
+      <Button type="submit" size="lg" loading={pending}>إنشاء الحساب</Button>
     </form>
   );
 }
