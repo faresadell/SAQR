@@ -177,11 +177,11 @@ export function LandingSections() {
 
       <Reveal>
       <section aria-labelledby="tasbeeh-title">
-        <Link href="/tasbeeh" className="relative flex items-center justify-between gap-4 overflow-hidden rounded-sheet bg-gradient-to-l from-navy-800 to-navy-900 p-6 text-white shadow-card transition-transform hover:-translate-y-0.5">
+        <Link href="/tasbeeh" className="relative flex items-center justify-between gap-4 overflow-hidden rounded-sheet bg-gradient-to-l from-emerald-700 to-emerald-900 p-6 text-white shadow-card transition-transform hover:-translate-y-0.5">
           <span aria-hidden="true" className="absolute -start-10 -top-10 size-40 rounded-full bg-white/10" />
           <div className="relative flex flex-col gap-1">
             <h2 id="tasbeeh-title" className="text-xl font-bold">التسبيح والأذكار</h2>
-            <p className="text-sm text-silver">سبّح، وخذ أذكار الصباح والمساء وبعد الصلاة والنوم.</p>
+            <p className="text-sm text-emerald-50">سبّح، وخذ أذكار الصباح والمساء وبعد الصلاة والنوم.</p>
           </div>
           <span className="relative flex size-12 shrink-0 items-center justify-center rounded-full bg-white/15"><Icon name="sun" className="size-6" /></span>
         </Link>
