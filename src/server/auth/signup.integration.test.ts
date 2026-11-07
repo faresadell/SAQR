@@ -31,7 +31,7 @@ describe("sign-up and activation by email code", () => {
     expect(mails[0]).toMatchObject({ to: "ahmed@example.com", purpose: "VERIFY_EMAIL" });
     const pending = await db.user.findUniqueOrThrow({ where: { phone: base.phone } });
     expect(pending).toMatchObject({ status: "PENDING", email: "ahmed@example.com", name: "أحمد علي", role: "CUSTOMER", emailVerifiedAt: null });
-    expect(await authenticate({ phone: base.phone, password: base.password }, "unknown")).toEqual({ ok: false, error: "NEEDS_VERIFICATION" }); // cannot sign in before activation
+    expect(await authenticate({ phone: base.phone, password: base.password }, "unknown")).toMatchObject({ ok: false, error: "NEEDS_VERIFICATION" }); // cannot sign in before activation
     expect(await completeEmailActivation(base.phone, "000000", "unknown")).toEqual({ ok: false, error: "INVALID_CODE" });
     const done = await completeEmailActivation(base.phone, mails[0]!.code, "unknown");
     expect(done).toMatchObject({ ok: true, user: { role: "CUSTOMER" } });

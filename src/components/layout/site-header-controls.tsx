@@ -18,7 +18,7 @@ const ghost = "rounded-control px-3 py-2 text-sm font-semibold text-ink-muted ho
 
 /**
  * Public header: search, primary links, "طلباتي" button, the basket (only while it holds items), and the account
- * buttons (تسجيل دخول / إنشاء حساب when signed out). On phones the search box drops to its own row.
+ * button (signed in only; sign-in and sign-up live in the footer and settings). On phones the search box drops to its own row.
  */
 export function SiteHeaderControls({ signedIn, accountHref, ordersHref }: Props) {
   const router = useRouter();
@@ -73,12 +73,7 @@ export function SiteHeaderControls({ signedIn, accountHref, ordersHref }: Props)
             <Icon name="user" className="size-4" />
             حسابي
           </Link>
-        ) : (
-          <>
-            <Link href="/login" className="shrink-0 rounded-full px-3 py-2 text-sm font-bold text-ink hover:bg-canvas">تسجيل دخول</Link>
-            <Link href="/register" className="shrink-0 rounded-full bg-brand px-3 py-2 text-sm font-bold text-white hover:bg-brand-hover sm:px-4">إنشاء حساب</Link>
-          </>
-        )}
+        ) : null}
       </div>
     </>
   );

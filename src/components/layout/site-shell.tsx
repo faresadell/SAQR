@@ -1,6 +1,7 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { Logo } from "@/components/brand/logo";
+import { SiteFooter } from "./site-footer";
 import { getCurrentSession } from "@/server/auth/session";
 import { SiteHeaderControls } from "./site-header-controls";
 import { PublicBottomNav } from "./public-bottom-nav";
@@ -36,25 +37,9 @@ export function SiteFrame({ children, accountHref, ordersHref = "/login", signed
       </header>
 
       {ribbon ? <p className="bg-warning-soft px-4 py-2 text-center text-sm font-semibold text-warning-ink">{ribbon}</p> : null}
-      <main id="main" className="flex-1 pb-20 lg:pb-0">{children}</main>
+      <main id="main" className="flex-1">{children}</main>
 
-      <footer className="hidden border-t border-line bg-surface lg:block">
-        <div className="mx-auto flex w-full max-w-page flex-wrap items-center justify-between gap-4 px-6 py-6 text-sm text-ink-muted">
-          <span className="flex items-center gap-2 font-semibold text-ink">
-            <Logo size={24} />
-            صقر | SAQR
-          </span>
-          <nav aria-label="روابط التذييل" className="flex flex-wrap gap-5">
-            <Link href="/explore" className="hover:text-ink">المنتجات</Link>
-            <Link href="/offers" className="hover:text-ink">العروض</Link>
-            <Link href="/legal/privacy" className="hover:text-ink">سياسة الخصوصية</Link>
-            <Link href="/legal/terms" className="hover:text-ink">الشروط والأحكام</Link>
-            <Link href="/legal/cancellation" className="hover:text-ink">الإلغاء</Link>
-            <Link href="/legal/refund" className="hover:text-ink">الاسترجاع</Link>
-            <Link href="/legal/support" className="hover:text-ink">الدعم</Link>
-          </nav>
-        </div>
-      </footer>
+      <SiteFooter signedIn={signedIn} />
 
       <PublicBottomNav />
     </div>

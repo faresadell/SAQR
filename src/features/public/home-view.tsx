@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { Logo } from "@/components/brand/logo";
-import { Icon, type IconName } from "@/components/ui/icon";
+import { Icon } from "@/components/ui/icon";
 import { LinkButton } from "@/components/ui/link-button";
 import { SectionTitle } from "@/components/ui/page-header";
 import { EmptyState } from "@/components/ui/states";
@@ -11,14 +11,8 @@ import { categoryStyle } from "./category-style";
 import { ShopCard } from "./shop-card";
 import type { BusinessTypeOption, ShopSummary } from "./types";
 
-const STEPS: { icon: IconName; title: string; text: string }[] = [
-  { icon: "store", title: "اختر نشاطاً", text: "تصفّح المطاعم والمحلات والعطارات في منطقتك." },
-  { icon: "cart", title: "اطلب وادفع", text: "أضف ما تريد من أكثر من نشاط، وحوّل المبلغ وأرفق الإيصال." },
-  { icon: "truck", title: "استلم طلبك", text: "يقبل سائق طلبك وتتابعه خطوة بخطوة حتى يصل." },
-];
-
 /** Home page body: hero, categories, running offers, available shops, how it works, and the invitation to join. Pure: the page loads the data. */
-export function HomeView({ types, shops, offers, signedIn }: { types: BusinessTypeOption[]; shops: ShopSummary[]; offers: PublicOfferView[]; signedIn: boolean }) {
+export function HomeView({ types, shops, offers }: { types: BusinessTypeOption[]; shops: ShopSummary[]; offers: PublicOfferView[]; signedIn?: boolean }) {
   const typeLabel = new Map(types.map((t) => [t.code, t.nameAr]));
   const perType = new Map<string, number>();
   for (const s of shops) perType.set(s.businessType, (perType.get(s.businessType) ?? 0) + 1);
@@ -104,35 +98,8 @@ export function HomeView({ types, shops, offers, signedIn }: { types: BusinessTy
           )}
         </section>
 
-        <section className="flex flex-col gap-4" aria-labelledby="how-title">
-          <SectionTitle><span id="how-title">كيف يعمل صقر؟</span></SectionTitle>
-          <ol className="grid gap-3 sm:grid-cols-3">
-            {STEPS.map((step, i) => (
-              <li key={step.title} className="flex gap-3 rounded-card border border-line bg-surface p-4">
-                <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-navy-900 text-white"><Icon name={step.icon} className="size-5" /></span>
-                <div>
-                  <p className="font-bold"><span className="num text-ink-faint">{i + 1}.</span> {step.title}</p>
-                  <p className="text-sm text-ink-muted">{step.text}</p>
-                </div>
-              </li>
-            ))}
-          </ol>
-        </section>
-
         <LandingSections />
 
-        {signedIn ? null : (
-          <section className="grid gap-3 rounded-card bg-navy-900 p-6 text-white sm:grid-cols-[1fr_auto] sm:items-center" aria-labelledby="join-title">
-            <div>
-              <h2 id="join-title" className="text-xl font-bold">انضم إلى صقر</h2>
-              <p className="text-silver">أنشئ حساباً كعميل لتطلب، أو كتاجر لتبيع، أو كسائق لتوصّل الطلبات وتكسب.</p>
-            </div>
-            <div className="flex flex-wrap gap-2">
-              <LinkButton href="/register" className="bg-white text-navy-900 hover:bg-silver">إنشاء حساب</LinkButton>
-              <LinkButton href="/login" variant="outline" className="border-white/30 bg-transparent text-white hover:bg-white/10">تسجيل الدخول</LinkButton>
-            </div>
-          </section>
-        )}
       </div>
     </>
   );

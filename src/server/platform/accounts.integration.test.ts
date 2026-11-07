@@ -6,10 +6,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { db } from "@/lib/db";
 import type { Actor } from "@/lib/auth/permissions";
 import { hashPassword } from "@/lib/auth/password";
-import { encryptSecret, parseEncryptionKey } from "@/lib/auth/secret-box";
-import { generateTotpSecret } from "@/lib/auth/totp";
 import { authenticate } from "@/server/auth/auth-service";
-import { countUnusedRecoveryCodes, generateRecoveryCodes } from "@/server/auth/admin-recovery";
 import { confirmEmailVerification, confirmPasswordResetByEmail, requestPasswordResetByEmail, startEmailVerification } from "@/server/auth/email-account";
 import { setEmailSenderForTests } from "@/server/auth/email-sender";
 import { AuthorizationError, NotFoundError } from "@/server/errors";
@@ -29,12 +26,10 @@ let n = 0;
 async function user(opts: { role?: "CUSTOMER" | "ADMIN"; email?: string; verifiedEmail?: boolean; password?: string } = {}) {
   n += 1;
   const phone = `+2011${String(n).padStart(8, "0")}`;
-  const secretKey = parseEncryptionKey(process.env.DATA_ENCRYPTION_KEY!);
   const u = await db.user.create({
     data: {
       phone, name: `U${n}`, passwordHash: await hashPassword(opts.password ?? "Old-pass-12345"), role: opts.role ?? "CUSTOMER", status: "ACTIVE", phoneVerifiedAt: new Date(),
       email: opts.email, emailVerifiedAt: opts.email && opts.verifiedEmail !== false ? new Date() : null,
-      ...(opts.role === "ADMIN" ? { totpSecretEnc: encryptSecret(secretKey, generateTotpSecret()) } : {}),
     },
   });
   return { u, phone, actor: { id: u.id, role: u.role, isSuperAdmin: false, permissions: [] } as Actor };
@@ -130,40 +125,14 @@ describe("password reset by email", () => {
   });
 });
 
-describe("administrator recovery codes", () => {
-  it("are created by an admin with their password, work once at login instead of the authenticator code, and are replaced on regeneration", async () => {
+describe("administrator sign-in", () => {
+  it("is email + password only: no authenticator code, and a wrong password is refused", async () => {
     const adm = await user({ role: "ADMIN", password: "Admin-long-pass-123" });
-    const customer = await user();
-    await expect(generateRecoveryCodes(customer.actor, "Old-pass-12345", "unknown")).rejects.toBeInstanceOf(AuthorizationError);
-    expect(await generateRecoveryCodes(adm.actor, "wrong password", "unknown")).toEqual({ ok: false, error: "WRONG_PASSWORD" });
-    const first = await generateRecoveryCodes(adm.actor, "Admin-long-pass-123", "unknown");
-    if (!first.ok) throw new Error("setup");
-    expect(first.codes).toHaveLength(10);
-    expect(await countUnusedRecoveryCodes(adm.actor)).toBe(10);
-    const stored = await db.adminRecoveryCode.findMany({ where: { userId: adm.u.id } });
-    expect(JSON.stringify(stored)).not.toContain(first.codes[0]!); // only hashes are stored
-
-    expect((await authenticate({ phone: adm.phone, password: "Admin-long-pass-123" }, "unknown")).ok).toBe(false); // neither factor
-    expect((await authenticate({ phone: adm.phone, password: "Admin-long-pass-123", recoveryCode: "AAAAA-AAAAA" }, "unknown")).ok).toBe(false);
-    expect((await authenticate({ phone: adm.phone, password: "wrong", recoveryCode: first.codes[0]! }, "unknown")).ok).toBe(false); // password is still required
-    const login = await authenticate({ phone: adm.phone, password: "Admin-long-pass-123", recoveryCode: first.codes[0]!.toLowerCase() }, "unknown");
-    expect(login.ok).toBe(true);
-    expect((await authenticate({ phone: adm.phone, password: "Admin-long-pass-123", recoveryCode: first.codes[0]! }, "unknown")).ok).toBe(false); // single use
-    expect(await countUnusedRecoveryCodes(adm.actor)).toBe(9);
-    expect(await db.auditLog.count({ where: { action: "ADMIN_RECOVERY_CODE_USED", entityId: adm.u.id } })).toBe(1);
-
-    const second = await generateRecoveryCodes(adm.actor, "Admin-long-pass-123", "unknown");
-    if (!second.ok) throw new Error("setup");
-    expect((await authenticate({ phone: adm.phone, password: "Admin-long-pass-123", recoveryCode: first.codes[1]! }, "unknown")).ok).toBe(false); // replaced
-    expect((await authenticate({ phone: adm.phone, password: "Admin-long-pass-123", recoveryCode: second.codes[1]! }, "unknown")).ok).toBe(true);
-  });
-
-  it("the database refuses to revive a used code", async () => {
-    const adm = await user({ role: "ADMIN", password: "Admin-long-pass-123" });
-    const r = await generateRecoveryCodes(adm.actor, "Admin-long-pass-123", "unknown");
-    if (!r.ok) throw new Error("setup");
-    await authenticate({ phone: adm.phone, password: "Admin-long-pass-123", recoveryCode: r.codes[0]! }, "unknown");
-    await expect(db.$executeRawUnsafe(`UPDATE "AdminRecoveryCode" SET "usedAt" = NULL WHERE "userId" = '${adm.u.id}' AND "usedAt" IS NOT NULL`)).rejects.toThrow();
+    await db.user.update({ where: { id: adm.u.id }, data: { email: "boss@example.com", emailVerifiedAt: new Date() } });
+    expect((await authenticate({ email: "boss@example.com", password: "wrong" }, "unknown")).ok).toBe(false);
+    expect((await authenticate({ email: "boss@example.com", password: "Admin-long-pass-123" }, "unknown")).ok).toBe(true);
+    expect((await authenticate({ phone: adm.phone, password: "Admin-long-pass-123" }, "unknown")).ok).toBe(true);
+    expect(await db.auditLog.count({ where: { action: "ADMIN_LOGIN", entityId: adm.u.id } })).toBe(2);
   });
 });
 

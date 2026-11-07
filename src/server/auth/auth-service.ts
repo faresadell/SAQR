@@ -1,15 +1,11 @@
 import "server-only";
 import { Prisma, type Role } from "@prisma/client";
 import { db } from "@/lib/db";
-import { getEnv } from "@/lib/env";
 import { writeAudit } from "@/lib/audit";
 import { consumeRateLimit } from "@/lib/rate-limit";
 import { getSetting } from "@/lib/settings";
 import { burnPasswordCheck, hashPassword, verifyPassword } from "@/lib/auth/password";
-import { decryptSecret, parseEncryptionKey } from "@/lib/auth/secret-box";
-import { verifyTotp } from "@/lib/auth/totp";
 import { consumeEmailCode, issueEmailCode } from "./email-codes";
-import { redeemRecoveryCode } from "./admin-recovery";
 
 export const CONSENT_VERSION = "2026-10-v1";
 
@@ -112,16 +108,16 @@ export async function resendActivationCode(phone: string, ip: string): Promise<{
 // ───────────── Login ─────────────
 
 export interface LoginInput {
-  phone: string; // normalized
+  /** Normalized email (the normal way in) or, for accounts that have no email yet (e.g. drivers added by a shop), a normalized phone. */
+  email?: string;
+  phone?: string;
   password: string;
-  totp?: string;
-  /** Administrators who lost their authenticator may present ONE backup code instead of the authenticator code. */
-  recoveryCode?: string;
 }
 
 export type LoginResult =
   | { ok: true; user: { id: string; role: Role } }
-  | { ok: false; error: "INVALID" | "RATE_LIMITED" | "SUSPENDED" | "NEEDS_VERIFICATION" };
+  | { ok: false; error: "INVALID" | "RATE_LIMITED" | "SUSPENDED" }
+  | { ok: false; error: "NEEDS_VERIFICATION"; phone: string };
 
 async function registerFailedLogin(userId: string, ip: string): Promise<void> {
   const [maxFailures, lockMinutes] = await Promise.all([getSetting("auth.login.max_failures"), getSetting("auth.login.lock_minutes")]);
@@ -141,14 +137,16 @@ async function registerFailedLogin(userId: string, ip: string): Promise<void> {
 
 /** Every failure returns the same INVALID error and costs the same time, so accounts cannot be enumerated. */
 export async function authenticate(input: LoginInput, ip: string): Promise<LoginResult> {
-  const [perIp, perPhone] = await Promise.all([
+  const identity = input.email ? `email:${input.email}` : input.phone ? `phone:${input.phone}` : null;
+  if (!identity) return { ok: false, error: "INVALID" };
+  const [perIp, perAccount] = await Promise.all([
     getSetting("auth.login.max_per_ip_per_10min"),
     getSetting("auth.login.max_per_phone_per_10min"),
   ]);
   if (ip !== "unknown" && !(await consumeRateLimit(`login:ip:${ip}`, perIp, 600))) return { ok: false, error: "RATE_LIMITED" };
-  if (!(await consumeRateLimit(`login:phone:${input.phone}`, perPhone, 600))) return { ok: false, error: "RATE_LIMITED" };
+  if (!(await consumeRateLimit(`login:id:${identity}`, perAccount, 600))) return { ok: false, error: "RATE_LIMITED" };
 
-  const user = await db.user.findUnique({ where: { phone: input.phone } });
+  const user = await db.user.findUnique({ where: input.email ? { email: input.email } : { phone: input.phone! } });
   const passwordOk = user ? await verifyPassword(input.password, user.passwordHash) : (await burnPasswordCheck(input.password), false);
 
   if (user?.lockedUntil && user.lockedUntil > new Date()) return { ok: false, error: "INVALID" };
@@ -160,39 +158,10 @@ export async function authenticate(input: LoginInput, ip: string): Promise<Login
   if (user.status === "SUSPENDED") return { ok: false, error: "SUSPENDED" };
   if (user.status === "PENDING") {
     if (user.email) await issueEmailCode(user.id, user.email, "VERIFY_EMAIL", ip);
-    return { ok: false, error: "NEEDS_VERIFICATION" };
+    return { ok: false, error: "NEEDS_VERIFICATION", phone: user.phone };
   }
 
-  // Administrators must also present a valid authenticator code (replay-protected).
-  if (user.role === "ADMIN") {
-    if (!user.totpSecretEnc) return { ok: false, error: "INVALID" };
-    if (!input.totp && input.recoveryCode) {
-      if (!(await redeemRecoveryCode(user.id, input.recoveryCode, ip))) {
-        await registerFailedLogin(user.id, ip);
-        return { ok: false, error: "INVALID" };
-      }
-    } else {
-      if (!input.totp) return { ok: false, error: "INVALID" };
-      let secret: Buffer;
-      try {
-        secret = decryptSecret(parseEncryptionKey(getEnv().DATA_ENCRYPTION_KEY), user.totpSecretEnc);
-      } catch {
-        return { ok: false, error: "INVALID" };
-      }
-      const step = verifyTotp(secret, input.totp.trim(), Date.now(), user.lastTotpStep);
-      if (step === null) {
-        await registerFailedLogin(user.id, ip);
-        return { ok: false, error: "INVALID" };
-      }
-      // Atomic: only one request can consume a given time step.
-      const claimed = await db.user.updateMany({
-        where: { id: user.id, OR: [{ lastTotpStep: null }, { lastTotpStep: { lt: step } }] },
-        data: { lastTotpStep: step },
-      });
-      if (claimed.count !== 1) return { ok: false, error: "INVALID" };
-    }
-    await writeAudit({ actorId: user.id, action: "ADMIN_LOGIN", entityType: "User", entityId: user.id, ip });
-  }
+  if (user.role === "ADMIN") await writeAudit({ actorId: user.id, action: "ADMIN_LOGIN", entityType: "User", entityId: user.id, ip });
 
   await db.user.update({ where: { id: user.id }, data: { failedLoginCount: 0, lockedUntil: null } });
   return { ok: true, user: { id: user.id, role: user.role } };
