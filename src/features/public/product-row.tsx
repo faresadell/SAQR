@@ -19,6 +19,16 @@ export function ProductRow({ product, merchantId, merchantName }: { product: Men
     const dialog = sheet.current;
     if (isOpen && dialog && !dialog.open) dialog.showModal();
   }, [isOpen]);
+  // A tap on the backdrop (the dialog element itself, outside its content) closes the sheet. Registered here rather than as a JSX handler on a non-interactive element; Escape already closes a modal dialog natively.
+  useEffect(() => {
+    const dialog = sheet.current;
+    if (!dialog) return;
+    const onBackdrop = (e: MouseEvent) => {
+      if (e.target === dialog) dialog.close();
+    };
+    dialog.addEventListener("click", onBackdrop);
+    return () => dialog.removeEventListener("click", onBackdrop);
+  }, []);
   const open = () => setOpen(true);
   const close = () => sheet.current?.close();
   const cart = { productId: product.id, merchantId, merchantName, name: product.nameAr, priceCents: product.priceCents, isAvailable: product.isAvailable };
@@ -43,9 +53,6 @@ export function ProductRow({ product, merchantId, merchantName }: { product: Men
         ref={sheet}
         aria-label={product.nameAr}
         onClose={() => setOpen(false)}
-        onClick={(e) => {
-          if (e.target === sheet.current) close();
-        }}
         className="mb-0 mt-auto max-h-[90dvh] w-full max-w-lg overflow-y-auto rounded-t-sheet bg-surface p-0 text-ink shadow-pop backdrop:bg-navy-950/60 sm:m-auto sm:rounded-sheet"
       >
         {isOpen ? (
