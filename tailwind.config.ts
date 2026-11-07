@@ -1,7 +1,7 @@
 import type { Config } from "tailwindcss";
 
 // Single source of truth for design tokens (colors, type, radii, shadows, motion).
-// Brand = the falcon logo: deep navy + silver, with ONE green for every action (brand on light, accent on navy).
+// Brand = the falcon logo: deep navy + silver, with ONE action colour taken from it: logo blue (brand) on light surfaces, silver (accent) on navy surfaces. Green/red/amber are for status only.
 // Pages and components use these names only; never hard-code hex values in components.
 const config: Config = {
   content: ["./src/**/*.{ts,tsx}"],
@@ -9,8 +9,8 @@ const config: Config = {
     extend: {
       colors: {
         navy: { 950: "#070B1A", 900: "#0B1530", 800: "#12214A", 700: "#1E3A8A", 600: "#274690" },
-        brand: { DEFAULT: "#047857", hover: "#065F46", soft: "#D1FAE5" },
-        accent: { DEFAULT: "#34D399", hover: "#6EE7B7" }, // the same green, for buttons and highlights on navy surfaces
+        brand: { DEFAULT: "#1E3A8A", hover: "#12214A", soft: "#E4EAF7" },
+        accent: { DEFAULT: "#C7D2E6", hover: "#E4EAF7" }, // silver, for buttons and highlights on navy surfaces
         silver: { DEFAULT: "#C7D2E6", dim: "#8EA0C0" },
         background: "#F8FAFC",
         canvas: "#F1F5F9",
