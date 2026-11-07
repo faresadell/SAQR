@@ -2,7 +2,7 @@ import { expect, test } from "@playwright/test";
 import { E2E_ACCOUNTS, E2E_ADMIN_PW, type E2eProject } from "./accounts";
 import { expectNoHorizontalScroll, skipIntro, TINY_PNG, watchErrors } from "./helpers";
 
-test("admin: sign in with the authenticator code, open every page, add a shop with an owner and a picture, publish an offer for it", async ({ page }, testInfo) => {
+test("admin: sign in with email/phone and password, open every page, add a shop with an owner and a picture, publish an offer for it", async ({ page }, testInfo) => {
   test.setTimeout(420_000);
   await skipIntro(page);
   const errors = watchErrors(page);
@@ -11,6 +11,7 @@ test("admin: sign in with the authenticator code, open every page, add a shop wi
   const shopName = `مطعم أضافه الأدمن ${project}`;
 
   await page.goto("/login");
+  await page.getByRole("tab", { name: "رقم الموبايل" }).click();
   await page.locator("input[name=identifier]").fill(acc.adminPhone.replace("+20", "0"));
   await page.locator("input[name=password]").fill(E2E_ADMIN_PW);
   await page.getByRole("button", { name: "دخول" }).click();

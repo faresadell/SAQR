@@ -63,6 +63,7 @@ export async function signUp(page: Page, role: "CUSTOMER" | "MERCHANT" | "DRIVER
 
 export async function login(page: Page, identifier: string, password: string): Promise<void> {
   await page.goto("/login");
+  if (!identifier.includes("@")) await page.getByRole("tab", { name: "رقم الموبايل" }).click();
   await page.locator("input[name=identifier]").fill(identifier);
   await page.locator("input[name=password]").fill(password);
   await page.getByRole("button", { name: "دخول" }).click();
