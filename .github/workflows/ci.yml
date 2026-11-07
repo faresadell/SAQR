@@ -88,7 +88,6 @@ jobs:
             echo "DATA_ENCRYPTION_KEY=$(openssl rand -base64 32)"
             echo "E2E_ADMIN_PW=Ad1-$(openssl rand -hex 12)"
             echo "E2E_USER_PW=Us1-$(openssl rand -hex 12)"
-            echo "E2E_TOTP_SECRET=$(openssl rand -base64 20)"
           } >> "$GITHUB_ENV"
       - run: npm ci --ignore-scripts
       - run: ./node_modules/.bin/prisma generate

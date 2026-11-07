@@ -56,22 +56,6 @@ export function LandingSections() {
       </Reveal>
 
       <Reveal>
-        <FeatureBand
-          id="categories-title"
-          tag="كل احتياجاتك"
-          title="تصفّح الأنشطة"
-          accent="في مكان واحد"
-          text="بدل ما تتنقل بين مواقع كتير، تصفّح الأنشطة المتاحة في صقر واجمع طلبك في سلة واحدة."
-          cta="استكشف الأنشطة"
-          href="/explore"
-          image="/images/categories.webp"
-          alt="أيقونات أنشطة: مطاعم وسوبر ماركت وعطارة وصيدليات"
-          width={660}
-          height={896}
-        />
-      </Reveal>
-
-      <Reveal>
       <section className="flex flex-col gap-4" aria-labelledby="why-title">
         <SectionTitle><span id="why-title">ليه صقر؟</span></SectionTitle>
         <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
@@ -89,6 +73,55 @@ export function LandingSections() {
       </Reveal>
 
       <Reveal>
+      <section className="flex flex-col gap-4" aria-labelledby="steps-title">
+        <SectionTitle><span id="steps-title">كيف تطلب من صقر؟</span></SectionTitle>
+        <ol className="grid gap-4 md:grid-cols-3">
+          {STEPS.map((st) => (
+            <li key={st.n} className="relative flex flex-col gap-2 rounded-card border border-line bg-surface p-5 pt-9 shadow-card">
+              <span className="absolute -top-5 start-5 flex size-11 items-center justify-center rounded-full bg-brand text-xl font-bold text-white shadow-pop">{st.n}</span>
+              <h3 className="font-bold">{st.title}</h3>
+              <p className="text-sm text-ink-muted">{st.text}</p>
+            </li>
+          ))}
+        </ol>
+      </section>
+      </Reveal>
+
+      <Reveal>
+        <FeatureBand
+          id="delivery-title"
+          tag="التوصيل"
+          title="طلبك يوصلك"
+          accent="مع سائق صقر"
+          text="يوصّل سائق صقر طلبك إلى عنوانك، وتتابع حالته خطوة بخطوة داخل حسابك."
+          cta="تتبّع طلباتك"
+          href="/account/orders"
+          image="/images/delivery.webp"
+          alt="صندوق توصيل بشعار صقر وحقيبة سائق وسيارة ودراجات"
+          flip
+          width={640}
+          height={896}
+          note="صورة توضيحية"
+        />
+      </Reveal>
+
+      <Reveal>
+        <FeatureBand
+          id="categories-title"
+          tag="كل احتياجاتك"
+          title="تصفّح الأنشطة"
+          accent="في مكان واحد"
+          text="بدل ما تتنقل بين مواقع كتير، تصفّح الأنشطة المتاحة في صقر واجمع طلبك في سلة واحدة."
+          cta="استكشف الأنشطة"
+          href="/explore"
+          image="/images/categories.webp"
+          alt="أيقونات أنشطة: مطاعم وسوبر ماركت وعطارة وصيدليات"
+          width={660}
+          height={896}
+        />
+      </Reveal>
+
+      <Reveal>
         <FeatureBand
           id="merchant-title"
           tag="التاجر"
@@ -100,6 +133,7 @@ export function LandingSections() {
           href="/register"
           image="/images/merchant.webp"
           alt="واجهة محل بشعار صقر وأمامه شاشة لوحة تحكم"
+          flip
           width={700}
           height={896}
           note="صورة توضيحية"
@@ -124,18 +158,21 @@ export function LandingSections() {
       </Reveal>
 
       <Reveal>
-      <section className="flex flex-col gap-4" aria-labelledby="steps-title">
-        <SectionTitle><span id="steps-title">كيف تطلب من صقر؟</span></SectionTitle>
-        <ol className="grid gap-4 md:grid-cols-3">
-          {STEPS.map((st) => (
-            <li key={st.n} className="relative flex flex-col gap-2 rounded-card border border-line bg-surface p-5 pt-9 shadow-card">
-              <span className="absolute -top-5 start-5 flex size-11 items-center justify-center rounded-full bg-brand text-xl font-bold text-white shadow-pop">{st.n}</span>
-              <h3 className="font-bold">{st.title}</h3>
-              <p className="text-sm text-ink-muted">{st.text}</p>
-            </li>
-          ))}
-        </ol>
-      </section>
+        <FeatureBand
+          id="screens-title"
+          tag="تجربة الاستخدام"
+          title="تصفّح أسهل"
+          accent="وطلب أسرع"
+          text="واجهة مصممة للموبايل: تصفّح الأنشطة، أضف إلى سلتك، وتابع طلبك."
+          cta="جرّب الآن"
+          href="/explore"
+          image="/images/screens.webp"
+          alt="تصوّر توضيحي لشاشات موقع صقر على الهاتف"
+          flip
+          width={660}
+          height={896}
+          note="تصوّر توضيحي للتصميم وليس لقطات شاشة فعلية"
+        />
       </Reveal>
 
       <Reveal>
@@ -149,40 +186,6 @@ export function LandingSections() {
           <span className="relative flex size-12 shrink-0 items-center justify-center rounded-full bg-white/15"><Icon name="sun" className="size-6" /></span>
         </Link>
       </section>
-      </Reveal>
-
-      <Reveal>
-        <FeatureBand
-          id="delivery-title"
-          tag="التوصيل"
-          title="طلبك يوصلك"
-          accent="مع سائق صقر"
-          text="يوصّل سائق صقر طلبك إلى عنوانك، وتتابع حالته خطوة بخطوة داخل حسابك."
-          cta="تتبّع طلباتك"
-          href="/account/orders"
-          image="/images/delivery.webp"
-          alt="صندوق توصيل بشعار صقر وحقيبة سائق وسيارة ودراجات"
-          width={640}
-          height={896}
-          note="صورة توضيحية"
-        />
-      </Reveal>
-
-      <Reveal>
-        <FeatureBand
-          id="screens-title"
-          tag="تجربة الاستخدام"
-          title="تصفّح أسهل"
-          accent="وطلب أسرع"
-          text="واجهة مصممة للموبايل: تصفّح الأنشطة، أضف إلى سلتك، وتابع طلبك."
-          cta="جرّب الآن"
-          href="/explore"
-          image="/images/screens.webp"
-          alt="تصوّر توضيحي لشاشات موقع صقر على الهاتف"
-          width={660}
-          height={896}
-          note="تصوّر توضيحي للتصميم وليس لقطات شاشة فعلية"
-        />
       </Reveal>
 
       <Reveal>
@@ -200,6 +203,41 @@ export function LandingSections() {
           ))}
         </div>
       </section>
+      </Reveal>
+
+      <Reveal>
+        <section aria-labelledby="join-title" className="flex flex-col gap-5">
+          <div className="text-center">
+            <h2 id="join-title" className="text-2xl font-bold sm:text-3xl">جاهز تجرب صقر؟</h2>
+            <p className="text-ink-muted">اختر أنت مين في المنظومة</p>
+          </div>
+          <ul className="grid gap-3 md:grid-cols-3">
+            <li>
+              <Link href="/explore" className="flex h-full flex-col gap-2 rounded-card bg-success p-6 text-white shadow-card transition-transform hover:-translate-y-0.5">
+                <span className="text-xs font-bold text-white/80">للعميل</span>
+                <span className="text-2xl font-bold">اطلب الآن</span>
+                <span className="text-sm text-white/90">تصفّح الأنشطة وأضف طلبك إلى السلة.</span>
+                <span className="mt-auto pt-3 text-sm font-bold">ابدأ التسوق ←</span>
+              </Link>
+            </li>
+            <li>
+              <Link href="/register" className="flex h-full flex-col gap-2 rounded-card bg-navy-900 p-6 text-white shadow-card transition-transform hover:-translate-y-0.5">
+                <span className="text-xs font-bold text-emerald-300">للتاجر</span>
+                <span className="text-2xl font-bold">سجّل نشاطك</span>
+                <span className="text-sm text-silver">افتح متجرك على صقر واستقبل طلباتك.</span>
+                <span className="mt-auto pt-3 text-sm font-bold text-emerald-300">ابدأ التسجيل ←</span>
+              </Link>
+            </li>
+            <li>
+              <Link href="/register" className="flex h-full flex-col gap-2 rounded-card border border-line bg-surface p-6 shadow-card transition-transform hover:-translate-y-0.5">
+                <span className="text-xs font-bold text-success">للسائق</span>
+                <span className="text-2xl font-bold text-navy-900">انضم إلى صقر</span>
+                <span className="text-sm text-ink-muted">وصّل الطلبات القريبة منك.</span>
+                <span className="mt-auto pt-3 text-sm font-bold text-success">قدّم كسائق ←</span>
+              </Link>
+            </li>
+          </ul>
+        </section>
       </Reveal>
     </>
   );

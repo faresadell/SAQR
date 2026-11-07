@@ -18,15 +18,15 @@ async function main(): Promise<void> {
   try {
     const passwordHash = await hashPassword(password);
     const past = new Date(Date.now() - 86_400_000);
-    const upsertUser = (phone: string, name: string, role: "CUSTOMER" | "MERCHANT" | "DRIVER") =>
+    const upsertUser = (phone: string, email: string, name: string, role: "CUSTOMER" | "MERCHANT" | "DRIVER") =>
       db.user.upsert({
         where: { phone },
-        create: { phone, name, role, status: "ACTIVE", passwordHash, phoneVerifiedAt: new Date() },
-        update: { passwordHash, status: "ACTIVE", failedLoginCount: 0, lockedUntil: null },
+        create: { phone, email, name, role, status: "ACTIVE", passwordHash, phoneVerifiedAt: new Date(), emailVerifiedAt: new Date() },
+        update: { passwordHash, email, emailVerifiedAt: new Date(), status: "ACTIVE", failedLoginCount: 0, lockedUntil: null },
       });
-    const customer = await upsertUser(PHONES.customer, "عميل تجريبي", "CUSTOMER");
-    const merchantUser = await upsertUser(PHONES.merchant, "تاجر تجريبي", "MERCHANT");
-    const driverUser = await upsertUser(PHONES.driver, "سائق تجريبي", "DRIVER");
+    const customer = await upsertUser(PHONES.customer, "customer@demo.saqr.example", "عميل تجريبي", "CUSTOMER");
+    const merchantUser = await upsertUser(PHONES.merchant, "merchant@demo.saqr.example", "تاجر تجريبي", "MERCHANT");
+    const driverUser = await upsertUser(PHONES.driver, "driver@demo.saqr.example", "سائق تجريبي", "DRIVER");
 
     // A delivery zone and the merchant response window, only when the admin has not set any yet.
     let zone = await db.deliveryZone.findFirst();

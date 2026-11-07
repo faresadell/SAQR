@@ -62,14 +62,10 @@ export async function signUp(page: Page, role: "CUSTOMER" | "MERCHANT" | "DRIVER
   await page.getByRole("button", { name: "تأكيد" }).click();
 }
 
-export async function login(page: Page, phone: string, password: string, totp?: string): Promise<void> {
+export async function login(page: Page, identifier: string, password: string): Promise<void> {
   await page.goto("/login");
-  await page.locator("input[name=phone]").fill(phone);
+  await page.locator("input[name=identifier]").fill(identifier);
   await page.locator("input[name=password]").fill(password);
-  if (totp) {
-    await page.getByText("دخول المشرفين").click();
-    await page.locator("input[name=totp]").fill(totp);
-  }
   await page.getByRole("button", { name: "دخول" }).click();
 }
 

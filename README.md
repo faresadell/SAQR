@@ -53,9 +53,9 @@ npm run db:seed        # يضيف أنواع النشاط (مطعم، متجر) 
 ### إنشاء المشرف الرئيسي
 
 ```bash
-ADMIN_PASSWORD='كلمة-سر-طويلة-12-حرف-على-الأقل' npm run admin:create -- --phone 01012345678 --name "اسمك"
+ADMIN_PASSWORD='كلمة-سر-طويلة-12-حرف-على-الأقل' npm run admin:create -- --email you@example.com --phone 01012345678 --name "اسمك"
 ```
-سيطبع رابط مصادقة (otpauth) مرة واحدة: أضفه فوراً لتطبيق Google Authenticator. الدخول للمشرف يحتاج رقم الموبايل + كلمة المرور + رمز التطبيق.
+الدخول للمشرف بالإيميل وكلمة المرور (بدون رمز مصادقة).
 
 أوامر الفحص: `npm run typecheck` · `npm run lint` · `npm test` · `npm run test:integration` · `npm run db:validate` · `npm run audit`
 

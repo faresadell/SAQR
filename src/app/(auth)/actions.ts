@@ -117,22 +117,23 @@ export async function resendCodeAction(_prev: FormState, _formData: FormData): P
 // ───────────── Login / logout ─────────────
 
 const loginSchema = z.object({
-  phone: z.string().max(30),
+  identifier: z.string().max(200),
   password: z.string().min(1, "اكتب كلمة المرور.").max(200),
-  totp: z.string().max(10).optional(),
-  recoveryCode: z.string().max(20).optional(), // administrators who lost their authenticator
 });
 
 export async function loginAction(_prev: FormState, formData: FormData): Promise<FormState> {
   const parsed = loginSchema.safeParse(Object.fromEntries(formData));
-  if (!parsed.success) return { error: "اكتب رقم الهاتف وكلمة المرور." };
+  if (!parsed.success) return { error: "اكتب الإيميل وكلمة المرور." };
 
-  const phone = normalizeEgyptPhone(parsed.data.phone);
+  // The normal way in is the email. A phone number still works for accounts that have no email (e.g. drivers added by a shop).
+  const raw = parsed.data.identifier.trim();
+  const email = raw.includes("@") ? normalizeEmail(raw) : null;
+  const phone = raw.includes("@") ? null : normalizeEgyptPhone(raw);
   const ip = await getClientIp();
-  const invalid: FormState = { error: "رقم الهاتف أو كلمة المرور غير صحيحة." };
-  if (!phone) return invalid;
+  const invalid: FormState = { error: "الإيميل أو كلمة المرور غير صحيحة." };
+  if (!email && !phone) return invalid;
 
-  const result = await authenticate({ phone, password: parsed.data.password, totp: parsed.data.totp || undefined, recoveryCode: parsed.data.recoveryCode || undefined }, ip);
+  const result = await authenticate({ ...(email ? { email } : { phone: phone! }), password: parsed.data.password }, ip);
   if (!result.ok) {
     switch (result.error) {
       case "RATE_LIMITED":
@@ -140,7 +141,7 @@ export async function loginAction(_prev: FormState, formData: FormData): Promise
       case "SUSPENDED":
         return { error: "هذا الحساب موقوف. تواصل مع الدعم." };
       case "NEEDS_VERIFICATION":
-        await setPendingPhone(phone);
+        await setPendingPhone(result.phone);
         redirect("/verify");
       default:
         return invalid;

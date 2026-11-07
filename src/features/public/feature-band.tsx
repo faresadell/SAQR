@@ -16,10 +16,12 @@ type Props = {
   width: number;
   height: number;
   note?: string;
+  /** Put the picture on the reading-start side instead of the end side (alternates the rhythm down the page). */
+  flip?: boolean;
 };
 
 /** Navy storytelling band: live text on one side, a brand illustration on the other. On phones the picture sits on top and fades into the text. */
-export function FeatureBand({ id, tag, title, accent, text, bullets, cta, href, image, alt, width, height, note }: Props) {
+export function FeatureBand({ id, tag, title, accent, text, bullets, cta, href, image, alt, width, height, note, flip }: Props) {
   return (
     <section aria-labelledby={id} className="overflow-hidden rounded-sheet bg-navy-900 text-white shadow-pop">
       <div className="grid items-center md:grid-cols-2">
@@ -44,14 +46,14 @@ export function FeatureBand({ id, tag, title, accent, text, bullets, cta, href, 
           </LinkButton>
           {note ? <p className="text-xs text-silver/70">{note}</p> : null}
         </div>
-        <div className="order-first overflow-hidden md:order-none">
+        <div className={flip ? "order-first overflow-hidden" : "order-first overflow-hidden md:order-none"}>
           <Image
             src={image}
             alt={alt}
             width={width}
             height={height}
             sizes="(min-width: 768px) 40vw, 100vw"
-            className="aspect-[4/3] w-full object-cover [mask-image:linear-gradient(to_bottom,black_72%,transparent)] md:aspect-auto md:h-full md:max-h-[28rem] md:[mask-image:linear-gradient(to_left,black_78%,transparent)]"
+            className={"aspect-[4/3] w-full object-cover [mask-image:linear-gradient(to_bottom,black_72%,transparent)] md:aspect-auto md:h-full md:max-h-[28rem] " + (flip ? "md:[mask-image:linear-gradient(to_right,black_78%,transparent)]" : "md:[mask-image:linear-gradient(to_left,black_78%,transparent)]")}
           />
         </div>
       </div>

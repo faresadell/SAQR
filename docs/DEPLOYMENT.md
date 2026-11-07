@@ -19,7 +19,7 @@
 `POST /api/internal/jobs/{daily-stars | monthly-rewards | plan-reminders | refund-overdue | membership-maintenance | settlements}` — or just `POST /api/internal/jobs/all` (runs every job once; a failing job does not stop the others; all are idempotent). Schedule that ONE call hourly with your host's scheduler (or any cron service) sending the `Authorization` header. Daily is enough; `settlements` and `monthly-rewards` act only on the Cairo month boundary.
 
 ## First-run admin tasks
-1. Create the main administrator and enrol TOTP.
+1. Create the main administrator (email + password).
 2. Admin → payment methods: set the Vodafone Cash / InstaPay receiver numbers (until set, the method refuses payment requests).
 3. Admin → zones: create delivery zones and fees. Review plans, membership plans, commissions and settings.
 
@@ -28,8 +28,7 @@
 2. R2: set the variables, upload a product image and a payment receipt, confirm they open through the app and that the bucket URL itself is NOT publicly readable. The R2 adapter is unit-tested against the AWS signature test vector but has NOT been run against a real bucket.
 
 ## Administrator recovery
-- Each administrator creates 10 single-use backup codes (`POST /api/v1/admin/recovery-codes`) and stores them offline. A code replaces the authenticator code at login, once.
-- If codes are lost too: the SYSTEM OWNER (someone with database + `DATA_ENCRYPTION_KEY` access, verified out-of-band by the main administrator) runs `npm run admin:reset-totp -- --phone 01XXXXXXXXX --reason "..." --confirm-phone 01XXXXXXXXX`. It revokes all sessions, voids old codes, issues a new authenticator secret (printed once) and writes an audit entry. Email alone can never bypass the authenticator.
+- Administrators sign in with email + password only. The owner decided to drop the authenticator (TOTP) step on 2026-11-06; this is weaker than two-factor, so use a long unique admin password and keep that email account protected.
 
 ## Money rules that need the owner
 - Automatic payment (stars, plans) is NOT available until a payment gateway is contracted: see docs/PAYMENT-GATEWAYS.md. Manual transfer with proof and admin review stays. Enter the receiving number from the admin panel (never in code or GitHub).
@@ -46,6 +45,6 @@
 - Set every variable from the table above in Vercel > Project > Settings > Environment Variables (Production), then **redeploy** (variables apply only to new deployments).
 - The `vercel-build` script does the database work for you on every PRODUCTION deploy: `prisma migrate deploy` (creates/updates the tables) then the idempotent seed (commission rates, payment methods, plans, business types; receiving numbers from `VODAFONE_CASH_RECEIVER` / `INSTAPAY_RECEIVER` if set), then `next build`. The app uses `DATABASE_URL` at runtime; the migration step uses `DATABASE_URL_UNPOOLED` when present (Vercel's Neon integration sets both), otherwise `DATABASE_URL`. Preview deployments of other branches skip this step. If `DATABASE_URL` is not set the step is skipped with a warning (the site still builds and `/api/health` reports the problem); if it IS set and the migration fails, the build fails on purpose so a broken database is never deployed.
 - **Trial before you own a domain:** set `PREVIEW_MODE=true` and `APP_URL=https://<your-app>.vercel.app`. Sign-up codes are then printed in Vercel > Logs (search "DEV ONLY") instead of emailed, and the robot check may stay off. The app REFUSES `PREVIEW_MODE` on any address that is not `*.vercel.app`, so it can never run on the real domain. Remove `PREVIEW_MODE` when you switch to the real domain and Resend. Uploads (pictures, receipts) need R2 even in the trial: Vercel has no persistent disk. R2 and Turnstile work on the `vercel.app` address too.
-- The main admin can be created from a phone: set `SETUP_TOKEN` (32+ random characters), redeploy, open `/setup` (it shows the authenticator key once; a 404 when the token is unset or an admin exists), then remove `SETUP_TOKEN`. Or by one command from your computer (it prints the authenticator key once, so it must never run inside a build log): `ADMIN_PASSWORD='…' npm run admin:create -- --phone 01XXXXXXXXX --name "…"` with the production `DATABASE_URL` and `DATA_ENCRYPTION_KEY`.
+- The main admin can be created from a phone: set `SETUP_TOKEN` (32+ random characters), redeploy, open `/setup` (email, phone, name, password; a 404 when the token is unset or an admin exists), then remove `SETUP_TOKEN`. Or by one command from your computer `ADMIN_PASSWORD='…' npm run admin:create -- --email you@example.com --phone 01XXXXXXXXX --name "…"` with the production `DATABASE_URL`.
 - Check the deployment: open `https://<your-app>/api/health`. `{"ok":true}` = configured. `{"ok":false,"problem":"ENV"}` = a variable is missing or invalid (the exact names are in Vercel > Logs, search "health:"). `"DATABASE"` = cannot connect (wrong URL, or the provider blocks Vercel). `"MIGRATIONS"` = connected but the tables do not exist yet (run `migrate deploy`).
 - The generic "حدث خطأ غير متوقع" page means a server error; the real message is in Vercel > Logs.

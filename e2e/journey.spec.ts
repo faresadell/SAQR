@@ -1,6 +1,5 @@
 import { expect, test, type Browser, type BrowserContext, type Page } from "@playwright/test";
-import { totpAt } from "../src/lib/auth/totp";
-import { E2E_ACCOUNTS, E2E_ADMIN_PW, E2E_TOTP_SECRET, type E2eProject } from "./accounts";
+import { E2E_ACCOUNTS, E2E_ADMIN_PW, type E2eProject } from "./accounts";
 import { expectNoHorizontalScroll, login, signUp, skipIntro, TINY_PNG, uniqueDigits, watchErrors } from "./helpers";
 
 /** A separate signed-in browser session (one per person), with the same screen size as the project under test. */
@@ -47,7 +46,7 @@ test("a full order: stars bought, order placed and paid, shop accepts and prepar
   await requestPackage(shop.page, "/merchant/packages", `M-${tag}`);
 
   // The admin approves both transfers.
-  await login(admin.page, acc.adminPhone.replace("+20", "0"), E2E_ADMIN_PW, totpAt(E2E_TOTP_SECRET, Math.floor(Date.now() / 1000 / 30) + 1));
+  await login(admin.page, acc.adminPhone.replace("+20", "0"), E2E_ADMIN_PW);
   await expect(admin.page).toHaveURL(/\/admin/);
   await admin.page.goto("/admin/payments");
   for (let i = 0; i < 2; i += 1) {
