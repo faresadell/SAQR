@@ -27,7 +27,7 @@ const schema = z
     TURNSTILE_SECRET_KEY: z.preprocess((v) => (v === "" ? undefined : v), z.string().min(8).optional()),
     TURNSTILE_SITE_KEY: z.preprocess((v) => (v === "" ? undefined : v), z.string().min(8).optional()),
     // Private object storage for receipts and product images.
-    STORAGE_PROVIDER: z.enum(["local", "r2"]).default("local"),
+    STORAGE_PROVIDER: z.enum(["local", "r2", "database"]).default("local"),
     R2_ACCOUNT_ID: z.preprocess((v) => (v === "" ? undefined : v), z.string().regex(/^[a-f0-9]{32}$/).optional()),
     R2_BUCKET: z.preprocess((v) => (v === "" ? undefined : v), z.string().regex(/^[a-z0-9][a-z0-9-]{2,62}$/).optional()),
     R2_ACCESS_KEY_ID: z.preprocess((v) => (v === "" ? undefined : v), z.string().min(8).optional()),
