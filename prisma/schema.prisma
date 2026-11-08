@@ -1030,3 +1030,10 @@ model UserAvatar {
   updatedAt DateTime @updatedAt
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
+
+/// A private uploaded file (product picture, payment receipt) when STORAGE_PROVIDER=database. Never served from a public path: only our own checked routes read it.
+model StoredFile {
+  key       String   @id
+  bytes     Bytes
+  createdAt DateTime @default(now())
+}

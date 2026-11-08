@@ -3,6 +3,7 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { getEnv } from "@/lib/env";
 import { STORAGE_KEY_PATTERN } from "@/lib/uploads/image-sniff";
+import { DatabaseStorage } from "./database-storage";
 import { R2Storage } from "./r2-storage";
 
 /** Private object storage. Swap the implementation (S3/R2/MinIO) without touching callers. Never served from a public path. */
@@ -44,6 +45,8 @@ export function getStorage(): PrivateStorage {
   if (process.env.STORAGE_PROVIDER === "r2") {
     const env = getEnv(); // validated: env.ts requires all four R2 values when STORAGE_PROVIDER=r2
     instance = new R2Storage({ accountId: env.R2_ACCOUNT_ID!, bucket: env.R2_BUCKET!, accessKeyId: env.R2_ACCESS_KEY_ID!, secretAccessKey: env.R2_SECRET_ACCESS_KEY! });
+  } else if (process.env.STORAGE_PROVIDER === "database") {
+    instance = new DatabaseStorage();
   } else {
     instance = new LocalDiskStorage(process.env.UPLOAD_DIR ?? path.join(process.cwd(), ".data", "uploads"));
   }
