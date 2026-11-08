@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { Card } from "@/components/ui/card";
 import { PageHeader } from "@/components/ui/page-header";
+import { ProductImageUploader } from "@/features/catalog/product-image-uploader";
 import { requireRole } from "@/server/auth/guards";
 import { listOwnProducts, listUsableCategories } from "@/server/catalog/products";
 import { ProductForm } from "../../product-forms";
@@ -24,6 +25,11 @@ export default async function EditProductPage({ params }: { params: Promise<{ id
           categories={categories}
           defaults={{ id: product.id, name: product.nameAr, description: product.description ?? "", price: (product.priceCents / 100).toFixed(2), categoryId: product.categoryId, isAvailable: product.isAvailable }}
         />
+      </Card>
+      <Card className="flex max-w-2xl flex-col gap-3">
+        <h2 className="text-lg font-bold">صورة المنتج</h2>
+        <p className="text-sm text-ink-muted">JPG أو PNG أو WebP، حتى 5 ميجابايت. تظهر للعملاء أثناء كون المنتج متاحاً.</p>
+        <ProductImageUploader productId={product.id} hasImage={product.imageKey !== null} />
       </Card>
     </>
   );
