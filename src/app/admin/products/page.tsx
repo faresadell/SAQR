@@ -8,7 +8,7 @@ import { requirePermission } from "@/server/auth/guards";
 import { listProductsForAdmin, listShopOptions } from "@/server/catalog/admin-products";
 import { listUsableCategories } from "@/server/catalog/products";
 import { AdminCreateProductForm, AdminProductRow } from "./product-forms";
-import { ProductImageUploader } from "./product-image-uploader";
+import { ProductImageUploader } from "@/features/catalog/product-image-uploader";
 
 export const metadata: Metadata = { title: "منتجات الأنشطة" };
 

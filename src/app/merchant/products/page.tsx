@@ -38,7 +38,7 @@ export default async function MerchantProductsPage() {
           {products.map((p) => (
             <li key={p.id}>
               <Card className="flex gap-3 p-3">
-                <SafeImage alt="" src={null} fallbackIcon="box" className="size-20 shrink-0 rounded-control" />
+                <SafeImage alt="" src={p.imageKey ? `/api/v1/products/${p.id}/image` : null} fallbackIcon="box" className="size-20 shrink-0 rounded-control" />
                 <div className="flex min-w-0 flex-1 flex-col gap-2">
                   <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0">
