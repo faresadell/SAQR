@@ -48,14 +48,18 @@ export function ProfileForm({ defaults, businessTypes, canEdit }: { defaults: Pr
           {DISPLAY_ORDER.map((day) => {
             const interval = defaults.hours[day][0];
             return (
-              <div key={day} className="grid grid-cols-[5rem_1fr_1fr_auto] items-end gap-2">
-                <span className="pb-3 text-sm">{DAY_LABELS_AR[day]}</span>
-                <Field label="من" name={`h:${day}:open`} type="time" dir="ltr" defaultValue={interval?.open ?? "09:00"} />
-                <Field label="إلى" name={`h:${day}:close`} type="time" dir="ltr" defaultValue={interval?.close === "24:00" ? "23:59" : (interval?.close ?? "22:00")} />
-                <label className="flex items-center gap-1 pb-3 text-sm">
-                  <input type="checkbox" name={`h:${day}:closed`} defaultChecked={defaults.hours[day].length === 0} />
-                  مغلق
-                </label>
+              <div key={day} className="flex flex-col gap-2 rounded-control border border-line p-3">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="font-bold">{DAY_LABELS_AR[day]}</span>
+                  <label className="flex items-center gap-2 text-sm">
+                    <input type="checkbox" name={`h:${day}:closed`} defaultChecked={defaults.hours[day].length === 0} className="size-4" />
+                    مغلق هذا اليوم
+                  </label>
+                </div>
+                <div className="grid grid-cols-2 gap-2 [&_input]:min-w-0">
+                  <Field label="من" name={`h:${day}:open`} type="time" dir="ltr" defaultValue={interval?.open ?? "09:00"} />
+                  <Field label="إلى" name={`h:${day}:close`} type="time" dir="ltr" defaultValue={interval?.close === "24:00" ? "23:59" : (interval?.close ?? "22:00")} />
+                </div>
               </div>
             );
           })}
