@@ -162,9 +162,9 @@ export default async function AdminSettingsPage({ searchParams }: { searchParams
                 {m.isEnabled && !m.receiverNumber ? <Badge tone="warning">بدون رقم استلام: لن تُقبل طلبات الدفع</Badge> : null}
               </div>
               {canEdit ? (
-                <form action={setPaymentReceiverAction} className="flex items-center gap-2">
+                <form action={setPaymentReceiverAction} className="flex flex-wrap items-center gap-2">
                   <input type="hidden" name="code" value={m.code} />
-                  <input name="receiver" defaultValue={m.receiverNumber ?? ""} inputMode="tel" dir="ltr" placeholder="رقم الاستلام" aria-label={`رقم استلام ${m.nameAr}`} className="w-44 rounded-control border border-line px-3 py-2 text-sm" />
+                  <input name="receiver" defaultValue={m.receiverNumber ?? ""} inputMode="tel" dir="ltr" placeholder="رقم الاستلام" aria-label={`رقم استلام ${m.nameAr}`} className="w-full max-w-44 rounded-control border border-line px-3 py-2 text-sm" />
                   <Button type="submit" size="sm" variant="secondary">حفظ الرقم</Button>
                 </form>
               ) : m.receiverNumber ? <span dir="ltr" className="text-sm">{m.receiverNumber}</span> : null}

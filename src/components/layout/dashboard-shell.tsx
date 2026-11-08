@@ -93,7 +93,7 @@ export function DashboardShell({ areaLabel, groups, mobileItems, user, logoutAct
   const rootHref = groups[0]?.items[0]?.href ?? "/";
 
   return (
-    <div className="min-h-dvh bg-canvas lg:ps-64">
+    <div className="min-h-dvh overflow-x-clip bg-canvas lg:ps-64">
       <a href="#main" className="sr-only focus:not-sr-only focus:fixed focus:start-3 focus:top-3 focus:z-50 focus:rounded-control focus:bg-white focus:px-4 focus:py-2 focus:font-semibold">
         تخطي إلى المحتوى
       </a>
@@ -138,7 +138,7 @@ export function DashboardShell({ areaLabel, groups, mobileItems, user, logoutAct
 
       {ribbon ? <p className="bg-warning-soft px-4 py-2 text-center text-sm font-semibold text-warning-ink">{ribbon}</p> : null}
 
-      <main id="main" className="mx-auto flex w-full max-w-page flex-col gap-6 px-4 pb-28 pt-5 sm:px-6 lg:pb-10 lg:pt-8">
+      <main id="main" className="mx-auto flex w-full min-w-0 max-w-page flex-col gap-6 [&>*]:min-w-0 px-4 pb-28 pt-5 sm:px-6 lg:pb-10 lg:pt-8">
         {logoutAction ? <AutoRefresh /> : null}
         {children}
       </main>
