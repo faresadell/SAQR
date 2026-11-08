@@ -42,7 +42,7 @@ export default async function UsersPage({ searchParams }: { searchParams: Promis
       {notice && notices[notice] ? <p role="status" className="rounded-control bg-brand-soft p-3 text-sm font-medium">{notices[notice]}</p> : null}
 
       <form className="flex gap-2">
-        <input name="q" defaultValue={q ?? ""} placeholder="ابحث بالاسم أو رقم الموبايل" className="h-11 flex-1 rounded-control border border-line bg-surface px-3" />
+        <input name="q" defaultValue={q ?? ""} placeholder="ابحث بالاسم أو رقم الموبايل" className="h-11 min-w-0 flex-1 rounded-control border border-line bg-surface px-3" />
         <Button type="submit" variant="secondary">بحث</Button>
       </form>
 

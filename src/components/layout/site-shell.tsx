@@ -22,7 +22,7 @@ export async function SiteShell({ children }: { children: ReactNode }) {
 /** Public storefront frame: header (logo, search, cart, account), footer, and a bottom tab bar on phones. Pure: no data access. */
 export function SiteFrame({ children, accountHref, ordersHref = "/login", signedIn, ribbon }: { children: ReactNode; accountHref: string; ordersHref?: string; signedIn: boolean; ribbon?: string }) {
   return (
-    <div className="flex min-h-dvh flex-col bg-background">
+    <div className="flex min-h-dvh flex-col overflow-x-clip bg-background">
       <a href="#main" className="sr-only focus:not-sr-only focus:fixed focus:start-3 focus:top-3 focus:z-50 focus:rounded-control focus:bg-white focus:px-4 focus:py-2 focus:font-semibold">
         تخطي إلى المحتوى
       </a>
