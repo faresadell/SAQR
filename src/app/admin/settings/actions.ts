@@ -9,18 +9,12 @@ import { parseEffectiveFrom } from "@/lib/effective";
 import type { FormState } from "@/lib/form-state";
 import { parseEgp, MoneyError } from "@/lib/money";
 import { toLatinDigits } from "@/lib/auth/phone";
-import { getSettingAt } from "@/lib/settings";
-import {
-  SETTING_DEFINITIONS,
-  parseSettingInput,
-  settingKeysInGroup,
-  type IntSettingDefinition,
-} from "@/lib/settings-registry";
+import { SETTING_DEFINITIONS, parseSettingInput, settingKeysInGroup, type IntSettingDefinition } from "@/lib/settings-registry";
 import { requirePermission } from "@/server/auth/guards";
 import { scheduleCommissionRate } from "@/server/commissions/service";
 import { createZone, scheduleZoneFee, setZoneActive } from "@/server/delivery/zones";
-import { setPaymentMethodEnabled, setPaymentReceiver } from "@/server/payments/methods";
-import { changeSetting } from "@/server/settings/service";
+import { setPaymentMethodEnabled } from "@/server/payments/methods";
+import { changeSetting, isChangeNeeded } from "@/server/settings/service";
 import { AuthorizationError, NotFoundError } from "@/server/errors";
 
 const GENERIC = "حدث خطأ غير متوقع. حاول مرة أخرى.";
@@ -52,7 +46,7 @@ function toFailure(error: unknown): FormState {
 export async function saveSettingsAction(_prev: FormState, formData: FormData): Promise<FormState> {
   const { user } = await requirePermission("settings.manage");
   try {
-    const group = z.enum(["orders", "security", "offers", "contest"]).safeParse(formData.get("group"));
+    const group = z.enum(["orders", "security"]).safeParse(formData.get("group"));
     if (!group.success) return { error: GENERIC };
 
     const when = readEffectiveFrom(formData);
@@ -69,12 +63,11 @@ export async function saveSettingsAction(_prev: FormState, formData: FormData): 
       const raw = toLatinDigits(String(formData.get(`s:${key}`) ?? "")).trim();
       const parsed = parseSettingInput(key, raw);
       if (!parsed.ok) {
-        // Widen from the literal `as const` types so min/max can be compared.
         const def: IntSettingDefinition = SETTING_DEFINITIONS[key];
         fieldErrors[key] = def.min === def.max ? "قيمة غير صالحة." : `القيمة يجب أن تكون رقماً بين ${def.min} و${def.max}.`;
         continue;
       }
-      if (parsed.value !== (await getSettingAt(key, now))) changes.push({ key, raw });
+      if (await isChangeNeeded(key, parsed.value, dateCheck.date)) changes.push({ key, raw });
     }
     if (Object.keys(fieldErrors).length > 0) return { fieldErrors };
     if (changes.length === 0) return { message: "لا توجد تغييرات للحفظ." };
@@ -128,24 +121,6 @@ export async function togglePaymentMethodAction(formData: FormData): Promise<voi
   let notice = "done";
   try {
     await setPaymentMethodEnabled(user, parsed.data.code, parsed.data.enabled === "true");
-  } catch (error) {
-    if (error instanceof AuthorizationError) notice = "forbidden";
-    else if (error instanceof NotFoundError) notice = "missing";
-    else throw error;
-  }
-  revalidatePath("/admin/settings");
-  redirect(`/admin/settings?notice=${notice}#payments`);
-}
-
-export async function setPaymentReceiverAction(formData: FormData): Promise<void> {
-  const { user } = await requirePermission("settings.manage");
-  const parsed = z.object({ code: z.string().min(1).max(40), receiver: z.string().max(40) }).safeParse(Object.fromEntries(formData));
-  if (!parsed.success) redirect("/admin/settings?notice=invalid");
-  let notice = "done";
-  try {
-    const raw = toLatinDigits(parsed.data.receiver).trim();
-    const result = await setPaymentReceiver(user, parsed.data.code, raw === "" ? null : raw);
-    if (!result.ok) notice = "invalid";
   } catch (error) {
     if (error instanceof AuthorizationError) notice = "forbidden";
     else if (error instanceof NotFoundError) notice = "missing";
