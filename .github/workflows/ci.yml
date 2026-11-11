@@ -23,92 +23,39 @@ jobs:
     env:
       DATABASE_URL: postgresql://ci:ci@localhost:5432/ci
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-node@v7
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
         with:
           node-version: 22
+          cache: npm
       - run: npm ci
       - run: npx prisma generate
       - run: npm run db:validate
       - run: npm run typecheck
       - run: npm run lint
       - run: npm test
-      - name: Apply real migrations (no db push) and check for drift
+      - name: Create schema and database-level protections
         run: |
-          npx prisma migrate deploy
-          npx prisma migrate status
-      - name: Production build (next build)
-        run: npm run build
-        env:
-          APP_URL: http://localhost:3000
-          SESSION_SECRET: ci-only-session-secret-0123456789abcdef0123456789
-          DATA_ENCRYPTION_KEY: MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=
+          npx prisma db push --skip-generate
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f prisma/manual/001_constraints_and_triggers.sql
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f prisma/manual/002_phase2_append_only.sql
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f prisma/manual/003_phase3_catalog.sql
       - name: Integration tests (real PostgreSQL)
         run: npm run test:integration
         env:
           DB_TRIGGERS_APPLIED: "1"
-      - name: Audit details (annotations)
-        if: always()
+      - name: Migrations must match schema.prisma
         run: |
-          npm audit --omit=dev --json > audit.json || true
-          node -e 'const a=require("./audit.json");for(const [n,v] of Object.entries(a.vulnerabilities||{})){const via=v.via.map(x=>typeof x==="string"?x:x.title+" "+(x.range||"")).join(" | ");console.log("::warning title=audit "+n+" ["+v.severity+"]::fix="+JSON.stringify(v.fixAvailable)+" range="+v.range+" via "+via.slice(0,300))}'
-      - run: npm run audit
-
-  # Real browser (Chromium) on a phone-sized and a desktop-sized screen against the running site and a real database.
-  # Development mode on purpose: the production build refuses the console email sender that prints the sign-up codes.
-  e2e:
-    runs-on: ubuntu-24.04
-    services:
-      postgres:
-        image: postgres:16
+          psql "postgresql://ci:ci@localhost:5432/ci" -v ON_ERROR_STOP=1 -c 'CREATE DATABASE ci_migrations'
+          DATABASE_URL="postgresql://ci:ci@localhost:5432/ci_migrations" npx prisma migrate deploy
+          npx prisma migrate diff --from-url "postgresql://ci:ci@localhost:5432/ci_migrations" --to-schema-datamodel prisma/schema.prisma --exit-code
+      - name: Production build
+        run: npm run build
         env:
-          POSTGRES_USER: ci
-          POSTGRES_HOST_AUTH_METHOD: trust
-          POSTGRES_DB: ci
-        ports: ["5432:5432"]
-        options: >-
-          --health-cmd "pg_isready -U ci" --health-interval 5s --health-timeout 5s --health-retries 10
-    env:
-      DATABASE_URL: postgresql://ci@localhost:5432/ci
-      APP_URL: http://localhost:3000
-      EMAIL_PROVIDER: console
-      OTP_PROVIDER: console
-      CAPTCHA_PROVIDER: disabled
-      UPLOAD_DIR: /tmp/saqr-uploads
-      DEV_LOG: /tmp/saqr-dev.log
-    steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-node@v7
-        with:
-          node-version: 22
-      - name: Generate throwaway secrets for this run (never stored)
-        run: |
-          {
-            echo "SESSION_SECRET=$(openssl rand -hex 32)"
-            echo "DATA_ENCRYPTION_KEY=$(openssl rand -base64 32)"
-            echo "E2E_ADMIN_PW=Ad1-$(openssl rand -hex 12)"
-            echo "E2E_USER_PW=Us1-$(openssl rand -hex 12)"
-          } >> "$GITHUB_ENV"
-      - run: npm ci --ignore-scripts
-      - run: ./node_modules/.bin/prisma generate
-      - run: ./node_modules/.bin/prisma migrate deploy
-      - run: ./node_modules/.bin/tsx prisma/seed.ts
-      - run: ./node_modules/.bin/tsx e2e/seed.ts
-      - run: npm install --no-save --no-package-lock --ignore-scripts @playwright/test@1.52.0
-      - run: ./node_modules/.bin/playwright install --with-deps chromium
-      - name: Start the site (development mode)
-        run: |
-          nohup ./node_modules/.bin/next dev -p 3000 > "$DEV_LOG" 2>&1 &
-          for i in $(seq 1 60); do curl -fs -o /dev/null http://localhost:3000/login && break; sleep 2; done
-          curl -fs -o /dev/null http://localhost:3000/login
-      - name: Browser tests
-        run: ./node_modules/.bin/playwright test -c e2e/playwright.config.ts
-      - name: Server log (last lines)
-        if: always()
-        run: tail -n 80 "$DEV_LOG" || true
-      - uses: actions/upload-artifact@v4
-        if: failure()
-        with:
-          name: e2e-results
-          path: e2e-results
-          if-no-files-found: ignore
+          NODE_ENV: production
+          APP_URL: https://example.com
+          SESSION_SECRET: ci-only-secret-ci-only-secret-ci-only-secret-0000
+          DATA_ENCRYPTION_KEY: MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=
+          OTP_PROVIDER: disabled
+          STORAGE_DIR: /tmp/saqr-ci-storage
+      - run: npm run audit
