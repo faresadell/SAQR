@@ -3,9 +3,9 @@ node_modules
 out
 coverage
 .env
+.private-storage
 .env.*
 !.env.example
 *.tsbuildinfo
 next-env.d.ts
 .DS_Store
-.data
