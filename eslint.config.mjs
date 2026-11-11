@@ -2,7 +2,7 @@ import { FlatCompat } from "@eslint/eslintrc";
 
 const compat = new FlatCompat({ baseDirectory: import.meta.dirname });
 
-export default [
+const config = [
   ...compat.extends("next/core-web-vitals", "next/typescript"),
   {
     rules: {
@@ -14,5 +14,7 @@ export default [
       "@typescript-eslint/no-unused-vars": ["error", { argsIgnorePattern: "^_", varsIgnorePattern: "^_" }],
     },
   },
-  { ignores: [".next/**", "node_modules/**", "public/sw.js", "e2e/**", "e2e-results/**"] },
+  { ignores: [".next/**", "node_modules/**", "public/sw.js", "next-env.d.ts"] },
 ];
+
+export default config;
