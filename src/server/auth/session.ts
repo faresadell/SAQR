@@ -79,13 +79,30 @@ export async function destroyCurrentSession(): Promise<void> {
   store.delete(SESSION_COOKIE);
 }
 
-// The phone being verified is kept in a short-lived httpOnly cookie instead of the URL (keeps it out of logs).
-export async function setPendingPhone(phone: string): Promise<void> {
-  (await cookies()).set(PENDING_COOKIE, phone, { ...baseCookie, maxAge: PENDING_MAX_AGE_SECONDS });
+// The phone being verified plus a secret nonce are kept in a short-lived httpOnly cookie instead of the URL
+// (keeps them out of logs). The nonce proves this browser is the one that submitted the sign-up form.
+const PENDING_PHONE = /^\+20\d{10}$/;
+const PENDING_NONCE = /^[A-Za-z0-9_-]{20,64}$/;
+
+export interface PendingSignup {
+  phone: string;
+  nonce: string;
+}
+
+export async function setPendingSignup(phone: string, nonce: string): Promise<void> {
+  (await cookies()).set(PENDING_COOKIE, `${phone}|${nonce}`, { ...baseCookie, maxAge: PENDING_MAX_AGE_SECONDS });
+}
+
+export async function getPendingSignup(): Promise<PendingSignup | null> {
+  const raw = (await cookies()).get(PENDING_COOKIE)?.value;
+  if (!raw) return null;
+  const [phone, nonce, ...extra] = raw.split("|");
+  if (extra.length > 0 || !phone || !nonce || !PENDING_PHONE.test(phone) || !PENDING_NONCE.test(nonce)) return null;
+  return { phone, nonce };
 }
 
 export async function getPendingPhone(): Promise<string | null> {
-  return (await cookies()).get(PENDING_COOKIE)?.value ?? null;
+  return (await getPendingSignup())?.phone ?? null;
 }
 
 export async function clearPendingPhone(): Promise<void> {
