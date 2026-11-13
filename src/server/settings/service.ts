@@ -15,15 +15,6 @@ import { AuthorizationError } from "@/server/errors";
 
 export type ChangeResult = { ok: true; effectiveFrom: Date } | { ok: false; error: "UNKNOWN_KEY" | "INVALID_VALUE" | "INVALID_DATE" | "IN_PAST" | "TOO_FAR" };
 
-/**
- * Does saving `value` at `effectiveFrom` change anything? The comparison is made against the value that WILL BE in
- * force at that moment, not against today's value. Otherwise a pending scheduled change could never be reverted:
- * scheduling "5" for a date when "10" is already scheduled would look like "no change" next to today's 5.
- */
-export async function isChangeNeeded(key: SettingKey, value: number | null, effectiveFrom: Date): Promise<boolean> {
-  return value !== (await getSettingAt(key, effectiveFrom));
-}
-
 export function assertCanManageSettings(actor: Actor): void {
   if (!hasPermission(actor, "settings.manage")) throw new AuthorizationError();
 }
