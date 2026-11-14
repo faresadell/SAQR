@@ -52,6 +52,13 @@ async function main(): Promise<void> {
       await db.address.create({ data: { userId: customer.id, label: "البيت", line: "١٢ شارع التحرير، المعادي", zoneId: zone.id } });
     }
 
+    // Demo shop owner: a 30-day package, otherwise nobody could order from the demo shop (shops without a package take no orders).
+    const demoPlan = await db.plan.findFirst({ where: { audience: "MERCHANT", isActive: true }, orderBy: { sortOrder: "asc" } });
+    if (demoPlan) {
+      const startsAt = new Date();
+      await db.subscription.upsert({ where: { userId: merchantUser.id }, create: { userId: merchantUser.id, planId: demoPlan.id, startsAt, expiresAt: new Date(startsAt.getTime() + 30 * 86_400_000) }, update: {} });
+    }
+
     // The shop: approved, with a few products.
     let shop = await db.merchant.findFirst({ where: { ownerId: merchantUser.id } });
     if (!shop) {

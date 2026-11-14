@@ -3,6 +3,7 @@ import { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
 import { writeAudit } from "@/lib/audit";
 import type { Actor } from "@/lib/auth/permissions";
+import { hasEverHadPackage } from "@/server/plans/service";
 import { isOpenAt, validateOpeningHours } from "@/lib/catalog/opening-hours";
 import { buildCheckoutQuote, type CartLineInput, type CheckoutError, type CheckoutQuote, type PricedProduct } from "@/lib/orders/checkout";
 import { getSetting } from "@/lib/settings";
@@ -113,7 +114,8 @@ export async function placeOrder(actor: Actor, input: PlaceOrderInput): Promise<
             row.merchant.status === "APPROVED" &&
             row.merchant.owner.status === "ACTIVE" &&
             isOpenAt(hours?.ok ? hours.value : null, now) &&
-            (await getStarBalance(tx, row.merchant.ownerId)) >= minMerchant;
+            (await getStarBalance(tx, row.merchant.ownerId)) >= minMerchant &&
+            (await hasEverHadPackage(row.merchant.ownerId, tx)); // no package yet = nobody can order from this shop
           merchantOk.set(row.merchantId, ok);
         }
         const categoryVisible = row.category.isActive && !row.category.archivedAt && (!row.category.parent || (row.category.parent.isActive && !row.category.parent.archivedAt));

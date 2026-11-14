@@ -7,11 +7,13 @@ import { appliedUnitDiscountCents, checkDiscount, type Discount } from "@/lib/of
 import { getSetting } from "@/lib/settings";
 import { AuthorizationError, NotFoundError } from "@/server/errors";
 import { notifyInTx } from "@/server/notifications/service";
+import { hasEverHadPackage } from "@/server/plans/service";
 import { applyStarMove, InsufficientStarsError } from "@/server/stars/ledger";
 
 export type OfferError =
   | "INVALID_REQUEST"
   | "SHOP_NOT_APPROVED"
+  | "NO_PACKAGE"
   | "OFFER_NOT_ACTIVE"
   | "INSUFFICIENT_STARS"
   | "WRONG_STATE"
@@ -83,6 +85,7 @@ export async function createOfferAsAdmin(actor: Actor, merchantId: string, input
 
 async function createOfferForShop(actor: Actor, shop: Awaited<ReturnType<typeof ownShop>>, input: OfferInput, byAdmin: boolean): Promise<OfferResult<{ offerId: string; endsAt: Date }>> {
   if (shop.status !== "APPROVED") return { ok: false, error: "SHOP_NOT_APPROVED" };
+  if (!byAdmin && !(await hasEverHadPackage(shop.ownerId))) return { ok: false, error: "NO_PACKAGE" }; // a shop that never bought a package cannot act
   const title = cleanText(input.title, 3, 80);
   const description = input.description == null || input.description === "" ? null : cleanText(input.description, 1, 500);
   if (!title || (input.description != null && input.description !== "" && !description)) return { ok: false, error: "INVALID_REQUEST" };

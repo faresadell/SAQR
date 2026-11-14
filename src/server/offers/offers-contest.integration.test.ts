@@ -3,6 +3,7 @@
  * WARNING: they TRUNCATE tables (including "User"). Use a throwaway database.
  */
 import { beforeEach, describe, expect, it } from "vitest";
+import { grantPackage } from "@/test-support/package";
 import { db } from "@/lib/db";
 import type { Actor } from "@/lib/auth/permissions";
 import { invalidateSettingsCache } from "@/lib/settings";
@@ -21,10 +22,11 @@ let keyNo = 0;
 const key = () => `extend-key-${(keyNo += 1)}-abcdef`;
 const past = new Date(Date.now() - 86_400_000);
 
-async function shopOwner(status: "APPROVED" | "PENDING_REVIEW" = "APPROVED", stars = 50): Promise<{ actor: Actor; merchantId: string }> {
+async function shopOwner(status: "APPROVED" | "PENDING_REVIEW" = "APPROVED", stars = 50, withPackage = true): Promise<{ actor: Actor; merchantId: string }> {
   n += 1;
   const u = await db.user.create({ data: { phone: `+2016${String(n).padStart(8, "0")}`, name: `M${n}`, passwordHash: "x", role: "MERCHANT", status: "ACTIVE" } });
   const m = await db.merchant.create({ data: { ownerId: u.id, name: `shop ${n}`, businessType: "restaurant", status } });
+  if (withPackage) await grantPackage(u.id);
   if (stars > 0) await db.$transaction((tx) => applyStarMove(tx, { userId: u.id, amount: stars, reason: "PURCHASE", idempotencyKey: `seed:${u.id}` }));
   return { actor: { id: u.id, role: "MERCHANT", isSuperAdmin: false, permissions: [] }, merchantId: m.id };
 }
