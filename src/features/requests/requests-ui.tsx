@@ -11,7 +11,7 @@ import { acceptQuoteAction, closeRequestAction, createRequestAction, quoteReques
 
 const idle: FormState = {};
 
-export function NewRequestForm({ merchantId, addresses }: { merchantId: string; addresses: { id: string; label: string; line: string }[] }) {
+export function NewRequestForm({ merchantId, addresses }: { merchantId: string; addresses: { id: string; label: string | null; line: string }[] }) {
   const [state, action, pending] = useActionState(createRequestAction, idle);
   return (
     <form action={action} className="flex max-w-2xl flex-col gap-3">
@@ -19,7 +19,7 @@ export function NewRequestForm({ merchantId, addresses }: { merchantId: string; 
       <Textarea label="اكتب طلبك" name="body" required minLength={3} maxLength={1000} rows={5} hint="اكتب ما تريده بكلماتك. سيحدّد النشاط سعراً نهائياً واحداً، ولا يوجد تفاوض على السعر." />
       <Select label="عنوان التوصيل" name="addressId" required defaultValue="">
         <option value="" disabled>اختر العنوان</option>
-        {addresses.map((a) => <option key={a.id} value={a.id}>{a.label} — {a.line}</option>)}
+        {addresses.map((a) => <option key={a.id} value={a.id}>{a.label ? `${a.label} — ${a.line}` : a.line}</option>)}
       </Select>
       {state.error ? <Notice tone="danger">{state.error}</Notice> : null}
       <Button type="submit" loading={pending} className="w-fit">إرسال الطلب</Button>
