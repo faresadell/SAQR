@@ -59,6 +59,7 @@ export const OFFER_MESSAGES: Record<string, string> = {
   INVALID_REQUEST: "راجع بيانات العرض: العنوان من 3 أحرف، ولا يُقبل خصم بدون منتجات.",
   SHOP_NOT_APPROVED: "لا يمكن نشر عروض قبل اعتماد النشاط.",
   NO_PACKAGE: "اشترك في باقة أولاً حتى تتمكن من نشر العروض.",
+  HOURS_REQUIRED: "انتهت عروض باقتك المجانية. اكتب عدد الساعات (نجمة لكل ساعة) لنشر العرض.",
   OFFER_NOT_ACTIVE: "هذا العرض لم يعد ساري المدة.",
   INSUFFICIENT_STARS: "رصيد النجوم لا يكفي للتمديد.",
   WRONG_STATE: "تغيّرت حالة العرض. حدّث الصفحة.",

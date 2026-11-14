@@ -38,7 +38,7 @@ export async function createOfferAction(_prev: FormState, formData: FormData): P
     // Percent is stored in basis points (15% = 1500); fixed amounts in piasters per unit.
     discount = { type, value: Math.round(raw * 100) };
   }
-  return guarded(() => createOffer(user, { title: get(formData, "title"), description: get(formData, "description") || null, discount, productIds }), "تم نشر العرض.");
+  return guarded(() => createOffer(user, { title: get(formData, "title"), description: get(formData, "description") || null, discount, productIds, ...(get(formData, "paidHours") ? { paidHours: Number(get(formData, "paidHours")) } : {}) }), "تم نشر العرض.");
 }
 
 export async function extendOfferAction(_prev: FormState, formData: FormData): Promise<FormState> {

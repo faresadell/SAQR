@@ -20,13 +20,19 @@ function CreateOffer({ data }: { data: MerchantOffersData }) {
   const [state, action, pending] = useActionState(createOfferAction, idle);
   const [type, setType] = useState("");
   const d = data.discounts;
+  const free = data.quota.remaining > 0;
   return (
     <Card className="flex flex-col gap-3">
       <h2 className="text-lg font-bold">نشر عرض جديد</h2>
-      <p className="text-sm text-ink-muted">يستمر العرض <strong className="num">{formatNumber(data.baseHours)}</strong> ساعة، ويمكنك تمديده بالنجوم.</p>
+      {free ? (
+        <p className="text-sm text-ink-muted">متبقي لك <strong className="num">{formatNumber(data.quota.remaining)}</strong> من <strong className="num">{formatNumber(data.quota.quota)}</strong> عروض مجانية في باقتك. يستمر العرض <strong className="num">{formatNumber(data.baseHours)}</strong> ساعة، ويمكنك تمديده بالنجوم.</p>
+      ) : (
+        <Notice tone="info">{data.quota.active ? "استهلكت عروض باقتك لهذه الدورة." : "باقتك منتهية."} يمكنك نشر عرض جديد بالنجوم: <strong className="num">{formatNumber(data.extensionStarsPerHour)}</strong> نجمة لكل ساعة، تُخصم عند النشر.</Notice>
+      )}
       <form action={action} className="flex flex-col gap-3">
         <Field label="عنوان العرض" name="title" required minLength={3} maxLength={80} error={state.fieldErrors?.title} />
         <Field label="وصف (اختياري)" name="description" maxLength={500} />
+        {free ? null : <Field label="مدة العرض (ساعات)" name="paidHours" type="number" min={1} max={1000} step={1} defaultValue={24} required hint={`التكلفة نجمة لكل ساعة (${formatNumber(data.extensionStarsPerHour)} نجمة/ساعة).`} />}
         {d.enabled ? (
           <>
             <Select label="نوع الخصم" name="discountType" value={type} onChange={(e) => setType(e.target.value)}>

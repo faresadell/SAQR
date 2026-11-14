@@ -14,6 +14,7 @@ export type OfferError =
   | "INVALID_REQUEST"
   | "SHOP_NOT_APPROVED"
   | "NO_PACKAGE"
+  | "HOURS_REQUIRED"
   | "OFFER_NOT_ACTIVE"
   | "INSUFFICIENT_STARS"
   | "WRONG_STATE"
@@ -56,6 +57,21 @@ export interface OfferInput {
   /** Optional. A discounted offer needs `discount` AND `productIds` (products of this shop). Off until an administrator enables discounts. */
   discount?: { type: "PERCENT" | "FIXED"; value: number } | null;
   productIds?: string[];
+  /** Only used when the shop has no free offers left this cycle: how many hours to run (1 star per hour). Ignored otherwise. */
+  paidHours?: number;
+}
+
+const CYCLE_MS = 30 * 24 * HOUR_MS;
+
+/** The shop owner's offer quota for the current 30-day package cycle. An ended package or a plan without a quota means 0 free offers. */
+export async function getOfferQuota(ownerId: string, merchantId: string, client: Prisma.TransactionClient | typeof db = db, now = new Date()) {
+  const sub = await client.subscription.findUnique({ where: { userId: ownerId }, include: { plan: { select: { offerQuota: true } } } });
+  if (!sub) return { hasPackage: false, active: false, quota: 0, used: 0, remaining: 0 };
+  const active = sub.expiresAt.getTime() > now.getTime();
+  const quota = active ? (sub.plan.offerQuota ?? 0) : 0;
+  const windowStart = new Date(sub.startsAt.getTime() + Math.max(0, Math.floor((now.getTime() - sub.startsAt.getTime()) / CYCLE_MS)) * CYCLE_MS);
+  const used = await client.offer.count({ where: { merchantId, quotaUsed: true, createdAt: { gte: windowStart } } });
+  return { hasPackage: true, active, quota, used, remaining: Math.max(0, quota - used) };
 }
 
 const MAX_PRODUCTS_PER_OFFER = 50;
@@ -94,31 +110,53 @@ async function createOfferForShop(actor: Actor, shop: Awaited<ReturnType<typeof 
   if (discount ? productIds.length < 1 || productIds.length > MAX_PRODUCTS_PER_OFFER || (discount.type !== "PERCENT" && discount.type !== "FIXED") : productIds.length > 0) return { ok: false, error: "INVALID_REQUEST" };
   if (productIds.some((id) => typeof id !== "string" || id.length < 8 || id.length > 64)) return { ok: false, error: "INVALID_REQUEST" };
   if (discount && (await getSetting("offers.discount.enabled")) !== 1) return { ok: false, error: "DISCOUNTS_DISABLED" };
-  const hours = await getSetting("offers.base_duration_hours");
+  const baseHours = await getSetting("offers.base_duration_hours");
+  const perHour = await getSetting("offers.extension_stars_per_hour");
   const startsAt = new Date();
-  const endsAt = new Date(startsAt.getTime() + hours * HOUR_MS);
   const limits = discount ? { maxPercent: await getSetting("offers.discount.max_percent"), maxFixedCents: (await getSetting("offers.discount.max_fixed_egp")) * 100 } : null;
   const maxActive = discount ? await getSetting("offers.discount.max_active_per_shop") : 0;
-  return db.$transaction(async (tx): Promise<OfferResult<{ offerId: string; endsAt: Date }>> => {
-    if (discount) {
-      await tx.$queryRaw`SELECT "id" FROM "Merchant" WHERE "id" = ${shop.id} FOR UPDATE`; // one discounted offer is created per shop at a time
-      const products = await tx.product.findMany({ where: { id: { in: productIds }, merchantId: shop.id, archivedAt: null }, select: { id: true, priceCents: true } });
-      if (products.length !== productIds.length) return { ok: false, error: "INVALID_REQUEST" };
-      const problem = checkDiscount(discount, products.map((p) => p.priceCents), limits!);
-      if (problem) return { ok: false, error: problem === "ABOVE_LIMIT" ? "DISCOUNT_ABOVE_LIMIT" : problem === "INVALID_VALUE" ? "DISCOUNT_INVALID" : "FINAL_PRICE_NOT_POSITIVE" };
-      if ((await tx.offer.count({ where: { merchantId: shop.id, ...ACTIVE_DISCOUNTED(startsAt) } })) >= maxActive) return { ok: false, error: "TOO_MANY_DISCOUNTED_OFFERS" };
-      if ((await tx.offerProduct.count({ where: { productId: { in: productIds }, offer: ACTIVE_DISCOUNTED(startsAt) } })) > 0) return { ok: false, error: "PRODUCT_ALREADY_IN_OFFER" };
-    }
-    const created = await tx.offer.create({
-      data: {
-        merchantId: shop.id, title, description, startsAt, endsAt,
-        ...(discount ? { discountType: discount.type, discountValue: discount.value, products: { create: productIds.map((productId) => ({ productId })) } } : {}),
-      },
+  try {
+    return await db.$transaction(async (tx): Promise<OfferResult<{ offerId: string; endsAt: Date }>> => {
+      if (discount || !byAdmin) await tx.$queryRaw`SELECT "id" FROM "Merchant" WHERE "id" = ${shop.id} FOR UPDATE`; // one creation per shop at a time (quota count, discount cap)
+      // Owner path: free while the package still has offers left this cycle, otherwise the owner picks hours at 1 star each.
+      let hours = baseHours;
+      let quotaUsed = false;
+      let paidHours: number | null = null;
+      if (!byAdmin) {
+        const q = await getOfferQuota(shop.ownerId, shop.id, tx, startsAt);
+        if (q.remaining > 0) quotaUsed = true;
+        else {
+          const chosen = input.paidHours;
+          if (chosen === undefined || chosen === null) return { ok: false, error: "HOURS_REQUIRED" };
+          if (!Number.isInteger(chosen) || chosen < 1 || chosen > MAX_HOURS_PER_REQUEST) return { ok: false, error: "INVALID_REQUEST" };
+          hours = chosen;
+          paidHours = chosen;
+        }
+      }
+      if (discount) {
+        const products = await tx.product.findMany({ where: { id: { in: productIds }, merchantId: shop.id, archivedAt: null }, select: { id: true, priceCents: true } });
+        if (products.length !== productIds.length) return { ok: false, error: "INVALID_REQUEST" };
+        const problem = checkDiscount(discount, products.map((p) => p.priceCents), limits!);
+        if (problem) return { ok: false, error: problem === "ABOVE_LIMIT" ? "DISCOUNT_ABOVE_LIMIT" : problem === "INVALID_VALUE" ? "DISCOUNT_INVALID" : "FINAL_PRICE_NOT_POSITIVE" };
+        if ((await tx.offer.count({ where: { merchantId: shop.id, ...ACTIVE_DISCOUNTED(startsAt) } })) >= maxActive) return { ok: false, error: "TOO_MANY_DISCOUNTED_OFFERS" };
+        if ((await tx.offerProduct.count({ where: { productId: { in: productIds }, offer: ACTIVE_DISCOUNTED(startsAt) } })) > 0) return { ok: false, error: "PRODUCT_ALREADY_IN_OFFER" };
+      }
+      const created = await tx.offer.create({
+        data: {
+          merchantId: shop.id, title, description, startsAt, endsAt: new Date(startsAt.getTime() + hours * HOUR_MS), quotaUsed, paidHours,
+          ...(discount ? { discountType: discount.type, discountValue: discount.value, products: { create: productIds.map((productId) => ({ productId })) } } : {}),
+        },
+      });
+      const cost = paidHours !== null ? paidHours * perHour : 0;
+      if (cost > 0) await applyStarMove(tx, { userId: shop.ownerId, amount: -cost, reason: "OFFER_EXTENSION", actorId: actor.id, note: `new offer ${created.id} ${paidHours}h`, idempotencyKey: `offer-new:${created.id}` }); // rolls everything back when the balance is short
+      await writeAudit({ actorId: actor.id, action: byAdmin ? "OFFER_CREATED_BY_ADMIN" : "OFFER_CREATED", entityType: "Offer", entityId: created.id, after: { title, hours, quotaUsed, ...(paidHours !== null ? { paidHours, starsCharged: cost } : {}), ...(byAdmin ? { onBehalfOfMerchantId: shop.id, createdByAdminId: actor.id } : {}), ...(discount ? { discountType: discount.type, discountValue: discount.value, productIds } : {}) } }, tx);
+      if (byAdmin) await notifyInTx(tx, { userId: shop.ownerId, type: "OFFER_CREATED_BY_ADMIN", title: "أنشأت الإدارة عرضاً لنشاطك", body: `أنشأت الإدارة العرض "${title}" نيابةً عنك.`, data: { offerId: created.id }, dedupeKey: `offer-created-admin:${created.id}` });
+      return { ok: true, offerId: created.id, endsAt: created.endsAt };
     });
-    await writeAudit({ actorId: actor.id, action: byAdmin ? "OFFER_CREATED_BY_ADMIN" : "OFFER_CREATED", entityType: "Offer", entityId: created.id, after: { title, hours, ...(byAdmin ? { onBehalfOfMerchantId: shop.id, createdByAdminId: actor.id } : {}), ...(discount ? { discountType: discount.type, discountValue: discount.value, productIds } : {}) } }, tx);
-    if (byAdmin) await notifyInTx(tx, { userId: shop.ownerId, type: "OFFER_CREATED_BY_ADMIN", title: "أنشأت الإدارة عرضاً لنشاطك", body: `أنشأت الإدارة العرض "${title}" نيابةً عنك.`, data: { offerId: created.id }, dedupeKey: `offer-created-admin:${created.id}` });
-    return { ok: true, offerId: created.id, endsAt: created.endsAt };
-  });
+  } catch (error) {
+    if (error instanceof InsufficientStarsError) return { ok: false, error: "INSUFFICIENT_STARS" };
+    throw error;
+  }
 }
 
 /**

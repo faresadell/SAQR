@@ -875,6 +875,8 @@ model Offer {
   // Optional discount. null = announcement only. PERCENT: value in basis points (1500 = 15%). FIXED: piasters off each unit.
   discountType  OfferDiscountType?
   discountValue Int?
+  quotaUsed   Boolean     @default(false) // published free against the package's offer quota (counted even after it ends or is stopped)
+  paidHours   Int? // set when published outside the quota: hours chosen, 1 star per hour
   createdAt   DateTime    @default(now())
   updatedAt   DateTime    @updatedAt
 

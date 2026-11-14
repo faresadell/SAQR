@@ -50,6 +50,8 @@ export interface MerchantOffersData {
   discounts: { enabled: boolean; maxPercent: number; maxFixedEgp: number; maxActive: number };
   baseHours: number;
   extensionStarsPerHour: number;
+  /** Free offers of the current package cycle. When `remaining` is 0 a new offer is paid: 1 star per hour. */
+  quota: { active: boolean; quota: number; used: number; remaining: number };
   offers: MerchantOfferRow[];
   products: { id: string; name: string; priceCents: number }[];
 }
