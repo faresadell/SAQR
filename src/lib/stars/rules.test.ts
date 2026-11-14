@@ -52,7 +52,7 @@ describe("plans", () => {
     expect(shape("DRIVER")).toEqual([[30, 0], [50, 0], [100, 0]]);
     for (const p of DEFAULT_PLANS) {
       expect(p.priceCents).toBe(p.baseStars * 100);
-      expect(p.offerQuota).toBeNull();
+      expect(p.offerQuota).toBe(p.audience === "MERCHANT" ? { 100: 4, 150: 6, 200: 8 }[p.baseStars] : null);
     }
     expect(totalStars({ baseStars: 100, bonusStars: 35 })).toBe(135);
     expect(new Set(DEFAULT_PLANS.map((x) => x.code)).size).toBe(9);
