@@ -58,6 +58,42 @@ async function existingParent(customerId: string, idempotencyKey: string): Promi
 }
 
 /**
+ * Everything about the customer and the delivery address that must hold before any order is created (cart checkout and an
+ * accepted custom-request quote share it). Returns the first failure instead of throwing.
+ */
+export async function resolveOrderContext(tx: Prisma.TransactionClient, customerId: string, addressId: string, now: Date) {
+  const user = await tx.user.findUnique({ where: { id: customerId } });
+  if (!user || user.status !== "ACTIVE" || user.role !== "CUSTOMER") return { ok: false, error: "ACCOUNT_NOT_ACTIVE" } as const;
+  // Trading stays closed until the business sets the merchant response window (docs/PHASE2.md, decision 4).
+  if ((await getSetting("orders.merchant_response_minutes")) === null) return { ok: false, error: "TRADING_NOT_CONFIGURED" } as const;
+  const minCustomer = await getSetting("stars.min_balance_customer");
+  if ((await getStarBalance(tx, customerId)) < minCustomer) return { ok: false, error: "CUSTOMER_STARS_TOO_LOW" } as const;
+  const address = await tx.address.findFirst({ where: { id: addressId, userId: customerId } }); // owner-scoped (IDOR)
+  if (!address) return { ok: false, error: "ADDRESS_NOT_FOUND" } as const;
+  if (!address.zoneId) return { ok: false, error: "ZONE_UNAVAILABLE" } as const;
+  try {
+    const zone = await resolveZoneFee(address.zoneId, now, tx);
+    return { ok: true, address, zone } as const;
+  } catch (error) {
+    if (error instanceof ZoneUnavailableError) return { ok: false, error: "ZONE_UNAVAILABLE" } as const;
+    throw error;
+  }
+}
+
+/** A shop can take orders only if it is approved, its owner active, it is open now, its owner has stars and has bought a package. */
+export async function merchantCanTrade(tx: Prisma.TransactionClient, merchant: { status: string; ownerId: string; openingHours: Prisma.JsonValue | null; owner: { status: string } }, now: Date): Promise<boolean> {
+  const minMerchant = await getSetting("stars.min_balance_merchant");
+  const hours = merchant.openingHours === null ? null : validateOpeningHours(merchant.openingHours);
+  return (
+    merchant.status === "APPROVED" &&
+    merchant.owner.status === "ACTIVE" &&
+    isOpenAt(hours?.ok ? hours.value : null, now) &&
+    (await getStarBalance(tx, merchant.ownerId)) >= minMerchant &&
+    (await hasEverHadPackage(merchant.ownerId, tx)) // no package yet = nobody can order from this shop
+  );
+}
+
+/**
  * Creates one ParentOrder and one suborder per merchant, all in ONE transaction: either everything is stored or nothing is.
  * Every price, fee, merchant tier and commission is read here on the server; nothing financial comes from the client.
  */
@@ -76,25 +112,9 @@ export async function placeOrder(actor: Actor, input: PlaceOrderInput): Promise<
       };
       const now = new Date();
 
-      const user = await tx.user.findUnique({ where: { id: actor.id } });
-      if (!user || user.status !== "ACTIVE" || user.role !== "CUSTOMER") fail("ACCOUNT_NOT_ACTIVE");
-
-      // Trading stays closed until the business sets the merchant response window (docs/PHASE2.md, decision 4).
-      if ((await getSetting("orders.merchant_response_minutes")) === null) fail("TRADING_NOT_CONFIGURED");
-
-      const minCustomer = await getSetting("stars.min_balance_customer");
-      if ((await getStarBalance(tx, actor.id)) < minCustomer) fail("CUSTOMER_STARS_TOO_LOW");
-
-      const address = await tx.address.findFirst({ where: { id: input.addressId, userId: actor.id } }); // owner-scoped (IDOR)
-      if (!address) fail("ADDRESS_NOT_FOUND");
-      if (!address!.zoneId) fail("ZONE_UNAVAILABLE");
-      let zone: Awaited<ReturnType<typeof resolveZoneFee>>;
-      try {
-        zone = await resolveZoneFee(address!.zoneId!, now, tx);
-      } catch (error) {
-        if (error instanceof ZoneUnavailableError) return fail("ZONE_UNAVAILABLE");
-        throw error;
-      }
+      const context = await resolveOrderContext(tx, actor.id, input.addressId, now);
+      if (!context.ok) return fail(context.error);
+      const { address, zone } = context;
 
       const ids = [...new Set(input.lines.map((l) => (typeof l?.productId === "string" ? l.productId : "")))].filter(Boolean);
       const rows = await tx.product.findMany({
@@ -103,19 +123,12 @@ export async function placeOrder(actor: Actor, input: PlaceOrderInput): Promise<
       });
 
       // A product is only purchasable if its shop is approved, open, and its category is visible.
-      const minMerchant = await getSetting("stars.min_balance_merchant");
       const merchantOk = new Map<string, boolean>();
       const products = new Map<string, PricedProduct>();
       for (const row of rows) {
         let ok = merchantOk.get(row.merchantId);
         if (ok === undefined) {
-          const hours = row.merchant.openingHours === null ? null : validateOpeningHours(row.merchant.openingHours);
-          ok =
-            row.merchant.status === "APPROVED" &&
-            row.merchant.owner.status === "ACTIVE" &&
-            isOpenAt(hours?.ok ? hours.value : null, now) &&
-            (await getStarBalance(tx, row.merchant.ownerId)) >= minMerchant &&
-            (await hasEverHadPackage(row.merchant.ownerId, tx)); // no package yet = nobody can order from this shop
+          ok = await merchantCanTrade(tx, row.merchant, now);
           merchantOk.set(row.merchantId, ok);
         }
         const categoryVisible = row.category.isActive && !row.category.archivedAt && (!row.category.parent || (row.category.parent.isActive && !row.category.parent.archivedAt));
@@ -153,7 +166,7 @@ export async function placeOrder(actor: Actor, input: PlaceOrderInput): Promise<
           subtotalCents: quote.subtotalCents,
           deliveryFeeCents: quote.deliveryFeeCents,
           totalCents: quote.totalCents,
-          addressSnap: { label: address!.label, line: address!.line, lat: address!.lat, lng: address!.lng, zoneId: zone.zoneId },
+          addressSnap: { label: address.label, line: address.line, lat: address.lat, lng: address.lng, zoneId: zone.zoneId },
         },
       });
 
@@ -174,7 +187,7 @@ export async function placeOrder(actor: Actor, input: PlaceOrderInput): Promise<
             commissionBaseCents: commission.commissionBaseCents,
             commissionCents: commission.commissionCents,
             deliveryRuleSnap: { zoneId: zone.zoneId, feeVersionId: zone.feeVersionId, feeCents: zone.feeCents },
-            addressSnap: { label: address!.label, line: address!.line, lat: address!.lat, lng: address!.lng, zoneId: zone.zoneId },
+            addressSnap: { label: address.label, line: address.line, lat: address.lat, lng: address.lng, zoneId: zone.zoneId },
             items: {
               create: sub.items.map((i) => ({
                 productId: i.productId,

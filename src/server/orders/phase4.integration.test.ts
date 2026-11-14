@@ -11,6 +11,7 @@ import { invalidateSettingsCache } from "@/lib/settings";
 import { ledgerKeys } from "@/lib/stars/rules";
 import { AuthorizationError, NotFoundError } from "@/server/errors";
 import { placeOrder } from "@/server/orders/checkout";
+import { acceptOrderQuote, closeOrderRequest, createOrderRequest, getOrderRequest, listOrderRequests, quoteOrderRequest } from "@/server/orders/requests";
 import { advanceOrder, cancelOrder, confirmPayment, decideOrder, rejectPayment, submitPayment } from "@/server/orders/lifecycle";
 import { escalateOverdueRefunds, reviewRefund, submitRefundProof } from "@/server/refunds/service";
 import { applyStarMove, getStarBalance } from "@/server/stars/ledger";
@@ -356,5 +357,66 @@ describe("scheduled star jobs", () => {
     await runMonthlyRewards();
     expect(await getStarBalance(db, w.customer.id)).toBe(before + 15);
     expect(await db.starLedgerEntry.count({ where: { reason: "MONTHLY_REWARD" } })).toBe(1);
+  });
+});
+
+describe("free-text order requests (one final price, no negotiation)", () => {
+  const ask = (body = "عايز كيلو لحمة ورز") => createOrderRequest(w.customer, { merchantId: w.a.merchant.id, addressId: w.addressId, body });
+
+  it("customer asks, shop quotes once, customer accepts: a normal order at that price + delivery, commission on products only", async () => {
+    const r = await ask();
+    if (!r.ok) throw new Error(`setup ${r.error}`);
+    expect(await db.notification.count({ where: { userId: w.ownerA.id, type: "ORDER_REQUEST_NEW" } })).toBe(1);
+    expect(await acceptOrderQuote(w.customer, r.requestId)).toEqual({ ok: false, error: "WRONG_STATE" }); // not quoted yet
+    expect((await quoteOrderRequest(w.ownerA, r.requestId, { subtotalCents: 25000, note: "جاهز خلال ساعة" })).ok).toBe(true);
+    expect(await quoteOrderRequest(w.ownerA, r.requestId, { subtotalCents: 1000 })).toEqual({ ok: false, error: "WRONG_STATE" }); // no second price
+
+    const accepted = await acceptOrderQuote(w.customer, r.requestId);
+    if (!accepted.ok) throw new Error(`accept ${accepted.error}`);
+    const order = await db.order.findUniqueOrThrow({ where: { id: accepted.orderId }, include: { items: true } });
+    expect([order.subtotalCents, order.deliveryFeeCents, order.totalCents]).toEqual([25000, 2000, 27000]);
+    expect(order.commissionBaseCents).toBe(25000);
+    expect(order.orderStatus).toBe("AWAITING_PAYMENT");
+    expect(order.items).toHaveLength(1);
+    expect(order.items[0]?.productId).toBeNull();
+    expect((await getOrderRequest(w.customer, r.requestId)).status).toBe("ACCEPTED");
+    expect(await acceptOrderQuote(w.customer, r.requestId)).toEqual({ ok: false, error: "WRONG_STATE" }); // never twice
+    expect(await db.order.count()).toBe(1);
+  });
+
+  it("only the two sides can see it; validation; declining and cancelling", async () => {
+    const r = await ask();
+    if (!r.ok) throw new Error("setup");
+    await expect(getOrderRequest(w.ownerB, r.requestId)).rejects.toBeInstanceOf(NotFoundError);
+    const stranger = await user("CUSTOMER");
+    await expect(getOrderRequest(stranger, r.requestId)).rejects.toBeInstanceOf(NotFoundError);
+    await expect(quoteOrderRequest(w.customer, r.requestId, { subtotalCents: 5000 })).rejects.toBeInstanceOf(AuthorizationError);
+    for (const bad of [0, 99, -5, 1.5, 5_000_001]) expect(await quoteOrderRequest(w.ownerA, r.requestId, { subtotalCents: bad })).toEqual({ ok: false, error: "INVALID_REQUEST" });
+    expect(await ask("  ")).toEqual({ ok: false, error: "INVALID_REQUEST" });
+    expect((await listOrderRequests(w.ownerA)).length).toBe(1);
+
+    expect((await closeOrderRequest(w.ownerA, r.requestId)).ok).toBe(true); // shop declines
+    expect(await closeOrderRequest(w.ownerA, r.requestId)).toEqual({ ok: false, error: "WRONG_STATE" });
+    const r2 = await ask();
+    if (!r2.ok) throw new Error("setup");
+    await quoteOrderRequest(w.ownerA, r2.requestId, { subtotalCents: 9000 });
+    expect(await closeOrderRequest(w.ownerA, r2.requestId)).toEqual({ ok: false, error: "WRONG_STATE" }); // shop cannot withdraw a quote
+    expect((await closeOrderRequest(w.customer, r2.requestId)).ok).toBe(true); // customer cancels
+    expect(await acceptOrderQuote(w.customer, r2.requestId)).toEqual({ ok: false, error: "WRONG_STATE" });
+  });
+
+  it("accepting is refused when the shop can no longer trade, and nothing is created", async () => {
+    const r = await ask();
+    if (!r.ok) throw new Error("setup");
+    await quoteOrderRequest(w.ownerA, r.requestId, { subtotalCents: 7000 });
+    await db.subscription.deleteMany({ where: { userId: w.ownerA.id } });
+    expect(await acceptOrderQuote(w.customer, r.requestId)).toEqual({ ok: false, error: "MERCHANT_UNAVAILABLE" });
+    expect(await db.order.count()).toBe(0);
+    expect((await getOrderRequest(w.customer, r.requestId)).status).toBe("QUOTED");
+  });
+
+  it("at most 3 open requests per shop", async () => {
+    for (let i = 0; i < 3; i += 1) expect((await ask(`طلب ${i} طويل كفاية`)).ok).toBe(true);
+    expect(await ask("الرابع طويل كفاية")).toEqual({ ok: false, error: "TOO_MANY_OPEN" });
   });
 });
