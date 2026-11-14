@@ -10,8 +10,18 @@ import { transferConfirmedElsewhere } from "@/server/payments/transfers";
 import { notifyInTx } from "@/server/notifications/service";
 import { applyStarMoves, type StarMove } from "@/server/stars/ledger";
 
-export type PlanError = "INVALID_REQUEST" | "PLAN_NOT_AVAILABLE" | "PAYMENT_METHOD_DISABLED" | "PAYMENT_RECEIVER_NOT_SET" | "PURCHASE_PENDING" | "WRONG_STATE" | "DUPLICATE_TRANSFER" | "CONFLICT";
+export type PlanError = "INVALID_REQUEST" | "PLAN_NOT_AVAILABLE" | "PAYMENT_METHOD_DISABLED" | "PAYMENT_RECEIVER_NOT_SET" | "PURCHASE_PENDING" | "WRONG_STATE" | "DUPLICATE_TRANSFER" | "CONFLICT" | "NO_PACKAGE";
 export type PlanResult<T = object> = ({ ok: true } & T) | { ok: false; error: PlanError };
+
+/** Loose stars a merchant tops up after a package ended: 1 star = 1 EGP, any whole number up to this cap per request. */
+export const TOPUP_PLAN_CODE = "merchant_stars_topup";
+export const TOPUP_PRICE_PER_STAR_CENTS = 100;
+export const TOPUP_MAX_STARS = 5000;
+
+/** Internal, never-sold plan row that top-up purchases point at (created on first use; hidden from every catalog). */
+async function ensureTopUpPlan() {
+  return db.plan.upsert({ where: { code: TOPUP_PLAN_CODE }, update: {}, create: { code: TOPUP_PLAN_CODE, audience: "MERCHANT", nameAr: "شحن نجوم (تاجر)", priceCents: TOPUP_PRICE_PER_STAR_CENTS, baseStars: 1, bonusStars: 0, isActive: false, sortOrder: 900 } });
+}
 
 const REFERENCE_PATTERN = /^[A-Za-z0-9\-_/ ]{4,64}$/;
 
@@ -75,22 +85,39 @@ export interface PurchaseInput {
 
 /** The buyer sends transfer proof for a plan. Nothing is activated and no stars are granted until an admin approves. */
 export async function requestPlanPurchase(actor: Actor, input: PurchaseInput): Promise<PlanResult<{ purchaseId: string }>> {
+  return createPurchase(actor, input);
+}
+
+/**
+ * A merchant whose package ended (or who already has one) buys loose stars at 1 EGP each and sends the transfer proof.
+ * Same review as a package, but approval only adds stars: it never starts or extends a package. A merchant that never
+ * bought a package must buy one first.
+ */
+export async function requestStarTopUp(actor: Actor, input: Omit<PurchaseInput, "planCode"> & { stars: number }): Promise<PlanResult<{ purchaseId: string }>> {
+  if (actor.role !== "MERCHANT") throw new AuthorizationError();
+  return createPurchase(actor, { ...input, planCode: TOPUP_PLAN_CODE }, input.stars);
+}
+
+async function createPurchase(actor: Actor, input: PurchaseInput, topUpStars?: number): Promise<PlanResult<{ purchaseId: string }>> {
   const audience = audienceFor(actor.role);
   if (!audience) throw new AuthorizationError();
   const referenceNo = typeof input.referenceNo === "string" ? input.referenceNo.trim() : "";
   if (!REFERENCE_PATTERN.test(referenceNo) || typeof input.uploadId !== "string" || input.uploadId.length < 8 || input.uploadId.length > 64) return { ok: false, error: "INVALID_REQUEST" };
+  if (topUpStars !== undefined && (!Number.isInteger(topUpStars) || topUpStars < 1 || topUpStars > TOPUP_MAX_STARS)) return { ok: false, error: "INVALID_REQUEST" };
   try {
     await assertPaymentMethodEnabled(String(input.method));
   } catch (error) {
     if (error instanceof PaymentMethodDisabledError) return { ok: false, error: error.reason === "NO_RECEIVER" ? "PAYMENT_RECEIVER_NOT_SET" : "PAYMENT_METHOD_DISABLED" };
     throw error;
   }
+  const topUpPlan = topUpStars !== undefined ? await ensureTopUpPlan() : null;
   try {
     return await run(async (tx) => {
       const user = await tx.user.findUnique({ where: { id: actor.id } });
       if (!user || user.status !== "ACTIVE") throw new AuthorizationError();
-      const plan = await tx.plan.findFirst({ where: { code: String(input.planCode), audience, isActive: true } }); // audience-scoped
+      const plan = topUpPlan ?? (await tx.plan.findFirst({ where: { code: String(input.planCode), audience, isActive: true } })); // audience-scoped
       if (!plan) return fail("PLAN_NOT_AVAILABLE");
+      if (topUpPlan && !(await tx.subscription.findUnique({ where: { userId: actor.id }, select: { id: true } }))) return fail("NO_PACKAGE");
       if ((await tx.planPurchase.count({ where: { userId: actor.id, status: "PENDING" } })) > 0) return fail("PURCHASE_PENDING");
 
       const upload = await tx.receiptUpload.findFirst({ where: { id: input.uploadId, orderId: null, uploaderId: actor.id, usedAt: null } });
@@ -103,9 +130,9 @@ export async function requestPlanPurchase(actor: Actor, input: PurchaseInput): P
         data: {
           userId: actor.id,
           planId: plan.id,
-          priceCentsSnap: plan.priceCents,
-          baseStarsSnap: plan.baseStars,
-          bonusStarsSnap: plan.bonusStars,
+          priceCentsSnap: topUpStars !== undefined ? topUpStars * TOPUP_PRICE_PER_STAR_CENTS : plan.priceCents,
+          baseStarsSnap: topUpStars ?? plan.baseStars,
+          bonusStarsSnap: topUpStars !== undefined ? 0 : plan.bonusStars,
           method: input.method,
           referenceNo,
           receiptUploadId: upload.id,
@@ -113,7 +140,7 @@ export async function requestPlanPurchase(actor: Actor, input: PurchaseInput): P
           flagReason: reused ? "Transfer reference already used on another purchase" : null,
         },
       });
-      await writeAudit({ actorId: actor.id, action: "PLAN_PURCHASE_REQUESTED", entityType: "PlanPurchase", entityId: purchase.id, after: { plan: plan.code, priceCents: plan.priceCents } }, tx);
+      await writeAudit({ actorId: actor.id, action: "PLAN_PURCHASE_REQUESTED", entityType: "PlanPurchase", entityId: purchase.id, after: { plan: plan.code, priceCents: topUpStars !== undefined ? topUpStars * TOPUP_PRICE_PER_STAR_CENTS : plan.priceCents, ...(topUpStars !== undefined ? { topUpStars } : {}) } }, tx);
       return { purchaseId: purchase.id };
     });
   } catch (error) {
@@ -154,21 +181,25 @@ export async function decidePlanPurchase(actor: Actor, purchaseId: string, decis
     const done = await tx.planPurchase.updateMany({ where: { id: purchase.id, status: "PENDING" }, data: { status: "APPROVED", decidedById: actor.id, decidedAt: now } });
     if (done.count !== 1) return fail("CONFLICT");
 
+    const isTopUp = purchase.plan.code === TOPUP_PLAN_CODE; // loose stars only: the package itself is left untouched
     const current = await tx.subscription.findUnique({ where: { userId: purchase.userId } });
     const expiresAt = computeNewExpiry(now, current?.expiresAt ?? null, PLAN_CYCLE_DAYS);
     const active = current !== null && current.expiresAt.getTime() > now.getTime();
-    await tx.subscription.upsert({
-      where: { userId: purchase.userId },
-      create: { userId: purchase.userId, planId: purchase.planId, startsAt: now, expiresAt },
-      update: { planId: purchase.planId, expiresAt, startsAt: active ? current!.startsAt : now, reminderSentAt: null, expiredNotifiedAt: null },
-    });
+    if (!isTopUp) {
+      await tx.subscription.upsert({
+        where: { userId: purchase.userId },
+        create: { userId: purchase.userId, planId: purchase.planId, startsAt: now, expiresAt },
+        update: { planId: purchase.planId, expiresAt, startsAt: active ? current!.startsAt : now, reminderSentAt: null, expiredNotifiedAt: null },
+      });
+    }
 
     const moves: StarMove[] = [{ userId: purchase.userId, amount: purchase.baseStarsSnap, reason: "PLAN_GRANT", idempotencyKey: ledgerKeys.planGrant(purchase.userId, purchase.id, "base"), actorId: actor.id, note: purchase.plan.code }];
     if (purchase.bonusStarsSnap > 0) moves.push({ userId: purchase.userId, amount: purchase.bonusStarsSnap, reason: "PLAN_GRANT", idempotencyKey: ledgerKeys.planGrant(purchase.userId, purchase.id, "bonus"), actorId: actor.id, note: `${purchase.plan.code} bonus` });
     await applyStarMoves(tx, moves);
 
-    await notifyInTx(tx, { userId: purchase.userId, type: "PLAN_APPROVED", title: "تم تفعيل باقتك", body: `تم تفعيل الباقة وإضافة ${purchase.baseStarsSnap + purchase.bonusStarsSnap} نجمة. صالحة حتى ${expiresAt.toISOString().slice(0, 10)}.`, data: { purchaseId: purchase.id }, dedupeKey: `plan-purchase-approved:${purchase.id}` });
-    await writeAudit({ actorId: actor.id, action: "PLAN_PURCHASE_APPROVED", entityType: "PlanPurchase", entityId: purchase.id, after: { plan: purchase.plan.code, expiresAt: expiresAt.toISOString(), stars: purchase.baseStarsSnap + purchase.bonusStarsSnap } }, tx);
+    const total = purchase.baseStarsSnap + purchase.bonusStarsSnap;
+    await notifyInTx(tx, { userId: purchase.userId, type: "PLAN_APPROVED", title: isTopUp ? "تم شحن نجومك" : "تم تفعيل باقتك", body: isTopUp ? `تمت إضافة ${total} نجمة إلى رصيدك.` : `تم تفعيل الباقة وإضافة ${total} نجمة. صالحة حتى ${expiresAt.toISOString().slice(0, 10)}.`, data: { purchaseId: purchase.id }, dedupeKey: `plan-purchase-approved:${purchase.id}` });
+    await writeAudit({ actorId: actor.id, action: "PLAN_PURCHASE_APPROVED", entityType: "PlanPurchase", entityId: purchase.id, after: { plan: purchase.plan.code, ...(isTopUp ? {} : { expiresAt: expiresAt.toISOString() }), stars: total } }, tx);
     return {};
   });
 }
@@ -201,5 +232,16 @@ export async function updatePlan(actor: Actor, code: string, change: { priceCent
 /** Admin view of every plan, including those taken off sale (older plans stay for history). Needs settings.view or settings.manage. */
 export async function listAllPlans(actor: Actor) {
   if (!hasPermission(actor, "settings.view") && !hasPermission(actor, "settings.manage")) throw new AuthorizationError();
-  return db.plan.findMany({ orderBy: [{ audience: "asc" }, { sortOrder: "asc" }], select: { code: true, audience: true, nameAr: true, priceCents: true, baseStars: true, bonusStars: true, offerQuota: true, isActive: true } });
+  return db.plan.findMany({ where: { code: { not: TOPUP_PLAN_CODE } }, orderBy: [{ audience: "asc" }, { sortOrder: "asc" }], select: { code: true, audience: true, nameAr: true, priceCents: true, baseStars: true, bonusStars: true, offerQuota: true, isActive: true } });
+}
+
+/** Whether a shop may receive orders and publish offers: its owner has bought a package at least once. */
+export async function shopHasPackage(merchantId: string): Promise<boolean> {
+  const shop = await db.merchant.findUnique({ where: { id: merchantId }, select: { ownerId: true } });
+  return shop ? hasEverHadPackage(shop.ownerId) : false;
+}
+
+/** True once the owner has ever bought a package (active or ended). Shops without one cannot take orders or publish offers. */
+export async function hasEverHadPackage(userId: string, client: Prisma.TransactionClient | typeof db = db): Promise<boolean> {
+  return (await client.subscription.findUnique({ where: { userId }, select: { id: true } })) !== null;
 }

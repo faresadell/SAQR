@@ -36,7 +36,7 @@ export const PLACE_ORDER_MESSAGES: Record<string, string> = {
   ZONE_UNAVAILABLE: "منطقة هذا العنوان غير متاحة للتوصيل حالياً.",
   TRADING_NOT_CONFIGURED: "استقبال الطلبات لم يبدأ بعد (الإدارة لم تحدد مهلة رد التاجر).",
   CUSTOMER_STARS_TOO_LOW: "رصيد نجومك أقل من الحد الأدنى لإرسال طلب. اشحن رصيدك من صفحة الباقات.",
-  MERCHANT_UNAVAILABLE: "أحد الأنشطة في سلتك لا يستقبل طلبات الآن (مغلق أو رصيده غير كافٍ).",
+  MERCHANT_UNAVAILABLE: "أحد الأنشطة في سلتك لا يستقبل طلبات الآن (مغلق أو رصيده غير كافٍ أو لم يشترك في باقة).",
 };
 
 export const ADDRESS_MESSAGES: Record<string, string> = {
@@ -52,11 +52,13 @@ export const PLAN_MESSAGES: Record<string, string> = {
   PLAN_NOT_AVAILABLE: "هذه الباقة غير متاحة لحسابك.",
   PURCHASE_PENDING: "لديك طلب شراء قيد المراجعة بالفعل.",
   CONFLICT: "تم استخدام هذا الإيصال من قبل. ارفع صورة جديدة.",
+  NO_PACKAGE: "اشترك في باقة أولاً. شحن النجوم متاح بعد أول باقة.",
 };
 
 export const OFFER_MESSAGES: Record<string, string> = {
   INVALID_REQUEST: "راجع بيانات العرض: العنوان من 3 أحرف، ولا يُقبل خصم بدون منتجات.",
   SHOP_NOT_APPROVED: "لا يمكن نشر عروض قبل اعتماد النشاط.",
+  NO_PACKAGE: "اشترك في باقة أولاً حتى تتمكن من نشر العروض.",
   OFFER_NOT_ACTIVE: "هذا العرض لم يعد ساري المدة.",
   INSUFFICIENT_STARS: "رصيد النجوم لا يكفي للتمديد.",
   WRONG_STATE: "تغيّرت حالة العرض. حدّث الصفحة.",

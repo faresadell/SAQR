@@ -4,6 +4,7 @@
  * STATUS: written without access to PostgreSQL or npm; NOT YET RUN. Expect to fix small typing/fixture issues on first run.
  */
 import { beforeEach, describe, expect, it } from "vitest";
+import { grantPackage } from "@/test-support/package";
 import { db } from "@/lib/db";
 import type { Actor } from "@/lib/auth/permissions";
 import { invalidateSettingsCache } from "@/lib/settings";
@@ -32,6 +33,7 @@ async function giveStars(userId: string, amount: number, key: string) {
 
 async function shop(owner: Actor, name: string, price: number) {
   const m = await db.merchant.create({ data: { ownerId: owner.id, name, businessType: "restaurant", status: "APPROVED" } });
+  await grantPackage(owner.id);
   const category = await db.category.findFirstOrThrow();
   const p = await db.product.create({ data: { merchantId: m.id, categoryId: category.id, nameAr: `منتج ${name}`, priceCents: price } });
   return { merchant: m, product: p };
@@ -114,6 +116,14 @@ describe("placeOrder", () => {
     expect(again.ok && again.replayed).toBe(true);
     expect(await db.parentOrder.count()).toBe(1);
     expect(await db.order.count()).toBe(2);
+  });
+
+  it("refuses to order from a shop whose owner never bought a package, and stores nothing", async () => {
+    await db.subscription.deleteMany({ where: { userId: w.ownerA.id } });
+    const r = await place("key-nopackage");
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.error).toBe("MERCHANT_UNAVAILABLE");
+    expect(await db.parentOrder.count()).toBe(0);
   });
 
   it("refuses a changed price and stores nothing", async () => {

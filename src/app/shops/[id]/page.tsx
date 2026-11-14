@@ -7,6 +7,7 @@ import { Icon } from "@/components/ui/icon";
 import { EmptyState, Notice } from "@/components/ui/states";
 import { TabLinks } from "@/components/ui/tab-links";
 import { loadBusinessTypes, loadCategories, loadShopPage } from "@/features/public/data";
+import { shopHasPackage } from "@/server/plans/service";
 import { ProductRow } from "@/features/public/product-row";
 
 export const metadata: Metadata = { title: "تفاصيل النشاط" };
@@ -20,6 +21,7 @@ export default async function ShopPage({ params, searchParams }: { params: Promi
   const page = await loadShopPage(id.slice(0, 64), { ...(term ? { q: term } : {}), ...(categoryId ? { categoryId } : {}) });
   if (!page) notFound();
   const { shop, products, contact } = page;
+  const takesOrders = await shopHasPackage(shop.id);
   const typeLabel = types.find((t) => t.code === shop.businessType)?.nameAr;
   const base = `/shops/${shop.id}`;
   const qs = (extra: Record<string, string | undefined>) => {
@@ -69,6 +71,7 @@ export default async function ShopPage({ params, searchParams }: { params: Promi
       </section>
 
       <div className="mx-auto flex w-full max-w-page flex-col gap-5 px-4 py-6 sm:px-6">
+        {!takesOrders ? <Notice tone="warning">هذا النشاط لا يستقبل طلبات حالياً.</Notice> : null}
         {!shop.isOpen ? <Notice tone="warning">النشاط مغلق الآن. يمكنك تصفح القائمة، وقد لا يُقبل الطلب حتى يفتح.</Notice> : null}
 
         <form action={base} role="search" className="flex gap-2">
