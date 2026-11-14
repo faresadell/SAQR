@@ -21,7 +21,7 @@ export function customerNav(base = "/account"): { groups: NavGroup[]; mobile: Na
   const tasbeeh = { href: `${base}/tasbeeh`, label: "التسبيح", icon: "sun" } as const;
   return {
     groups: [
-      { items: [home, orders] },
+      { items: [home, orders, { href: `${base}/chats`, label: "المحادثات", icon: "message" }] },
       {
         title: "النجوم والباقات",
         items: [stars, { href: `${base}/packages`, label: "الباقات والشحن", icon: "layers" }, { href: `${base}/rewards`, label: "المكافآت الشهرية", icon: "gift" }],
@@ -47,7 +47,7 @@ export function merchantNav(base = "/merchant"): { groups: NavGroup[]; mobile: N
   const offers = { href: `${base}/offers`, label: "العروض", icon: "tag" } as const;
   return {
     groups: [
-      { items: [home, orders, { href: `${base}/drivers`, label: "السائقون", icon: "truck" }] },
+      { items: [home, orders, { href: `${base}/chats`, label: "المحادثات", icon: "message" }, { href: `${base}/drivers`, label: "السائقون", icon: "truck" }] },
       { title: "الكتالوج", items: [products, offers] },
       {
         title: "المال",

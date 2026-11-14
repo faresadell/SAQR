@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import { notFound } from "next/navigation";
 import { SiteShell } from "@/components/layout/site-shell";
 import { Badge } from "@/components/ui/badge";
@@ -48,6 +49,10 @@ export default async function ShopPage({ params, searchParams }: { params: Promi
               {shop.address}
             </p>
           ) : null}
+          <Link href={`/account/chats/start?shop=${shop.id}`} className="inline-flex w-fit items-center gap-2 rounded-full bg-white px-4 py-2 text-sm font-bold text-navy-900 hover:bg-white/90">
+            <Icon name="message" className="size-4" />
+            ابدأ محادثة مع النشاط
+          </Link>
           {contact.phones.length > 0 || Object.keys(contact.social).length > 0 ? (
             <ul className="flex flex-wrap gap-2 text-sm" aria-label="التواصل مع النشاط">
               {contact.phones.map((ph) => (
