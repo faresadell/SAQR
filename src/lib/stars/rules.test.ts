@@ -44,17 +44,17 @@ describe("monthly rewards", () => {
 });
 
 describe("plans", () => {
-  it("are the approved 30/50/100 packages at one EGP per star for every audience", () => {
+  it("are the owner-approved packages (paid + bonus stars, 1 EGP per paid star)", () => {
     expect(DEFAULT_PLANS.length).toBe(9);
-    for (const audience of ["CUSTOMER", "DRIVER", "MERCHANT"] as const) {
-      const mine = DEFAULT_PLANS.filter((x) => x.audience === audience);
-      expect(mine.map((x) => totalStars(x))).toEqual([30, 50, 100]);
-      for (const p of mine) {
-        expect(p.priceCents).toBe(p.baseStars * 100);
-        expect(p.bonusStars).toBe(0);
-        expect(p.offerQuota).toBeNull();
-      }
+    const shape = (audience: "CUSTOMER" | "DRIVER" | "MERCHANT") => DEFAULT_PLANS.filter((x) => x.audience === audience).map((x) => [x.baseStars, x.bonusStars]);
+    expect(shape("CUSTOMER")).toEqual([[50, 15], [75, 25], [100, 35]]);
+    expect(shape("MERCHANT")).toEqual([[100, 15], [150, 25], [200, 35]]);
+    expect(shape("DRIVER")).toEqual([[30, 0], [50, 0], [100, 0]]);
+    for (const p of DEFAULT_PLANS) {
+      expect(p.priceCents).toBe(p.baseStars * 100);
+      expect(p.offerQuota).toBeNull();
     }
+    expect(totalStars({ baseStars: 100, bonusStars: 35 })).toBe(135);
     expect(new Set(DEFAULT_PLANS.map((x) => x.code)).size).toBe(9);
     for (const code of RETIRED_PLAN_CODES) expect(DEFAULT_PLANS.some((x) => x.code === code)).toBe(false);
   });

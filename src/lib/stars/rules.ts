@@ -80,20 +80,24 @@ export interface PlanDefinition {
 }
 
 /**
- * The ONE source of truth for star packages: 30, 50 and 100 stars, one star = 1 EGP, no bonus (nothing else is specified).
- * Every audience (customer, driver, merchant) buys from the same three sizes. Admins can edit prices/stars afterwards;
- * purchases keep their own snapshot. offerQuota is null: the offer quota per package has not been decided.
- * Older plans (customer_bronze ... merchant_gold) are deactivated by a migration, never deleted.
+ * The ONE source of truth for star packages (owner-approved, 14 Nov 2026), written "paid stars + bonus stars":
+ *   customer 50+15, 75+25, 100+35 · merchant 100+15, 150+25, 200+35 · driver 30, 50, 100 (no bonus, unchanged).
+ * Price = paid stars x 1 EGP (the existing rate; the owner gave no prices, so this is an assumption admins can edit).
+ * Admins can edit prices/stars afterwards; purchases keep their own snapshot. offerQuota is null: the offer quota per
+ * package has not been decided. Older plans are deactivated by migrations, never deleted.
  */
-export const STAR_PACKAGE_SIZES = [30, 50, 100] as const;
-const AUDIENCES: readonly PlanAudience[] = ["CUSTOMER", "DRIVER", "MERCHANT"];
-export const DEFAULT_PLANS: readonly PlanDefinition[] = AUDIENCES.flatMap((audience) =>
-  STAR_PACKAGE_SIZES.map((stars) => ({
+const PACKAGES: Record<PlanAudience, readonly (readonly [number, number])[]> = {
+  CUSTOMER: [[50, 15], [75, 25], [100, 35]],
+  DRIVER: [[30, 0], [50, 0], [100, 0]],
+  MERCHANT: [[100, 15], [150, 25], [200, 35]],
+};
+export const DEFAULT_PLANS: readonly PlanDefinition[] = (Object.keys(PACKAGES) as PlanAudience[]).flatMap((audience) =>
+  PACKAGES[audience].map(([stars, bonus]) => ({
     code: `${audience.toLowerCase()}_stars_${stars}`,
     audience,
     priceCents: stars * 100,
     baseStars: stars,
-    bonusStars: 0,
+    bonusStars: bonus,
     offerQuota: null,
   })),
 );
