@@ -3,9 +3,8 @@
 import { useActionState, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { Field } from "@/components/ui/field";
-import { FileUpload } from "@/components/ui/file-upload";
 import { Notice } from "@/components/ui/states";
+import { MethodFieldset, ProofFields } from "./payment-fields";
 import { PackageCard } from "@/components/saqr/package-card";
 import { formatEgp } from "@/lib/money";
 import type { FormState } from "@/lib/form-state";
@@ -35,7 +34,6 @@ export function PurchasePanel({ options, current, instructions, action }: Purcha
   const [state, formAction, pending] = useActionState(action ?? noop, idle);
   const [selected, setSelected] = useState<string | null>(options[0]?.id ?? null);
   const [method, setMethod] = useState(instructions[0]?.methodCode ?? "");
-  const errors = state.fieldErrors ?? {};
   const chosen = options.find((o) => o.id === selected);
   const instruction = instructions.find((i) => i.methodCode === method);
   const blocked = current.state === "PENDING_REVIEW";
@@ -65,15 +63,7 @@ export function PurchasePanel({ options, current, instructions, action }: Purcha
         ) : (
           <form action={formAction} className="flex flex-col gap-4">
             <input type="hidden" name="packageId" value={selected ?? ""} />
-            <fieldset className="flex flex-wrap gap-2" disabled={blocked}>
-              <legend className="mb-1 text-sm font-semibold">وسيلة الدفع</legend>
-              {instructions.map((i) => (
-                <label key={i.methodCode} className="flex cursor-pointer items-center gap-2 rounded-control border border-line bg-surface px-4 py-2.5 text-sm font-semibold has-[:checked]:border-brand has-[:checked]:bg-brand-soft">
-                  <input type="radio" name="method" value={i.methodCode} checked={method === i.methodCode} onChange={() => setMethod(i.methodCode)} />
-                  {i.methodLabel}
-                </label>
-              ))}
-            </fieldset>
+            <MethodFieldset instructions={instructions} method={method} onChange={setMethod} disabled={blocked} />
             {instruction?.accountValue ? (
               <p className="rounded-control bg-canvas p-3 text-sm">
                 حوّل {chosen ? <strong className="num">{formatEgp(chosen.priceCents)}</strong> : "المبلغ"} إلى {instruction.accountLabel}:{" "}
@@ -82,10 +72,7 @@ export function PurchasePanel({ options, current, instructions, action }: Purcha
             ) : instruction ? (
               <Notice tone="warning">لم تحدّد الإدارة بعد رقم استلام الدفع لهذه الوسيلة، ولا يمكن إتمام الشراء بها قبل إعداده.</Notice>
             ) : null}
-            <Field label="رقم عملية التحويل" name="referenceNo" dir="ltr" required disabled={blocked} error={errors.referenceNo} />
-            <FileUpload label="صورة الإيصال" name="receipt" required disabled={blocked} error={errors.receipt} />
-            {state.error ? <Notice tone="danger">{state.error}</Notice> : null}
-            {state.message ? <Notice tone="success">{state.message}</Notice> : null}
+            <ProofFields disabled={blocked} state={state} />
             <Button type="submit" loading={pending} disabled={!action || blocked || !selected || !instruction?.accountValue}>إرسال للمراجعة</Button>
             <p className="text-xs text-ink-muted">بعد الإرسال تظهر الحالة «قيد المراجعة» حتى يعتمد النظام الدفع. الصورة وحدها ليست دليلاً نهائياً على نجاح الدفع.</p>
           </form>

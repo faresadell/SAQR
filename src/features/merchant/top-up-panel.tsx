@@ -4,10 +4,10 @@ import { useActionState, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Field } from "@/components/ui/field";
-import { FileUpload } from "@/components/ui/file-upload";
 import { Notice } from "@/components/ui/states";
 import { formatEgp } from "@/lib/money";
 import type { FormState } from "@/lib/form-state";
+import { MethodFieldset, ProofFields } from "@/features/shared/payment-fields";
 import type { PaymentInstruction } from "@/features/shared/types";
 
 const idle: FormState = {};
@@ -32,15 +32,7 @@ export function TopUpPanel({ instructions, action, blocked }: { instructions: Pa
       ) : (
         <form action={formAction} className="flex flex-col gap-4">
           <Field label="عدد النجوم" name="stars" type="number" inputMode="numeric" min={1} max={5000} step={1} required value={stars} onChange={(e) => setStars(e.target.value)} disabled={blocked} error={errors.stars} />
-          <fieldset className="flex flex-wrap gap-2" disabled={blocked}>
-            <legend className="mb-1 text-sm font-semibold">وسيلة الدفع</legend>
-            {instructions.map((i) => (
-              <label key={i.methodCode} className="flex cursor-pointer items-center gap-2 rounded-control border border-line bg-surface px-4 py-2.5 text-sm font-semibold has-[:checked]:border-brand has-[:checked]:bg-brand-soft">
-                <input type="radio" name="method" value={i.methodCode} checked={method === i.methodCode} onChange={() => setMethod(i.methodCode)} />
-                {i.methodLabel}
-              </label>
-            ))}
-          </fieldset>
+          <MethodFieldset instructions={instructions} method={method} onChange={setMethod} disabled={blocked} />
           {instruction?.accountValue ? (
             <p className="rounded-control bg-canvas p-3 text-sm">
               حوّل {valid ? <strong className="num">{formatEgp(count * PRICE_PER_STAR_CENTS)}</strong> : "المبلغ"} إلى {instruction.accountLabel}: <strong className="ltr-isolate num">{instruction.accountValue}</strong>
@@ -48,10 +40,7 @@ export function TopUpPanel({ instructions, action, blocked }: { instructions: Pa
           ) : instruction ? (
             <Notice tone="warning">لم تحدّد الإدارة بعد رقم استلام الدفع لهذه الوسيلة.</Notice>
           ) : null}
-          <Field label="رقم عملية التحويل" name="referenceNo" dir="ltr" required disabled={blocked} error={errors.referenceNo} />
-          <FileUpload label="صورة الإيصال" name="receipt" required disabled={blocked} error={errors.receipt} />
-          {state.error ? <Notice tone="danger">{state.error}</Notice> : null}
-          {state.message ? <Notice tone="success">{state.message}</Notice> : null}
+          <ProofFields disabled={blocked} state={state} />
           <Button type="submit" loading={pending} disabled={blocked || !valid || !instruction?.accountValue}>إرسال للمراجعة</Button>
         </form>
       )}
