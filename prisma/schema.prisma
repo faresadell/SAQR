@@ -1038,3 +1038,31 @@ model StoredFile {
   bytes     Bytes
   createdAt DateTime @default(now())
 }
+
+// ───────────── Chat (customer ↔ shop; only the two participants can read it) ─────────────
+
+model Conversation {
+  id             String    @id @default(cuid())
+  customerId     String
+  merchantId     String
+  lastMessageAt  DateTime  @default(now())
+  customerReadAt DateTime?
+  merchantReadAt DateTime?
+  createdAt      DateTime  @default(now())
+  messages       Message[]
+
+  @@unique([customerId, merchantId])
+  @@index([customerId, lastMessageAt])
+  @@index([merchantId, lastMessageAt])
+}
+
+model Message {
+  id             String       @id @default(cuid())
+  conversationId String
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  senderId       String
+  body           String
+  createdAt      DateTime     @default(now())
+
+  @@index([conversationId, createdAt])
+}
