@@ -60,7 +60,7 @@ describe("plan purchase", () => {
     expect(await getStarBalance(db, c.id)).toBe(90);
   });
 
-  it("merchant 100-star package gives 100 stars; driver 30-star package gives 30", async () => {
+  it("merchant 100+15 package gives 115 stars; driver 30-star package gives 30", async () => {
     const m = await user("MERCHANT");
     const d = await user("DRIVER");
     const pm = await buy(m, "merchant_stars_100");
@@ -68,7 +68,7 @@ describe("plan purchase", () => {
     if (!pm.ok || !pd.ok) throw new Error("setup");
     await decidePlanPurchase(admin, pm.purchaseId, "APPROVE");
     await decidePlanPurchase(admin, pd.purchaseId, "APPROVE");
-    expect(await getStarBalance(db, m.id)).toBe(100);
+    expect(await getStarBalance(db, m.id)).toBe(115);
     expect(await getStarBalance(db, d.id)).toBe(30);
   });
 
@@ -83,7 +83,7 @@ describe("plan purchase", () => {
     await decidePlanPurchase(admin, second.purchaseId, "APPROVE");
     const after = await db.subscription.findUniqueOrThrow({ where: { userId: c.id } });
     expect(after.expiresAt.getTime() - before.expiresAt.getTime()).toBe(30 * 86_400_000);
-    expect(await getStarBalance(db, c.id)).toBe(100);
+    expect(await getStarBalance(db, c.id)).toBe(130); // 2 x (50 + 15)
   });
 
   it("keeps stars after the plan expires", async () => {
@@ -93,7 +93,7 @@ describe("plan purchase", () => {
     await decidePlanPurchase(admin, r.purchaseId, "APPROVE");
     await db.subscription.update({ where: { userId: c.id }, data: { expiresAt: new Date(Date.now() - 1000) } });
     expect((await getMyPlanState(c)).subscription?.isActive).toBe(false);
-    expect(await getStarBalance(db, c.id)).toBe(50);
+    expect(await getStarBalance(db, c.id)).toBe(65); // 50 + 15
   });
 
   it("rejects wrong audience, a second pending purchase, someone else's upload and a disabled method", async () => {
