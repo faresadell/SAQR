@@ -55,6 +55,12 @@ export default async function ShopPage({ params, searchParams }: { params: Promi
             <Icon name="message" className="size-4" />
             ابدأ محادثة مع النشاط
           </Link>
+          {takesOrders ? (
+            <Link href={`/account/requests/new?shop=${shop.id}`} className="inline-flex w-fit items-center gap-2 rounded-full border border-white/40 px-4 py-2 text-sm font-bold text-white hover:bg-white/10">
+              <Icon name="box" className="size-4" />
+              اطلب بكلماتك
+            </Link>
+          ) : null}
           {contact.phones.length > 0 || Object.keys(contact.social).length > 0 ? (
             <ul className="flex flex-wrap gap-2 text-sm" aria-label="التواصل مع النشاط">
               {contact.phones.map((ph) => (

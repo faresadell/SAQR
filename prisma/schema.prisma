@@ -1068,3 +1068,33 @@ model Message {
 
   @@index([conversationId, createdAt])
 }
+
+// ───────────── Free-text order requests (customer asks in words, the shop answers with ONE final price) ─────────────
+
+enum OrderRequestStatus {
+  PENDING_QUOTE
+  QUOTED
+  ACCEPTED
+  DECLINED
+  CANCELLED
+}
+
+// No negotiation: the shop quotes once (or declines); the customer accepts (which creates a normal order at that price) or cancels.
+model OrderRequest {
+  id                  String             @id @default(cuid())
+  customerId          String
+  merchantId          String
+  addressId           String
+  body                String
+  status              OrderRequestStatus @default(PENDING_QUOTE)
+  quotedSubtotalCents Int?
+  quoteNote           String?
+  quotedAt            DateTime?
+  decidedAt           DateTime?
+  parentOrderId       String?
+  createdAt           DateTime           @default(now())
+  updatedAt           DateTime           @updatedAt
+
+  @@index([customerId, createdAt])
+  @@index([merchantId, status, createdAt])
+}
