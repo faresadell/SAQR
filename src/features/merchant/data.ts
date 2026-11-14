@@ -8,7 +8,8 @@ import { listOrdersForActor, mapNotifications, mapPackages, mapStars } from "@/f
 import type { CurrentPackage, NotificationItem, PackageOption, PaymentInstruction, StarsOverview } from "@/features/shared/types";
 import { getSetting } from "@/lib/settings";
 import { listOwnProducts } from "@/server/catalog/products";
-import { listMyOffers } from "@/server/offers/service";
+import { getOfferQuota, listMyOffers } from "@/server/offers/service";
+import { getOwnMerchant } from "@/server/merchants/service";
 import { listMyDrivers } from "@/server/drivers/service";
 import type { MerchantDriverOption, MerchantOffersData, MerchantOrderActions, MerchantOrderRow, MerchantReport } from "./types";
 
@@ -87,8 +88,10 @@ export async function loadMerchantDriverOptions(user: U): Promise<MerchantDriver
 
 export async function loadMerchantOffers(user: U): Promise<Loaded<MerchantOffersData>> {
   return load(async () => {
-    const [offers, products, enabled, maxPercent, maxFixedEgp, maxActive, baseHours, perHour] = await Promise.all([
+    const shop = await getOwnMerchant(user);
+    const [offers, quota, products, enabled, maxPercent, maxFixedEgp, maxActive, baseHours, perHour] = await Promise.all([
       listMyOffers(user),
+      shop ? getOfferQuota(user.id, shop.id) : Promise.resolve({ hasPackage: false, active: false, quota: 0, used: 0, remaining: 0 }),
       listOwnProducts(user),
       getSetting("offers.discount.enabled"),
       getSetting("offers.discount.max_percent"),
@@ -101,6 +104,7 @@ export async function loadMerchantOffers(user: U): Promise<Loaded<MerchantOffers
       discounts: { enabled: enabled === 1, maxPercent, maxFixedEgp, maxActive },
       baseHours,
       extensionStarsPerHour: perHour,
+      quota: { active: quota.active, quota: quota.quota, used: quota.used, remaining: quota.remaining },
       offers: offers.map((o) => ({
         id: o.id,
         title: o.title,

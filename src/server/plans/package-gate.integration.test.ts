@@ -8,7 +8,7 @@ import type { Actor } from "@/lib/auth/permissions";
 import { DEFAULT_PLANS } from "@/lib/stars/rules";
 import { createOffer, createOfferAsAdmin } from "@/server/offers/service";
 import { decidePlanPurchase, hasEverHadPackage, listAllPlans, requestPlanPurchase, requestStarTopUp, shopHasPackage } from "@/server/plans/service";
-import { getStarBalance } from "@/server/stars/ledger";
+import { applyStarMove, getStarBalance } from "@/server/stars/ledger";
 import { AuthorizationError } from "@/server/errors";
 import { grantPackage } from "@/test-support/package";
 
@@ -94,5 +94,47 @@ describe("star top-up", () => {
 
     expect((await listAllPlans(admin)).some((p) => p.code === "merchant_stars_topup")).toBe(false);
     expect(await requestPlanPurchase(m.actor, { planCode: "merchant_stars_topup", method: "instapay", referenceNo: "SNEAK-REF-1", uploadId: await upload(m.actor) })).toEqual({ ok: false, error: "PLAN_NOT_AVAILABLE" });
+  });
+});
+
+describe("offer quota and paid hours", () => {
+  const withQuota = async (m: { actor: Actor }, code = "merchant_stars_100") => {
+    const plan = await db.plan.findUniqueOrThrow({ where: { code } });
+    const now = new Date();
+    await db.subscription.create({ data: { userId: m.actor.id, planId: plan.id, startsAt: now, expiresAt: new Date(now.getTime() + 30 * 86_400_000) } });
+  };
+  const fund = (userId: string, amount: number) => db.$transaction((tx) => applyStarMove(tx, { userId, amount, reason: "PURCHASE", idempotencyKey: `fund:${userId}:${amount}` }));
+
+  it("the first 4 offers of a 100+15 package are free; the 5th needs hours and costs 1 star per hour; stopped offers still count", async () => {
+    const m = await merchant();
+    await withQuota(m);
+    for (let i = 0; i < 4; i += 1) {
+      const r = await createOffer(m.actor, { title: `عرض ${i}` });
+      expect(r.ok).toBe(true);
+    }
+    const first = await db.offer.findFirstOrThrow({ orderBy: { createdAt: "asc" } });
+    await db.offer.update({ where: { id: first.id }, data: { status: "STOPPED" } }); // stopping does not give the offer back
+    expect(await createOffer(m.actor, { title: "الخامس" })).toEqual({ ok: false, error: "HOURS_REQUIRED" });
+    expect(await createOffer(m.actor, { title: "الخامس", paidHours: 0 })).toEqual({ ok: false, error: "INVALID_REQUEST" });
+    expect(await createOffer(m.actor, { title: "الخامس", paidHours: 5 })).toEqual({ ok: false, error: "INSUFFICIENT_STARS" });
+    expect(await db.offer.count()).toBe(4); // nothing created by the failed attempt
+
+    await fund(m.actor.id, 20);
+    const r = await createOffer(m.actor, { title: "الخامس", paidHours: 5 });
+    if (!r.ok) throw new Error(`setup ${r.error}`);
+    expect(await getStarBalance(db, m.actor.id)).toBe(15);
+    const paid = await db.offer.findUniqueOrThrow({ where: { id: r.offerId } });
+    expect([paid.quotaUsed, paid.paidHours]).toEqual([false, 5]);
+    expect(Math.round((paid.endsAt.getTime() - paid.startsAt.getTime()) / 3_600_000)).toBe(5);
+  });
+
+  it("an ended package has no free offers (they are paid per hour), and an admin-created offer never uses the quota", async () => {
+    const m = await merchant();
+    await withQuota(m, "merchant_stars_200");
+    await createOfferAsAdmin(admin, m.shopId, { title: "من الإدارة" });
+    expect((await createOffer(m.actor, { title: "مجاني" })).ok).toBe(true);
+    expect((await db.offer.findMany({ where: { quotaUsed: true } })).length).toBe(1);
+    await db.subscription.update({ where: { userId: m.actor.id }, data: { expiresAt: new Date(Date.now() - 1000) } });
+    expect(await createOffer(m.actor, { title: "بعد انتهاء الباقة" })).toEqual({ ok: false, error: "HOURS_REQUIRED" });
   });
 });
