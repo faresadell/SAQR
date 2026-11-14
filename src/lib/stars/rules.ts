@@ -83,9 +83,11 @@ export interface PlanDefinition {
  * The ONE source of truth for star packages (owner-approved, 14 Nov 2026), written "paid stars + bonus stars":
  *   customer 50+15, 75+25, 100+35 · merchant 100+15, 150+25, 200+35 · driver 30, 50, 100 (no bonus, unchanged).
  * Price = paid stars x 1 EGP (the existing rate; the owner gave no prices, so this is an assumption admins can edit).
- * Admins can edit prices/stars afterwards; purchases keep their own snapshot. offerQuota is null: the offer quota per
- * package has not been decided. Older plans are deactivated by migrations, never deleted.
+ * Merchant packages carry an offer quota per 30-day cycle (owner-approved): 4, 6 and 8 offers. Other audiences have none.
+ * Admins can edit prices/stars/quota afterwards; purchases keep their own snapshot. Older plans are deactivated by
+ * migrations, never deleted.
  */
+const MERCHANT_OFFER_QUOTA: Record<number, number> = { 100: 4, 150: 6, 200: 8 };
 const PACKAGES: Record<PlanAudience, readonly (readonly [number, number])[]> = {
   CUSTOMER: [[50, 15], [75, 25], [100, 35]],
   DRIVER: [[30, 0], [50, 0], [100, 0]],
@@ -98,7 +100,7 @@ export const DEFAULT_PLANS: readonly PlanDefinition[] = (Object.keys(PACKAGES) a
     priceCents: stars * 100,
     baseStars: stars,
     bonusStars: bonus,
-    offerQuota: null,
+    offerQuota: audience === "MERCHANT" ? (MERCHANT_OFFER_QUOTA[stars] ?? null) : null,
   })),
 );
 /** Codes of the retired star plans: kept in the database (history) but not sold. */
