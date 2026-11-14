@@ -105,7 +105,7 @@ describe("plan purchase", () => {
     expect(await requestPlanPurchase(other, { planCode: "customer_stars_50", method: "instapay", referenceNo: "REF-OTHER-1", uploadId: await upload(c) })).toEqual({ ok: false, error: "INVALID_REQUEST" });
     await db.paymentMethodConfig.update({ where: { code: "instapay" }, data: { isEnabled: false } });
     expect(await buy(other, "customer_stars_50")).toEqual({ ok: false, error: "PAYMENT_METHOD_DISABLED" });
-    expect((await listPlansFor(c)).map((p) => p.code)).toEqual(["customer_stars_30", "customer_stars_50", "customer_stars_100", "customer_bonus_fixture"]);
+    expect((await listPlansFor(c)).map((p) => p.code)).toEqual(["customer_stars_50", "customer_stars_75", "customer_stars_100", "customer_bonus_fixture"]);
   });
 
   it("only admins with payments.review can decide", async () => {
@@ -123,7 +123,7 @@ describe("plan purchase", () => {
     if (!r.ok) throw new Error("setup");
     const results = await Promise.all([decidePlanPurchase(admin, r.purchaseId, "APPROVE"), decidePlanPurchase(admin, r.purchaseId, "APPROVE")]);
     expect(results.filter((x) => x.ok).length).toBe(1);
-    expect(await getStarBalance(db, c.id)).toBe(100);
+    expect(await getStarBalance(db, c.id)).toBe(135); // 100 + 35
   });
 
   it("refuses to approve the same transfer twice and keeps the flag", async () => {
@@ -156,7 +156,7 @@ describe("plan catalog edits", () => {
     if (!r.ok) throw new Error("setup");
     expect((await updatePlan(admin, "customer_stars_50", { priceCents: 6000, baseStars: 60 })).ok).toBe(true);
     await decidePlanPurchase(admin, r.purchaseId, "APPROVE");
-    expect(await getStarBalance(db, c.id)).toBe(50); // the purchase kept its own snapshot
+    expect(await getStarBalance(db, c.id)).toBe(65); // the purchase kept its own snapshot (50 + 15)
     expect(await updatePlan(admin, "customer_stars_50", { priceCents: -5 })).toEqual({ ok: false, error: "INVALID_REQUEST" });
     await expect(updatePlan(supportOnly, "customer_stars_50", { priceCents: 6000 })).rejects.toBeInstanceOf(AuthorizationError);
     expect((await db.auditLog.findMany({ where: { action: "PLAN_UPDATED" } })).length).toBe(1);
@@ -192,6 +192,6 @@ describe("notifications and plan reminders", () => {
     await runPlanReminders();
     await runPlanReminders();
     expect((await db.notification.count({ where: { userId: c.id, type: "PLAN_EXPIRED" } }))).toBe(1);
-    expect(await getStarBalance(db, c.id)).toBe(50);
+    expect(await getStarBalance(db, c.id)).toBe(65); // 50 + 15
   });
 });
