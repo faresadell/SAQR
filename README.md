@@ -53,20 +53,11 @@ npm run db:seed        # يضيف أنواع النشاط (مطعم، متجر) 
 ### إنشاء المشرف الرئيسي
 
 ```bash
-ADMIN_PASSWORD='كلمة-سر-طويلة-12-حرف-على-الأقل' npm run admin:create -- --phone 01012345678 --name "اسمك"
+ADMIN_PASSWORD='كلمة-سر-طويلة-12-حرف-على-الأقل' npm run admin:create -- --email you@example.com --phone 01012345678 --name "اسمك"
 ```
-سيطبع رابط مصادقة (otpauth) مرة واحدة: أضفه فوراً لتطبيق Google Authenticator. الدخول للمشرف يحتاج رقم الموبايل + كلمة المرور + رمز التطبيق.
+الدخول للمشرف بالإيميل وكلمة المرور (بدون رمز مصادقة).
 
 أوامر الفحص: `npm run typecheck` · `npm run lint` · `npm test` · `npm run test:integration` · `npm run db:validate` · `npm run audit`
-
-### بعد المرحلة 1 من خطة التطوير الجديدة (الأساس والاستقرار)
-```bash
-npx prisma migrate deploy     # أو prisma db push في التطوير: يضيف عمود User.signupNonceHash
-npm run maintenance:cleanup   # تنضيف الجداول قصيرة العمر؛ جدولها يومياً (cron)
-```
-- متغير جديد في `.env`: `STORAGE_DIR` (مجلد خاص للإيصالات والصور خارج `public/`، وفي الإنتاج مسار مطلق على قرص دائم).
-- اختبارات التكامل ترفض العمل على قاعدة اسمها لا ينتهي بـ `test` أو `ci` لأنها تمسح الجداول.
-- التفاصيل الكاملة في `docs/PHASE1.md`.
 
 ## هيكل المشروع
 

@@ -19,8 +19,9 @@
     "audit": "npm audit --omit=dev --audit-level=high",
     "admin:create": "tsx --env-file=.env scripts/create-admin.ts",
     "db:seed": "tsx --env-file=.env prisma/seed.ts",
-    "maintenance:cleanup": "tsx --env-file=.env scripts/cleanup.ts",
-    "test:integration": "vitest run --config vitest.integration.config.ts"
+    "test:integration": "vitest run --config vitest.integration.config.ts",
+    "postinstall": "prisma generate",
+    "vercel-build": "if [ \"$VERCEL_ENV\" = \"production\" ]; then if [ -n \"$DATABASE_URL\" ]; then DATABASE_URL=\"${DATABASE_URL_UNPOOLED:-$DATABASE_URL}\" prisma migrate deploy && DATABASE_URL=\"${DATABASE_URL_UNPOOLED:-$DATABASE_URL}\" tsx prisma/seed.ts && { if [ \"$PREVIEW_MODE\" = \"true\" ] && [ -n \"$DEMO_PASSWORD\" ]; then DATABASE_URL=\"${DATABASE_URL_UNPOOLED:-$DATABASE_URL}\" tsx scripts/seed-demo.ts || echo \"WARNING: demo accounts were not created\"; fi; }; else echo \"WARNING: DATABASE_URL is not set, skipping migrations. Set it in Vercel Environment Variables and redeploy.\"; fi; fi && next build"
   },
   "dependencies": {
     "@prisma/client": "^6.0.0",
@@ -30,7 +31,7 @@
     "react-dom": "^19.0.0",
     "server-only": "^0.0.1",
     "tailwind-merge": "^2.5.0",
-    "zod": "^3.23.0"
+    "zod": "^4.6.7"
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3.0.0",
@@ -46,5 +47,11 @@
     "tsx": "^4.19.0",
     "typescript": "^5.6.0",
     "vitest": "^2.1.0"
+  },
+  "overrides": {
+    "next": {
+      "postcss": "^8.5.23"
+    },
+    "deepmerge-ts": "^8.0.0"
   }
 }

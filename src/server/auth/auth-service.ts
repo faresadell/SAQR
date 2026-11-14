@@ -1,15 +1,11 @@
 import "server-only";
 import { Prisma, type Role } from "@prisma/client";
 import { db } from "@/lib/db";
-import { getEnv } from "@/lib/env";
 import { writeAudit } from "@/lib/audit";
 import { consumeRateLimit } from "@/lib/rate-limit";
 import { getSetting } from "@/lib/settings";
 import { burnPasswordCheck, hashPassword, verifyPassword } from "@/lib/auth/password";
-import { decryptSecret, parseEncryptionKey } from "@/lib/auth/secret-box";
-import { generateSignupNonce, hashSignupNonce, signupNonceMatches } from "@/lib/auth/tokens";
-import { verifyTotp } from "@/lib/auth/totp";
-import { requestOtp, verifyOtp, type OtpRequestResult } from "./otp-service";
+import { consumeEmailCode, issueEmailCode } from "./email-codes";
 
 export const CONSENT_VERSION = "2026-10-v1";
 
@@ -17,20 +13,18 @@ export const CONSENT_VERSION = "2026-10-v1";
 
 export interface RegisterInput {
   name: string;
-  phone: string; // already normalized to E.164
+  phone: string; // already normalized to E.164 (a contact/login number; it is NOT verified by a code)
+  email: string; // already normalized; the activation code is sent here
   password: string;
-  role: "CUSTOMER" | "MERCHANT";
+  role: "CUSTOMER" | "MERCHANT" | "DRIVER";
 }
 
-/**
- * `nonce` is the secret for the browser that submitted the form. It is returned for EVERY branch (new, pending,
- * already registered) so the response is identical; only the branches that store its hash can ever verify with it.
- */
-export type RegisterResult = { ok: true; nonce: string } | { ok: false; error: "RATE_LIMITED" | "SEND_FAILED" };
+export type RegisterResult = { ok: true } | { ok: false; error: "RATE_LIMITED" | "SEND_FAILED" };
 
 /**
- * The result is identical whether the phone is new, pending or already registered, so this endpoint
- * cannot be used to discover which numbers have accounts. A code is only sent for new/pending accounts.
+ * The result is identical whether the phone/email is new, pending or already registered, so this endpoint
+ * cannot be used to discover which numbers or addresses have accounts. A code is only sent for a new account or a
+ * still-pending one with the same phone; an account is activated only by the code sent to its email.
  */
 export async function registerAccount(input: RegisterInput, ip: string): Promise<RegisterResult> {
   const perHour = await getSetting("auth.register.max_per_ip_per_hour");
@@ -40,110 +34,90 @@ export async function registerAccount(input: RegisterInput, ip: string): Promise
 
   // Hash first so response time is the same for every branch.
   const passwordHash = await hashPassword(input.password);
-  const nonce = generateSignupNonce();
-  const signupNonceHash = hashSignupNonce(nonce);
-  const existing = await db.user.findUnique({ where: { phone: input.phone } });
-  let sendCode = false;
+  const [byPhone, byEmail] = await Promise.all([db.user.findUnique({ where: { phone: input.phone } }), db.user.findUnique({ where: { email: input.email } })]);
+  let targetId: string | null = null;
 
-  if (!existing) {
+  if (!byPhone && !byEmail) {
     try {
-      await db.user.create({
-        data: {
-          phone: input.phone,
-          name: input.name,
-          passwordHash,
-          role: input.role,
-          status: "PENDING",
-          consentVersion: CONSENT_VERSION,
-          consentAcceptedAt: new Date(),
-          signupNonceHash,
-        },
+      const created = await db.user.create({
+        data: { phone: input.phone, email: input.email, name: input.name, passwordHash, role: input.role, status: "PENDING", consentVersion: CONSENT_VERSION, consentAcceptedAt: new Date() },
       });
-      sendCode = true;
+      targetId = created.id;
     } catch (error) {
-      // A parallel request created the same phone first: treat as already existing.
+      // A parallel request created the same phone/email first: treat as already existing.
       if (!(error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002")) throw error;
     }
-  } else if (existing.status === "PENDING" && !existing.phoneVerifiedAt && (existing.role === "CUSTOMER" || existing.role === "MERCHANT")) {
-    // The newest submission replaces an unverified account's details AND its nonce. Verification later requires the
-    // nonce, so an earlier browser (e.g. the real owner's) can no longer finish with someone else's password, and a
-    // stranger who never receives the SMS code can never finish at all.
+  } else if (byPhone && (!byEmail || byEmail.id === byPhone.id) && byPhone.status === "PENDING" && !byPhone.emailVerifiedAt && (await isSelfRegisteredPending(byPhone))) {
+    // Safe: whoever completes the email code is the owner of that address, and the account is still unused.
     await db.user.update({
-      where: { id: existing.id },
-      data: {
-        name: input.name,
-        passwordHash,
-        role: input.role,
-        consentVersion: CONSENT_VERSION,
-        consentAcceptedAt: new Date(),
-        signupNonceHash,
-      },
+      where: { id: byPhone.id },
+      data: { email: input.email, name: input.name, passwordHash, role: input.role, consentVersion: CONSENT_VERSION, consentAcceptedAt: new Date() },
     });
-    sendCode = true;
+    targetId = byPhone.id;
   }
 
-  if (sendCode) {
-    const result = await requestOtp(input.phone, "SIGNUP", ip);
-    if (!result.ok) return { ok: false, error: result.reason };
+  if (targetId) {
+    const sent = await issueEmailCode(targetId, input.email, "VERIFY_EMAIL", ip);
+    if (!sent.ok) return { ok: false, error: sent.reason };
   }
-  return { ok: true, nonce };
+  return { ok: true };
 }
 
-// ───────────── Phone verification ─────────────
+/** A pending account that a shop created for its driver is not something a stranger may take over. */
+async function isSelfRegisteredPending(user: { id: string; role: Role }): Promise<boolean> {
+  if (user.role !== "CUSTOMER" && user.role !== "MERCHANT" && user.role !== "DRIVER") return false;
+  if (user.role !== "DRIVER") return true;
+  const driver = await db.driver.findUnique({ where: { userId: user.id }, select: { merchantId: true } });
+  return !driver?.merchantId;
+}
+
+// ───────────── Activation by email code ─────────────
 
 export type VerifyResult =
   | { ok: true; user: { id: string; role: Role } }
   | { ok: false; error: "INVALID_CODE" | "RATE_LIMITED" | "SUSPENDED" };
 
-export async function completePhoneVerification(phone: string, code: string, nonce: string, ip: string): Promise<VerifyResult> {
+/** `phone` identifies the pending account (kept in a short-lived cookie); the code must be the one sent to its email. */
+export async function completeEmailActivation(phone: string, code: string, ip: string): Promise<VerifyResult> {
   const perPhone = await getSetting("auth.login.max_per_phone_per_10min");
   if (!(await consumeRateLimit(`verify:phone:${phone}`, perPhone, 600))) return { ok: false, error: "RATE_LIMITED" };
 
-  // The nonce is checked BEFORE the code, so a request without it can neither finish a sign-up nor burn the real
-  // owner's code attempts. Accounts that are already active have no nonce, so a stray sign-up code can never
-  // log anyone in without their password.
   const user = await db.user.findUnique({ where: { phone } });
-  if (!user || !signupNonceMatches(user.signupNonceHash, nonce)) return { ok: false, error: "INVALID_CODE" };
+  if (!user || !user.email) return { ok: false, error: "INVALID_CODE" };
   if (user.status === "SUSPENDED") return { ok: false, error: "SUSPENDED" };
-  if (user.status !== "PENDING") return { ok: false, error: "INVALID_CODE" };
-
-  if (!(await verifyOtp(phone, "SIGNUP", code))) return { ok: false, error: "INVALID_CODE" };
+  if (!(await consumeEmailCode(user.id, "VERIFY_EMAIL", code, user.email))) return { ok: false, error: "INVALID_CODE" };
 
   await db.$transaction(async (tx) => {
-    await tx.user.update({
-      where: { id: user.id },
-      data: { status: "ACTIVE", phoneVerifiedAt: user.phoneVerifiedAt ?? new Date(), signupNonceHash: null },
-    });
-    if (user.role === "CUSTOMER" || user.role === "MERCHANT") {
+    await tx.user.update({ where: { id: user.id }, data: { status: "ACTIVE", emailVerifiedAt: user.emailVerifiedAt ?? new Date() } });
+    if (user.role === "CUSTOMER" || user.role === "MERCHANT" || user.role === "DRIVER") {
       await tx.starAccount.upsert({ where: { userId: user.id }, update: {}, create: { userId: user.id } });
     }
-    await writeAudit({ actorId: user.id, action: "USER_PHONE_VERIFIED", entityType: "User", entityId: user.id, ip }, tx);
+    await writeAudit({ actorId: user.id, action: "EMAIL_VERIFIED", entityType: "User", entityId: user.id, after: { activated: true }, ip }, tx);
   });
   return { ok: true, user: { id: user.id, role: user.role } };
 }
 
-/**
- * Re-send the sign-up code. Only the browser that holds the matching nonce can trigger it, so a stranger cannot make
- * us text arbitrary numbers through this entry point. The result is neutral in every other case.
- */
-export async function resendSignupCode(phone: string, nonce: string, ip: string): Promise<OtpRequestResult> {
+/** Sends a fresh activation code to a PENDING account's email. Neutral: nothing is revealed about the phone. */
+export async function resendActivationCode(phone: string, ip: string): Promise<{ ok: true } | { ok: false; error: "RATE_LIMITED" }> {
   const user = await db.user.findUnique({ where: { phone } });
-  if (!user || user.status !== "PENDING" || !signupNonceMatches(user.signupNonceHash, nonce)) return { ok: true };
-  return requestOtp(phone, "SIGNUP", ip);
+  if (!user || user.status !== "PENDING" || !user.email) return { ok: true };
+  const sent = await issueEmailCode(user.id, user.email, "VERIFY_EMAIL", ip);
+  return !sent.ok && sent.reason === "RATE_LIMITED" ? { ok: false, error: "RATE_LIMITED" } : { ok: true };
 }
 
 // ───────────── Login ─────────────
 
 export interface LoginInput {
-  phone: string; // normalized
+  /** Normalized email (the normal way in) or, for accounts that have no email yet (e.g. drivers added by a shop), a normalized phone. */
+  email?: string;
+  phone?: string;
   password: string;
-  totp?: string;
 }
 
 export type LoginResult =
   | { ok: true; user: { id: string; role: Role } }
   | { ok: false; error: "INVALID" | "RATE_LIMITED" | "SUSPENDED" }
-  | { ok: false; error: "NEEDS_VERIFICATION"; nonce: string };
+  | { ok: false; error: "NEEDS_VERIFICATION"; phone: string };
 
 async function registerFailedLogin(userId: string, ip: string): Promise<void> {
   const [maxFailures, lockMinutes] = await Promise.all([getSetting("auth.login.max_failures"), getSetting("auth.login.lock_minutes")]);
@@ -163,14 +137,16 @@ async function registerFailedLogin(userId: string, ip: string): Promise<void> {
 
 /** Every failure returns the same INVALID error and costs the same time, so accounts cannot be enumerated. */
 export async function authenticate(input: LoginInput, ip: string): Promise<LoginResult> {
-  const [perIp, perPhone] = await Promise.all([
+  const identity = input.email ? `email:${input.email}` : input.phone ? `phone:${input.phone}` : null;
+  if (!identity) return { ok: false, error: "INVALID" };
+  const [perIp, perAccount] = await Promise.all([
     getSetting("auth.login.max_per_ip_per_10min"),
     getSetting("auth.login.max_per_phone_per_10min"),
   ]);
   if (ip !== "unknown" && !(await consumeRateLimit(`login:ip:${ip}`, perIp, 600))) return { ok: false, error: "RATE_LIMITED" };
-  if (!(await consumeRateLimit(`login:phone:${input.phone}`, perPhone, 600))) return { ok: false, error: "RATE_LIMITED" };
+  if (!(await consumeRateLimit(`login:id:${identity}`, perAccount, 600))) return { ok: false, error: "RATE_LIMITED" };
 
-  const user = await db.user.findUnique({ where: { phone: input.phone } });
+  const user = await db.user.findUnique({ where: input.email ? { email: input.email } : { phone: input.phone! } });
   const passwordOk = user ? await verifyPassword(input.password, user.passwordHash) : (await burnPasswordCheck(input.password), false);
 
   if (user?.lockedUntil && user.lockedUntil > new Date()) return { ok: false, error: "INVALID" };
@@ -181,35 +157,11 @@ export async function authenticate(input: LoginInput, ip: string): Promise<Login
 
   if (user.status === "SUSPENDED") return { ok: false, error: "SUSPENDED" };
   if (user.status === "PENDING") {
-    // The caller just proved they know this account's password, so they get a fresh nonce for the verification step.
-    const nonce = generateSignupNonce();
-    await db.user.update({ where: { id: user.id }, data: { signupNonceHash: hashSignupNonce(nonce) } });
-    await requestOtp(user.phone, "SIGNUP", ip);
-    return { ok: false, error: "NEEDS_VERIFICATION", nonce };
+    if (user.email) await issueEmailCode(user.id, user.email, "VERIFY_EMAIL", ip);
+    return { ok: false, error: "NEEDS_VERIFICATION", phone: user.phone };
   }
 
-  // Administrators must also present a valid authenticator code (replay-protected).
-  if (user.role === "ADMIN") {
-    if (!user.totpSecretEnc || !input.totp) return { ok: false, error: "INVALID" };
-    let secret: Buffer;
-    try {
-      secret = decryptSecret(parseEncryptionKey(getEnv().DATA_ENCRYPTION_KEY), user.totpSecretEnc);
-    } catch {
-      return { ok: false, error: "INVALID" };
-    }
-    const step = verifyTotp(secret, input.totp.trim(), Date.now(), user.lastTotpStep);
-    if (step === null) {
-      await registerFailedLogin(user.id, ip);
-      return { ok: false, error: "INVALID" };
-    }
-    // Atomic: only one request can consume a given time step.
-    const claimed = await db.user.updateMany({
-      where: { id: user.id, OR: [{ lastTotpStep: null }, { lastTotpStep: { lt: step } }] },
-      data: { lastTotpStep: step },
-    });
-    if (claimed.count !== 1) return { ok: false, error: "INVALID" };
-    await writeAudit({ actorId: user.id, action: "ADMIN_LOGIN", entityType: "User", entityId: user.id, ip });
-  }
+  if (user.role === "ADMIN") await writeAudit({ actorId: user.id, action: "ADMIN_LOGIN", entityType: "User", entityId: user.id, ip });
 
   await db.user.update({ where: { id: user.id }, data: { failedLoginCount: 0, lockedUntil: null } });
   return { ok: true, user: { id: user.id, role: user.role } };

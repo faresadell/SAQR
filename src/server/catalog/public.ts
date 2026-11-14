@@ -1,37 +1,36 @@
 import "server-only";
+import { parseSocialLinks } from "@/lib/catalog/shop-contact";
 import { db } from "@/lib/db";
 import { isOpenAt, validateOpeningHours } from "@/lib/catalog/opening-hours";
 
 /**
  * Customer-facing catalog reads (the browsing UI arrives in Phase 4). Only APPROVED merchants, only products that
  * are not archived and sit in an active category are returned, and only public fields: no owner ids, no phone numbers
- * of the owner account, no review or tier data. A shop whose OWNER account is suspended is hidden too, even though
- * its own review status stays APPROVED (reactivating the account brings it back).
+ * of the owner account, no review or tier data.
  */
 export async function listPublicMerchants(filter: { q?: string; businessType?: string } = {}, at: Date = new Date()) {
   const q = (filter.q ?? "").trim().slice(0, 60);
   const rows = await db.merchant.findMany({
     where: {
       status: "APPROVED",
-      owner: { status: "ACTIVE" }, // a suspended owner account hides the shop from customers
       ...(filter.businessType ? { businessType: filter.businessType } : {}),
       ...(q ? { name: { contains: q, mode: "insensitive" as const } } : {}),
     },
     orderBy: [{ name: "asc" }],
     take: 100,
-    select: { id: true, name: true, description: true, businessType: true, address: true, openingHours: true },
+    select: { id: true, name: true, description: true, businessType: true, address: true, openingHours: true, imageKey: true },
   });
   return rows.map((r) => {
     const hours = r.openingHours === null ? null : validateOpeningHours(r.openingHours);
-    return { id: r.id, name: r.name, description: r.description, businessType: r.businessType, address: r.address, isOpen: isOpenAt(hours?.ok ? hours.value : null, at) };
+    return { id: r.id, name: r.name, description: r.description, businessType: r.businessType, address: r.address, hasImage: r.imageKey !== null, isOpen: isOpenAt(hours?.ok ? hours.value : null, at) };
   });
 }
 
 export async function getPublicMenu(merchantId: string, filter: { q?: string; categoryId?: string } = {}) {
-  const shop = await db.merchant.findFirst({ where: { id: merchantId, status: "APPROVED", owner: { status: "ACTIVE" } }, select: { id: true, name: true, description: true } });
+  const shop = await db.merchant.findFirst({ where: { id: merchantId, status: "APPROVED" }, select: { id: true, name: true, description: true } });
   if (!shop) return null;
   const q = (filter.q ?? "").trim().slice(0, 60);
-  const products = await db.product.findMany({
+  const rows = await db.product.findMany({
     where: {
       merchantId: shop.id,
       archivedAt: null,
@@ -41,7 +40,16 @@ export async function getPublicMenu(merchantId: string, filter: { q?: string; ca
     },
     orderBy: [{ category: { sortOrder: "asc" } }, { nameAr: "asc" }],
     take: 300,
-    select: { id: true, nameAr: true, description: true, priceCents: true, isAvailable: true, categoryId: true },
+    select: { id: true, nameAr: true, description: true, priceCents: true, isAvailable: true, categoryId: true, imageKey: true },
   });
-  return { merchant: shop, products };
+  // The storage key stays private: shoppers only learn whether a picture exists.
+  return { merchant: shop, products: rows.map(({ imageKey, ...p }) => ({ ...p, hasImage: imageKey !== null })) };
+}
+
+/** Public contact details of an approved shop. Links are re-validated on the way out, so nothing unsafe can reach a page. */
+export async function getPublicShopContact(merchantId: string) {
+  const shop = await db.merchant.findFirst({ where: { id: merchantId, status: "APPROVED" }, select: { phone: true, contactPhones: true, socialLinks: true } });
+  if (!shop) return null;
+  const phones = [...new Set([...(shop.phone ? [shop.phone] : []), ...shop.contactPhones])];
+  return { phones, social: parseSocialLinks(shop.socialLinks) };
 }
