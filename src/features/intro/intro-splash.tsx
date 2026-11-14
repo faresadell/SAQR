@@ -1,20 +1,45 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { Logo } from "@/components/brand/logo";
-import { playFalcon } from "./falcon-sound";
+import { isSoundOn, playFalcon, setSoundOn } from "./falcon-sound";
+import { playImpact, startWind, stopAudio, unlockAudio } from "./intro-audio";
 
 const SEEN = "saqr_intro_seen";
-const AUTO_CLOSE_MS = 4200;
+/** Timeline (ms): the logo comes out of the dark, the light bursts (cry + impact), the name is revealed, then it opens into the site. */
+const BURST_AT = 2600;
+const LEAVE_AT = 7200;
+const FADE_OUT_MS = 800;
+/** A touch after this moment (when sound is already handled) skips straight into the site. */
+const SKIP_BY_TOUCH_AFTER = 3400;
+
+const DUST = Array.from({ length: 18 }, (_, i) => ({
+  left: `${(i * 37 + 11) % 100}%`,
+  top: `${(i * 53 + 7) % 100}%`,
+  size: 2 + (i % 3),
+  delay: `${(i % 6) * 0.7}s`,
+  duration: `${9 + (i % 5) * 2}s`,
+}));
+const SPARKS = Array.from({ length: 16 }, (_, i) => ({ angle: `${i * 22.5}deg`, delay: `${(i % 4) * 25}ms`, distance: `${110 + (i % 3) * 36}px` }));
 
 /**
- * Opening screen shown once per browser session, on the home page: the falcon swoops in with an animation and a cry.
- * Touch anywhere (or "تخطي") to enter. Skipped for people who asked their device for reduced motion.
+ * Opening screen, once per browser session, on the home page. A short cinematic sequence in the brand's navy and silver:
+ * out of the dark the falcon mark appears, a burst of light and the falcon cry land together, the name is revealed with a
+ * silver light sweep, then the screen opens into the site. Sound needs one touch (browsers refuse autoplay): until then the
+ * visuals run silently and a quiet hint is shown. Sound can be muted (remembered on the device). "تخطي", Escape or a touch
+ * after the burst enter the site. Skipped for people who asked their device for reduced motion.
  */
 export function IntroSplash() {
   const [open, setOpen] = useState(false);
   const [leaving, setLeaving] = useState(false);
-  const played = useRef(false);
+  const [burst, setBurst] = useState(false);
+  const [touched, setTouched] = useState(false);
+  const [soundOn, setSoundState] = useState(true);
+  const started = useRef(performance.now());
+  const armed = useRef(false); // touched before the burst: the cry waits for it
+  const cryPlayed = useRef(false);
+  const dialog = useRef<HTMLDivElement>(null);
+  const dust = useMemo(() => DUST, []);
 
   useEffect(() => {
     let seen = false;
@@ -25,54 +50,125 @@ export function IntroSplash() {
       /* no storage: show it, it will simply show again next time */
     }
     if (seen || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    started.current = performance.now();
+    setSoundState(isSoundOn());
     setOpen(true);
-    const timer = window.setTimeout(() => setLeaving(true), AUTO_CLOSE_MS);
-    return () => window.clearTimeout(timer);
   }, []);
 
+  /** The cry and the impact land together, once. */
+  const fireSound = useCallback(() => {
+    if (cryPlayed.current || !isSoundOn()) return;
+    cryPlayed.current = true;
+    playImpact();
+    playFalcon();
+  }, []);
+
+  // The timeline: burst, then leave. Everything is cleaned up when the screen closes.
   useEffect(() => {
     if (!open) return;
+    const burstTimer = window.setTimeout(() => {
+      setBurst(true);
+      if (armed.current) fireSound();
+    }, BURST_AT);
+    const leaveTimer = window.setTimeout(() => setLeaving(true), LEAVE_AT);
     document.body.style.overflow = "hidden";
-    return () => { document.body.style.overflow = ""; };
-  }, [open]);
+    dialog.current?.focus();
+    return () => {
+      window.clearTimeout(burstTimer);
+      window.clearTimeout(leaveTimer);
+      document.body.style.overflow = "";
+      stopAudio();
+    };
+  }, [open, fireSound]);
 
   useEffect(() => {
     if (!leaving) return;
-    const timer = window.setTimeout(() => setOpen(false), 450);
+    stopAudio(0.7);
+    const timer = window.setTimeout(() => setOpen(false), FADE_OUT_MS);
     return () => window.clearTimeout(timer);
   }, [leaving]);
 
-  function enter() {
-    if (!played.current) {
-      played.current = true;
-      playFalcon(); // allowed now: the person touched the page
+  /** The first touch unlocks sound; later touches (after the burst) enter the site. */
+  function handleTouch() {
+    if (!touched) {
+      setTouched(true);
+      if (isSoundOn() && unlockAudio()) {
+        startWind();
+        if (performance.now() - started.current >= BURST_AT) fireSound();
+        else armed.current = true;
+        return;
+      }
     }
-    window.setTimeout(() => setLeaving(true), 900);
+    if (performance.now() - started.current >= SKIP_BY_TOUCH_AFTER) setLeaving(true);
+  }
+
+  function toggleSound() {
+    const next = !soundOn;
+    setSoundState(next);
+    setSoundOn(next);
+    if (!next) stopAudio(0.2);
+    else if (touched && unlockAudio()) startWind();
   }
 
   if (!open) return null;
   return (
     <div
+      ref={dialog}
       role="dialog"
       aria-modal="true"
       aria-label="مرحباً بك في صقر"
-      onPointerDown={enter}
-      className={`fixed inset-0 z-[100] flex cursor-pointer flex-col items-center justify-center gap-6 bg-navy-900 text-white transition-opacity duration-500 ${leaving ? "opacity-0" : "opacity-100"}`}
+      tabIndex={-1}
+      onPointerDown={handleTouch}
+      onKeyDown={(e) => {
+        if (e.key === "Escape") setLeaving(true);
+        else if ((e.key === "Enter" || e.key === " ") && e.target === e.currentTarget) handleTouch();
+      }}
+      className={`intro-stage fixed inset-0 z-[100] flex cursor-pointer flex-col items-center justify-center gap-5 overflow-hidden text-white outline-none ${burst ? "intro-burst" : ""} ${leaving ? "opacity-0" : "opacity-100"}`}
+      style={{ transition: `opacity ${FADE_OUT_MS}ms ease-in-out` }}
     >
-      <div className="relative flex size-56 items-center justify-center">
-        <span className="absolute inset-0 animate-[ring-expand_2.4s_ease-out_infinite] rounded-full border border-white/25" />
-        <span className="absolute inset-6 animate-[ring-expand_2.4s_ease-out_0.8s_infinite] rounded-full border border-white/20" />
-        <Logo size={160} priority className="relative animate-[falcon-in_1.4s_cubic-bezier(0.2,0.8,0.2,1)_both]" />
+      <div className="intro-glow" aria-hidden="true" />
+      <div className="pointer-events-none absolute inset-0" aria-hidden="true">
+        {dust.map((d, i) => (
+          <span key={i} className="intro-dust" style={{ left: d.left, top: d.top, width: d.size, height: d.size, animationDelay: d.delay, animationDuration: d.duration }} />
+        ))}
       </div>
-      <p className="animate-[text-in_1s_ease-out_0.9s_both] text-4xl font-bold tracking-wide">صقر</p>
-      <p className="animate-[text-in_1s_ease-out_1.3s_both] text-silver">اطلب من منطقتك بسهولة</p>
-      <p className="animate-[text-in_1s_ease-out_2s_both] text-sm text-silver-dim">المس الشاشة للدخول</p>
+
+      <div className="relative flex size-60 items-center justify-center" aria-hidden="true">
+        {burst ? (
+          <>
+            <span className="intro-shock" />
+            <span className="intro-shock intro-shock-late" />
+            {SPARKS.map((s, i) => (
+              <span key={i} className="intro-spark" style={{ "--a": s.angle, "--d": s.distance, animationDelay: s.delay } as CSSProperties} />
+            ))}
+          </>
+        ) : null}
+        <Logo size={168} priority className="intro-mark relative" />
+      </div>
+
+      <p className="intro-name text-5xl font-extrabold tracking-wide">صقر</p>
+      <p className="intro-tagline text-silver">اطلب من منطقتك بسهولة</p>
+      {soundOn && !touched ? <p className="intro-hint absolute bottom-10 text-sm text-silver-dim">المس الشاشة لتشغيل الصوت</p> : null}
+
       <button
         type="button"
         onPointerDown={(e) => { e.stopPropagation(); setLeaving(true); }}
+        onKeyDown={(e) => e.stopPropagation()}
+        onClick={(e) => { if (e.detail === 0) setLeaving(true); }}
         className="absolute end-4 top-4 rounded-control px-3 py-2 text-sm font-semibold text-silver hover:bg-white/10"
       >
         تخطي
+      </button>
+      <button
+        type="button"
+        aria-pressed={!soundOn}
+        aria-label={soundOn ? "كتم الصوت" : "تشغيل الصوت"}
+        onPointerDown={(e) => { e.stopPropagation(); toggleSound(); }}
+        onKeyDown={(e) => e.stopPropagation()}
+        onClick={(e) => { if (e.detail === 0) toggleSound(); }}
+        className="absolute start-4 top-4 rounded-control px-3 py-2 text-sm font-semibold text-silver hover:bg-white/10"
+      >
+        {soundOn ? "الصوت: يعمل" : "الصوت: مكتوم"}
       </button>
     </div>
   );
