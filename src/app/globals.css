@@ -72,3 +72,97 @@
     }
   }
 }
+
+/* ───────────── Opening screen (src/features/intro) ─────────────
+   Navy and silver, from the brand. Only transform/opacity/filter animate (cheap on phones). */
+.intro-stage {
+  background: radial-gradient(120% 90% at 50% 42%, #12214a 0%, #0b1530 38%, #070b1a 78%);
+}
+.intro-glow {
+  position: absolute;
+  left: 50%;
+  top: 42%;
+  width: min(120vw, 760px);
+  aspect-ratio: 1;
+  translate: -50% -50%;
+  border-radius: 9999px;
+  background: radial-gradient(circle, rgba(199, 210, 230, 0.34) 0%, rgba(199, 210, 230, 0.08) 40%, transparent 68%);
+  opacity: 0;
+  animation: intro-glow-in 2.2s ease-out 0.4s forwards;
+  pointer-events: none;
+}
+.intro-burst .intro-glow {
+  animation: intro-glow-flash 1.6s ease-out forwards;
+}
+.intro-dust {
+  position: absolute;
+  border-radius: 9999px;
+  background: rgba(199, 210, 230, 0.55);
+  opacity: 0;
+  animation: intro-dust-drift linear infinite;
+}
+.intro-mark {
+  opacity: 0;
+  animation: intro-emerge 2.2s cubic-bezier(0.22, 0.7, 0.2, 1) 0.5s forwards;
+}
+.intro-burst .intro-mark {
+  animation: intro-emerge 0.01s forwards, intro-pulse 0.9s cubic-bezier(0.2, 0.9, 0.2, 1) both;
+  filter: drop-shadow(0 0 22px rgba(199, 210, 230, 0.5));
+}
+.intro-burst.intro-stage {
+  animation: intro-shake 0.5s ease-out;
+}
+.intro-shock {
+  position: absolute;
+  inset: 0;
+  border-radius: 9999px;
+  border: 2px solid rgba(228, 234, 247, 0.85);
+  opacity: 0;
+  animation: intro-shock 1.3s cubic-bezier(0.1, 0.7, 0.2, 1) forwards;
+}
+.intro-shock-late {
+  border-width: 1px;
+  animation-delay: 0.18s;
+}
+.intro-spark {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 3px;
+  height: 14px;
+  margin: -7px 0 0 -1.5px;
+  border-radius: 9999px;
+  background: linear-gradient(to bottom, #fff, rgba(199, 210, 230, 0));
+  opacity: 0;
+  transform: rotate(var(--a)) translateY(-40px);
+  animation: intro-spark 1.2s cubic-bezier(0.1, 0.7, 0.3, 1) forwards;
+}
+.intro-name {
+  opacity: 0;
+  background: linear-gradient(100deg, #8ea0c0 20%, #ffffff 45%, #c7d2e6 55%, #8ea0c0 80%);
+  background-size: 260% 100%;
+  background-position: 100% 0;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: intro-rise 1s ease-out 3.1s forwards, intro-sweep 2.4s ease-in-out 3.3s forwards;
+}
+.intro-tagline {
+  opacity: 0;
+  animation: intro-rise 1s ease-out 3.9s forwards;
+}
+.intro-hint {
+  opacity: 0;
+  animation: intro-hint 2.4s ease-in-out 1s infinite;
+}
+@keyframes intro-glow-in { to { opacity: 0.55; } }
+@keyframes intro-glow-flash { 0% { opacity: 0.55; transform: scale(0.9); } 25% { opacity: 1; transform: scale(1.15); } 100% { opacity: 0.6; transform: scale(1); } }
+@keyframes intro-dust-drift { 0% { opacity: 0; transform: translate3d(0, 0, 0); } 15% { opacity: 0.8; } 85% { opacity: 0.5; } 100% { opacity: 0; transform: translate3d(36px, -90px, 0); } }
+@keyframes intro-emerge { 0% { opacity: 0; transform: scale(1.14); filter: blur(16px) brightness(0.2); } 55% { opacity: 1; filter: blur(2px) brightness(0.75); } 100% { opacity: 1; transform: scale(1); filter: blur(0) brightness(1); } }
+@keyframes intro-pulse { 0% { transform: scale(1); } 30% { transform: scale(1.09); } 100% { transform: scale(1); } }
+@keyframes intro-shake { 0% { transform: translate(0, 0); } 15% { transform: translate(-3px, 2px); } 30% { transform: translate(3px, -2px); } 50% { transform: translate(-2px, 1px); } 100% { transform: translate(0, 0); } }
+@keyframes intro-shock { 0% { opacity: 0.9; transform: scale(0.55); } 100% { opacity: 0; transform: scale(2.6); } }
+@keyframes intro-spark { 0% { opacity: 0; transform: rotate(var(--a)) translateY(-40px); } 15% { opacity: 1; } 100% { opacity: 0; transform: rotate(var(--a)) translateY(calc(var(--d) * -1)); } }
+@keyframes intro-rise { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes intro-sweep { from { background-position: 100% 0; } to { background-position: 0% 0; } }
+@keyframes intro-hint { 0%, 100% { opacity: 0; } 40%, 60% { opacity: 0.9; } }
