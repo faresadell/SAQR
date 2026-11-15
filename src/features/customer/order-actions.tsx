@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useState } from "react";
+import { Fragment, useActionState, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Field } from "@/components/ui/field";
 import { FileUpload } from "@/components/ui/file-upload";
@@ -8,7 +8,7 @@ import { Notice } from "@/components/ui/states";
 import { Textarea } from "@/components/ui/textarea";
 import type { FormState } from "@/lib/form-state";
 import { formatEgp } from "@/lib/money";
-import { answerFeeAction, cancelOrderAction, fileComplaintAction, payOrderAction } from "./actions";
+import { answerFeeAction, cancelOrderAction, createReviewAction, fileComplaintAction, payOrderAction } from "./actions";
 
 export interface PayAccount {
   id: string;
@@ -108,6 +108,31 @@ export function CancelControl({ orderId, mode }: { orderId: string; mode: "direc
         <Button type="submit" variant="danger" size="sm" loading={pending}>{mode === "request" ? "إرسال الطلب" : "تأكيد الإلغاء"}</Button>
         <Button type="button" variant="ghost" size="sm" onClick={() => setOpen(false)}>تراجع</Button>
       </div>
+    </form>
+  );
+}
+
+/** After delivery: 1-5 stars and an optional comment. One review per sub-order. */
+export function ReviewForm({ orderId, shopName }: { orderId: string; shopName: string }) {
+  const [state, action, pending] = useActionState(createReviewAction, idle);
+  if (state.message) return <Notice tone="success">{state.message}</Notice>;
+  return (
+    <form action={action} className="flex flex-col gap-3 rounded-control border border-line p-3" aria-label={`تقييم ${shopName}`}>
+      <input type="hidden" name="orderId" value={orderId} />
+      <fieldset className="flex flex-col gap-1">
+        <legend className="text-sm font-semibold">قيّم {shopName}</legend>
+        <div className="flex flex-row-reverse justify-end gap-1 [&>input:checked~label]:text-warning" role="radiogroup">
+          {[5, 4, 3, 2, 1].map((n) => (
+            <Fragment key={n}>
+              <input type="radio" id={`rate-${orderId}-${n}`} name="rating" value={n} required className="peer sr-only" aria-label={`${n} من 5`} />
+              <label htmlFor={`rate-${orderId}-${n}`} className="cursor-pointer text-3xl leading-none text-line hover:text-warning peer-focus-visible:outline peer-focus-visible:outline-2">★</label>
+            </Fragment>
+          ))}
+        </div>
+      </fieldset>
+      <Textarea label="تعليق (اختياري)" name="comment" maxLength={500} rows={3} />
+      {state.error ? <Notice tone="danger">{state.error}</Notice> : null}
+      <Button type="submit" loading={pending} className="w-fit">إرسال التقييم</Button>
     </form>
   );
 }

@@ -116,6 +116,7 @@ export function adminNav(base = "/admin"): { groups: NavGroup[]; mobile: NavItem
           { href: `${base}/packages`, label: "الباقات والأسعار", icon: "star", permission: "settings.view" },
           { href: `${base}/settings#delivery`, label: "رسوم التوصيل", icon: "truck", permission: "settings.view" },
           { href: `${base}/complaints`, label: "الشكاوى والاستردادات", icon: "flag", permission: "refunds.verify" },
+          { href: `${base}/reviews`, label: "التقييمات", icon: "star", permission: "complaints.manage" },
         ],
       },
       {
