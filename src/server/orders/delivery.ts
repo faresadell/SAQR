@@ -171,7 +171,7 @@ export async function proposeDeliveryFee(actor: Actor, orderId: string, feeCents
 /** The customer answers the driver's price. Approving lets the driver pick up; refusing sends the order back to the open board. */
 export async function answerDeliveryFee(actor: Actor, orderId: string, approve: boolean): Promise<LifecycleResult> {
   return run(async (tx) => {
-    const order = await tx.order.findUnique({ where: { id: orderId }, include: { delivery: { include: { driver: true } } } });
+    const order = await tx.order.findUnique({ where: { id: orderId }, include: { merchant: true, delivery: { include: { driver: true } } } });
     if (!order || actor.role !== "CUSTOMER" || order.customerId !== actor.id) throw new NotFoundError();
     const record = order.delivery;
     if (!record || order.deliveryStatus !== "DRIVER_ASSIGNED" || record.feeStatus !== "PROPOSED") fail("WRONG_STATE");
