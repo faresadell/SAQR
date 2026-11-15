@@ -53,6 +53,7 @@ export function merchantNav(base = "/merchant"): { groups: NavGroup[]; mobile: N
         title: "المال",
         items: [
           { href: `${base}/packages`, label: "الباقات والنجوم", icon: "star" },
+          { href: `${base}/payment-accounts`, label: "حسابات استلام الدفع", icon: "receipt" },
           { href: `${base}/reports`, label: "المدفوعات والتقارير", icon: "chart" },
           { href: `${base}/refunds`, label: "استرداد المبالغ", icon: "receipt" },
         ],

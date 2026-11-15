@@ -14,6 +14,7 @@ async function seedProject(db: PrismaClient, project: E2eProject, categoryId: st
   await db.user.create({ data: { ...base, phone: a.ownerPhone, name: `صاحب ${project}`, role: "MERCHANT" } });
   const seeded = await db.user.create({ data: { ...base, phone: a.seededShopPhone, name: `تاجر ${project}`, role: "MERCHANT" } });
   const shop = await db.merchant.create({ data: { ownerId: seeded.id, name: a.seededShopName, businessType: "restaurant", status: "APPROVED", description: "مشويات وأكل بيتي", address: "المعادي" } });
+  await db.merchantPaymentAccount.create({ data: { merchantId: shop.id, method: "instapay", accountValue: "01000000111", holderName: "حساب اختبار" } });
   await db.product.createMany({
     data: [
       { merchantId: shop.id, categoryId, nameAr: "كباب", priceCents: 12000 },

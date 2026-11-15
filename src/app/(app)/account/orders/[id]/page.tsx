@@ -5,7 +5,8 @@ import { OrderDetailView } from "@/features/customer/orders-views";
 import { ResultState } from "@/features/shared/result-state";
 import { listMyComplaints } from "@/server/complaints/service";
 import { requireRole } from "@/server/auth/guards";
-import { getEnabledPaymentMethods } from "@/server/payments/methods";
+import { db } from "@/lib/db";
+import { listShopAccountsForCustomer } from "@/server/payments/merchant-accounts";
 
 export const metadata: Metadata = { title: "تفاصيل الطلب" };
 
@@ -15,9 +16,11 @@ export default async function OrderPage({ params }: { params: Promise<{ id: stri
   const result = await loadOrder(user, id.slice(0, 64));
   if (result.status !== "ready") return <ResultState result={result} />;
   if (!result.data) notFound();
-  const methods = (await getEnabledPaymentMethods()).map((m) => ({ code: m.code, label: m.nameAr, receiverNumber: m.receiverNumber ?? null }));
+  const subs = await db.order.findMany({ where: { id: { in: result.data.subOrders.map((x) => x.id) }, customerId: user.id }, select: { id: true, merchantId: true } });
+  const shopAccounts = await listShopAccountsForCustomer([...new Set(subs.map((x) => x.merchantId))]);
+  const accountsByOrder = Object.fromEntries(subs.map((x) => [x.id, shopAccounts.filter((a) => a.merchantId === x.merchantId).map((a) => ({ id: a.id, methodLabel: a.methodLabel, accountValue: a.accountValue, holderName: a.holderName }))]));
   const mine = await listMyComplaints(user);
   const ids = new Set(result.data.subOrders.map((s) => s.id));
   const complaints = mine.filter((c) => ids.has(c.orderId)).map((c) => ({ id: c.id, orderId: c.orderId, subject: c.subject, status: c.status, adminResponse: c.adminResponse }));
-  return <OrderDetailView order={result.data} base="/account" methods={methods} complaints={complaints} />;
+  return <OrderDetailView order={result.data} base="/account" accountsByOrder={accountsByOrder} complaints={complaints} />;
 }

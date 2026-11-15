@@ -63,6 +63,7 @@ async function main(): Promise<void> {
     let shop = await db.merchant.findFirst({ where: { ownerId: merchantUser.id } });
     if (!shop) {
       shop = await db.merchant.create({ data: { ownerId: merchantUser.id, name: "مطعم صقر التجريبي", businessType: "restaurant", status: "APPROVED", description: "مشويات وأكل بيتي (حساب تجريبي)", address: "المعادي" } });
+      await db.merchantPaymentAccount.create({ data: { merchantId: shop.id, method: "vodafone_cash", accountValue: "01000000000", holderName: "حساب تجريبي" } });
       const category = (await db.category.findFirst({ where: { nameAr: "مشويات" } })) ?? (await db.category.create({ data: { nameAr: "مشويات" } }));
       await db.product.createMany({
         data: [

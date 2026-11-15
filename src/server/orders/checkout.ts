@@ -4,6 +4,7 @@ import { db } from "@/lib/db";
 import { writeAudit } from "@/lib/audit";
 import type { Actor } from "@/lib/auth/permissions";
 import { hasEverHadPackage } from "@/server/plans/service";
+import { shopHasPaymentAccount } from "@/server/payments/merchant-accounts";
 import { isOpenAt, validateOpeningHours } from "@/lib/catalog/opening-hours";
 import { buildCheckoutQuote, type CartLineInput, type CheckoutError, type CheckoutQuote, type PricedProduct } from "@/lib/orders/checkout";
 import { getSetting } from "@/lib/settings";
@@ -81,7 +82,7 @@ export async function resolveOrderContext(tx: Prisma.TransactionClient, customer
 }
 
 /** A shop can take orders only if it is approved, its owner active, it is open now, its owner has stars and has bought a package. */
-export async function merchantCanTrade(tx: Prisma.TransactionClient, merchant: { status: string; ownerId: string; openingHours: Prisma.JsonValue | null; owner: { status: string } }, now: Date): Promise<boolean> {
+export async function merchantCanTrade(tx: Prisma.TransactionClient, merchant: { id: string; status: string; ownerId: string; openingHours: Prisma.JsonValue | null; owner: { status: string } }, now: Date): Promise<boolean> {
   const minMerchant = await getSetting("stars.min_balance_merchant");
   const hours = merchant.openingHours === null ? null : validateOpeningHours(merchant.openingHours);
   return (
@@ -89,7 +90,8 @@ export async function merchantCanTrade(tx: Prisma.TransactionClient, merchant: {
     merchant.owner.status === "ACTIVE" &&
     isOpenAt(hours?.ok ? hours.value : null, now) &&
     (await getStarBalance(tx, merchant.ownerId)) >= minMerchant &&
-    (await hasEverHadPackage(merchant.ownerId, tx)) // no package yet = nobody can order from this shop
+    (await hasEverHadPackage(merchant.ownerId, tx)) && // no package yet = nobody can order from this shop
+    (await shopHasPaymentAccount(merchant.id, tx)) // customers must have somewhere to pay
   );
 }
 
