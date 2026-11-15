@@ -9,7 +9,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { db } from "@/lib/db";
 import type { Actor } from "@/lib/auth/permissions";
 import { getSettingAt, invalidateSettingsCache } from "@/lib/settings";
-import { buildCommissionSnapshot, CommissionNotConfiguredError, scheduleCommissionRate } from "@/server/commissions/service";
+import { buildCommissionSnapshot, resolveCommissionRate, scheduleCommissionRate } from "@/server/commissions/service";
 import { createZone, resolveZoneFee, scheduleZoneFee, setZoneActive, ZoneUnavailableError } from "@/server/delivery/zones";
 import { AuthorizationError } from "@/server/errors";
 import { assertPaymentMethodEnabled, getEnabledPaymentMethods, PaymentMethodDisabledError, setPaymentMethodEnabled, setPaymentReceiver } from "@/server/payments/methods";
@@ -102,38 +102,12 @@ describe("settings: saving, validation, permissions, audit", () => {
   });
 });
 
-describe("commissions: 8% Basic, 5% Premium, effective dates, old orders never change", () => {
-  it("prices a Basic order at 8% and a Premium order at 5% of the PRODUCT amount", async () => {
+describe("legacy commission rates table", () => {
+  it("no percentage commission: every new order is priced at 0% whatever the rates table says", async () => {
+    expect(await buildCommissionSnapshot("REGULAR", 10_000)).toMatchObject({ commissionBp: 0, commissionCents: 0, commissionBaseCents: 10_000, merchantTierSnap: "REGULAR", rateId: null }); // no rate configured: still fine
     await seedRates();
-    const basic = await buildCommissionSnapshot("REGULAR", 10_000);
     const premium = await buildCommissionSnapshot("BUSINESS", 10_000);
-    expect([basic.commissionBp, basic.commissionCents, basic.commissionBaseCents]).toEqual([800, 800, 10_000]);
-    expect([premium.commissionBp, premium.commissionCents, premium.commissionBaseCents]).toEqual([500, 500, 10_000]);
-    expect(basic.merchantTierSnap).toBe("REGULAR");
-    expect(premium.merchantTierSnap).toBe("BUSINESS");
-  });
-
-  it("fails closed when no rate is configured", async () => {
-    await expect(buildCommissionSnapshot("REGULAR", 10_000)).rejects.toBeInstanceOf(CommissionNotConfiguredError);
-  });
-
-  it("a scheduled rate does not touch current or past pricing, only prices from its date", async () => {
-    await seedRates();
-    const orderTime = new Date();
-    const oldOrder = await buildCommissionSnapshot("REGULAR", 25_000, orderTime); // an order created today
-
-    const when = inDays(30);
-    expect((await scheduleCommissionRate(admin, "REGULAR", 700, iso(when))).ok).toBe(true);
-
-    // Today still 8%, and recomputing for the order's own moment gives the identical snapshot.
-    expect((await buildCommissionSnapshot("REGULAR", 25_000)).commissionBp).toBe(800);
-    const recomputed = await buildCommissionSnapshot("REGULAR", 25_000, orderTime);
-    expect(recomputed.commissionCents).toBe(oldOrder.commissionCents);
-    expect(oldOrder.commissionCents).toBe(2_000);
-
-    // From the effective date on: 7%. Premium is untouched.
-    expect((await buildCommissionSnapshot("REGULAR", 25_000, new Date(when.getTime() + 1000))).commissionBp).toBe(700);
-    expect((await buildCommissionSnapshot("BUSINESS", 25_000, new Date(when.getTime() + 1000))).commissionBp).toBe(500);
+    expect([premium.commissionBp, premium.commissionCents]).toEqual([0, 0]);
   });
 
   it("records old and new rate, actor and effective date in the audit log", async () => {
@@ -164,7 +138,7 @@ describe("commissions: 8% Basic, 5% Premium, effective dates, old orders never c
     const when = inDays(10);
     await scheduleCommissionRate(admin, "REGULAR", 700, iso(when));
     await scheduleCommissionRate(admin, "REGULAR", 650, iso(when));
-    expect((await buildCommissionSnapshot("REGULAR", 10_000, new Date(when.getTime() + 1000))).commissionBp).toBe(650);
+    expect((await resolveCommissionRate("REGULAR", new Date(when.getTime() + 1000))).basisPoints).toBe(650);
   });
 });
 
