@@ -96,6 +96,68 @@ const agreeFee = async (driver: Actor, id: string, cents = 2000) => {
 };
 const codeOf = async (id: string) => (await db.order.findUniqueOrThrow({ where: { id } })).deliveryCode ?? undefined;
 
+/** One customer order with a product from each of the two shops: two sub-orders, both paid, confirmed and approved. */
+async function twoShopOrder(): Promise<[string, string]> {
+  const category = await db.category.findFirstOrThrow();
+  const productB = await db.product.create({ data: { merchantId: w.otherShopId, categoryId: category.id, nameAr: "منتج ب", priceCents: 3000 } });
+  keyNo += 1;
+  const r = await placeOrder(w.customer, { idempotencyKey: `key-${String(keyNo).padStart(8, "0")}`, addressId: w.addressId, lines: [{ productId: w.productId, quantity: 1 }, { productId: productB.id, quantity: 1 }] });
+  if (!r.ok) throw new Error("setup");
+  const owners = new Map([[w.shopId, w.owner], [w.otherShopId, w.otherOwner]]);
+  const ids: string[] = [];
+  for (const id of r.suborderIds) {
+    const shopOwner = owners.get((await db.order.findUniqueOrThrow({ where: { id } })).merchantId)!;
+    uploads += 1;
+    const up = await db.receiptUpload.create({ data: { orderId: id, uploaderId: w.customer.id, storageKey: `receipts/${id}/${uploads}.jpg`, contentType: "image/jpeg", sizeBytes: 10, sha256: `t${uploads}` } });
+    expect((await submitPayment(w.customer, id, { accountId: await accountForOrder(id), referenceNo: `TREF-${uploads}000`, uploadId: up.id })).ok).toBe(true);
+    expect((await confirmPayment(shopOwner, id)).ok).toBe(true);
+    expect((await decideOrder(shopOwner, id, "APPROVE")).ok).toBe(true);
+    ids.push(id);
+  }
+  return [ids[0]!, ids[1]!];
+}
+
+describe("one trip for one customer order", () => {
+  it("taking one sub-order takes the others; one price for the whole trip; each order has its own code", async () => {
+    const [first, second] = await twoShopOrder();
+    const d = await user("DRIVER");
+    expect(await claimOrder(d, second)).toEqual({ ok: true }); // claiming either takes both
+    const records = await db.deliveryRecord.findMany({ orderBy: { order: { number: "asc" } } });
+    expect(records.map((r) => [r.orderId, r.feeExpectedCents, r.feeStatus])).toEqual([[first, 2000, "NONE"], [second, 0, "NONE"]]);
+    expect(await listBoard(await user("DRIVER"))).toEqual([]);
+    expect(await proposeDeliveryFee(d, second, 3500)).toEqual({ ok: true }); // proposing from either order prices the trip
+    expect((await db.deliveryRecord.findMany({ orderBy: { order: { number: "asc" } } })).map((r) => [r.feeExpectedCents, r.feeStatus])).toEqual([[3500, "PROPOSED"], [0, "PROPOSED"]]);
+    expect(await answerDeliveryFee(w.customer, first, true)).toEqual({ ok: true });
+    expect((await db.deliveryRecord.findMany()).every((r) => r.feeStatus === "APPROVED")).toBe(true);
+    for (const [id, shopOwner] of [[first, w.owner], [second, w.otherOwner]] as const) {
+      await advanceOrder(shopOwner, id, "PREPARING");
+      await advanceOrder(shopOwner, id, "READY");
+      expect((await pickUp(d, id)).ok).toBe(true);
+    }
+    const [c1, c2] = [await codeOf(first), await codeOf(second)];
+    expect(c1).toMatch(/^\d{4}$/);
+    expect(c2).toMatch(/^\d{4}$/);
+    expect(await deliver(d, second, { feeCollected: true, code: c1 === c2 ? undefined : c1 })).toEqual({ ok: false, error: "INVALID_CODE" }); // another order's code does not work
+    expect((await deliver(d, second, { feeCollected: true, code: c2 })).ok).toBe(true);
+    expect((await deliver(d, first, { feeCollected: true, code: c1 })).ok).toBe(true);
+    expect((await db.deliveryRecord.findMany()).every((r) => r.collectionStatus === "COLLECTED")).toBe(true);
+  });
+
+  it("refusing the price or releasing sends the whole trip back to the board", async () => {
+    const [first, second] = await twoShopOrder();
+    const a = await user("DRIVER");
+    const b = await user("DRIVER");
+    await claimOrder(a, first);
+    await proposeDeliveryFee(a, first, 3000);
+    expect(await answerDeliveryFee(w.customer, second, false)).toEqual({ ok: true });
+    expect((await listBoard(b)).map((r) => r.orderId).sort()).toEqual([first, second].sort());
+    expect((await db.deliveryRecord.findMany()).map((r) => [r.driverId, r.feeStatus, r.feeExpectedCents])).toEqual([[null, "NONE", 2000], [null, "NONE", 2000]]);
+    await claimOrder(b, second);
+    expect(await releaseOrder(b, first)).toEqual({ ok: true });
+    expect((await listBoard(a)).length).toBe(2);
+  });
+});
+
 describe("cancellation request", () => {
   it("customer asks, shop accepts: stars go back to both once, refund opens, repeats do nothing", async () => {
     const id = await approvedOrder();

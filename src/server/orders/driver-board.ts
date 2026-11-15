@@ -1,11 +1,11 @@
 import "server-only";
-import type { DeliveryStatus, OrderStatus } from "@prisma/client";
+import type { DeliveryStatus, Merchant, Order, OrderStatus } from "@prisma/client";
 import { db } from "@/lib/db";
 import { writeAudit } from "@/lib/audit";
 import type { Actor } from "@/lib/auth/permissions";
 import { AuthorizationError, NotFoundError } from "@/server/errors";
 import { notifyInTx } from "@/server/notifications/service";
-import { setDeliveryStatus } from "@/server/orders/delivery";
+import { openTrip, setDeliveryStatus } from "@/server/orders/delivery";
 import type { Tx } from "@/server/orders/lifecycle";
 
 /** The open board: an order is on it once the shop accepted it and the payment is confirmed, until a driver takes it. */
@@ -54,35 +54,55 @@ export async function listBoard(actor: Actor) {
   }));
 }
 
-/** First driver wins. Someone else already holding it is answered with that driver's name. */
+type ClaimableOrder = Order & { merchant: Merchant };
+
+/** Flip one order out of the board (atomic: only one driver can win) and give the driver its delivery record. */
+async function takeOrder(tx: Tx, actor: Actor, driverId: string, order: ClaimableOrder, fee: { cents: number; status: "NONE" | "PROPOSED" | "APPROVED" }, driverName: string): Promise<boolean> {
+  const won = await tx.order.updateMany({ where: { id: order.id, deliveryStatus: order.deliveryStatus, orderStatus: order.orderStatus }, data: { deliveryStatus: "DRIVER_ASSIGNED" } });
+  if (won.count !== 1) return false;
+  const now = new Date();
+  await tx.orderEvent.create({ data: { orderId: order.id, field: "deliveryStatus", fromValue: order.deliveryStatus, toValue: "DRIVER_ASSIGNED", actorId: actor.id, note: `driver ${driverId} accepted from the board` } });
+  await tx.deliveryRecord.upsert({
+    where: { orderId: order.id },
+    create: { orderId: order.id, driverId, feeExpectedCents: fee.cents, feeStatus: fee.status, assignedAt: now },
+    update: { driverId, assignedAt: now, pickedUpAt: null, deliveredAt: null, feeStatus: fee.status, feeExpectedCents: fee.cents },
+  });
+  await notifyInTx(tx, { userId: order.merchant.ownerId, type: "DELIVERY_ASSIGNED", title: "سائق قبل الطلب", body: `السائق ${driverName} قبل توصيل الطلب رقم ${order.number}.`, data: { orderId: order.id }, dedupeKey: `board-claimed-shop:${order.id}:${now.getTime()}` });
+  await notifyInTx(tx, { userId: order.customerId, type: "DELIVERY_ASSIGNED", title: "سائق في طريقه لاستلام طلبك", body: `السائق ${driverName} قبل توصيل طلبك رقم ${order.number}.`, data: { orderId: order.id }, dedupeKey: `board-claimed-customer:${order.id}:${now.getTime()}` });
+  await writeAudit({ actorId: actor.id, action: "DELIVERY_CLAIMED", entityType: "Order", entityId: order.id, after: { driverId } }, tx);
+  return true;
+}
+
+const onBoard = (o: { orderStatus: OrderStatus; paymentStatus: string; deliveryStatus: DeliveryStatus }) => BOARD_ORDER_STATUS.includes(o.orderStatus) && o.paymentStatus === "CONFIRMED" && BOARD_DELIVERY_STATUS.includes(o.deliveryStatus);
+
+/**
+ * First driver wins. Someone else already holding it is answered with that driver's name.
+ * Taking one sub-order also takes the customer's other sub-orders that are ready on the board: one trip, one delivery price.
+ */
 export async function claimOrder(actor: Actor, orderId: string): Promise<ClaimResult> {
   return db.$transaction(async (tx): Promise<ClaimResult> => {
     const driver = await currentDriver(tx, actor);
     const order = await tx.order.findUnique({ where: { id: orderId }, include: { merchant: true } });
     if (!order) throw new NotFoundError();
-    if (!BOARD_ORDER_STATUS.includes(order.orderStatus) || order.paymentStatus !== "CONFIRMED") {
-      return order.deliveryStatus === "DRIVER_ASSIGNED" || order.deliveryStatus === "PICKED_UP" ? { ok: false, error: "TAKEN", takenBy: await holderName(tx, orderId) } : { ok: false, error: "NOT_AVAILABLE" };
+    if (!onBoard(order)) return order.deliveryStatus === "DRIVER_ASSIGNED" || order.deliveryStatus === "PICKED_UP" ? { ok: false, error: "TAKEN", takenBy: await holderName(tx, orderId) } : { ok: false, error: "NOT_AVAILABLE" };
+    const prior = await openTrip(tx, driver.id, orderId); // sub-orders of this customer order the driver already holds
+    const siblings = order.parentOrderId
+      ? (await tx.order.findMany({ where: { parentOrderId: order.parentOrderId, id: { not: order.id } }, include: { merchant: true }, orderBy: { number: "asc" } })).filter(onBoard)
+      : [];
+    const group = [order, ...siblings].sort((a, b) => a.number - b.number);
+    const me = await tx.user.findUniqueOrThrow({ where: { id: actor.id }, select: { name: true } });
+    let claimedTarget = false;
+    for (const [index, o] of group.entries()) {
+      // The first of the trip carries the whole price; later ones (and ones joining a trip already priced) carry 0 and follow its status.
+      const joining = prior.length > 0;
+      const fee = joining ? { cents: 0, status: prior[0]!.feeStatus } : { cents: index === 0 ? o.deliveryFeeCents : 0, status: "NONE" as const };
+      const ok = await takeOrder(tx, actor, driver.id, o, fee, me.name);
+      if (o.id === order.id) claimedTarget = ok;
     }
-    if (!BOARD_DELIVERY_STATUS.includes(order.deliveryStatus)) {
-      return order.deliveryStatus === "DRIVER_ASSIGNED" || order.deliveryStatus === "PICKED_UP" ? { ok: false, error: "TAKEN", takenBy: await holderName(tx, orderId) } : { ok: false, error: "NOT_AVAILABLE" };
-    }
-    // Atomic: only one driver can flip the order out of the board states.
-    const won = await tx.order.updateMany({ where: { id: order.id, deliveryStatus: order.deliveryStatus, orderStatus: order.orderStatus }, data: { deliveryStatus: "DRIVER_ASSIGNED" } });
-    if (won.count !== 1) {
+    if (!claimedTarget) {
       const name = await holderName(tx, orderId);
       return name ? { ok: false, error: "TAKEN", takenBy: name } : { ok: false, error: "NOT_AVAILABLE" };
     }
-    const now = new Date();
-    await tx.orderEvent.create({ data: { orderId, field: "deliveryStatus", fromValue: order.deliveryStatus, toValue: "DRIVER_ASSIGNED", actorId: actor.id, note: `driver ${driver.id} accepted from the board` } });
-    await tx.deliveryRecord.upsert({
-      where: { orderId },
-      create: { orderId, driverId: driver.id, feeExpectedCents: order.deliveryFeeCents, feeStatus: "NONE", assignedAt: now },
-      update: { driverId: driver.id, assignedAt: now, pickedUpAt: null, deliveredAt: null, feeStatus: "NONE", feeExpectedCents: order.deliveryFeeCents },
-    });
-    const me = await tx.user.findUniqueOrThrow({ where: { id: actor.id }, select: { name: true } });
-    await notifyInTx(tx, { userId: order.merchant.ownerId, type: "DELIVERY_ASSIGNED", title: "سائق قبل الطلب", body: `السائق ${me.name} قبل توصيل الطلب رقم ${order.number}.`, data: { orderId }, dedupeKey: `board-claimed-shop:${orderId}:${now.getTime()}` });
-    await notifyInTx(tx, { userId: order.customerId, type: "DELIVERY_ASSIGNED", title: "سائق في طريقه لاستلام طلبك", body: `السائق ${me.name} قبل توصيل طلبك رقم ${order.number}.`, data: { orderId }, dedupeKey: `board-claimed-customer:${orderId}:${now.getTime()}` });
-    await writeAudit({ actorId: actor.id, action: "DELIVERY_CLAIMED", entityType: "Order", entityId: orderId, after: { driverId: driver.id } }, tx);
     return { ok: true };
   });
 }
@@ -95,10 +115,13 @@ export async function releaseOrder(actor: Actor, orderId: string): Promise<Relea
     if (!record || record.driverId !== driver.id) throw new NotFoundError();
     const order = await tx.order.findUniqueOrThrow({ where: { id: orderId }, include: { merchant: true } });
     if (order.deliveryStatus !== "DRIVER_ASSIGNED") return { ok: false, error: "WRONG_STATE" };
-    await setDeliveryStatus(tx, order, "AWAITING_DRIVER", actor.id, "released by driver");
-    await tx.deliveryRecord.update({ where: { id: record.id }, data: { driverId: null, assignedAt: null, feeStatus: "NONE" } });
-    await notifyInTx(tx, { userId: order.merchant.ownerId, type: "DELIVERY_FAILED", title: "السائق تراجع عن الطلب", body: `السائق تراجع عن توصيل الطلب رقم ${order.number} وعاد الطلب لقائمة السائقين.`, data: { orderId }, dedupeKey: `board-released:${orderId}:${Date.now()}` });
-    await writeAudit({ actorId: actor.id, action: "DELIVERY_RELEASED", entityType: "Order", entityId: orderId }, tx);
+    // The whole unpicked trip goes back together, because the delivery price was agreed for all of it.
+    for (const r of await openTrip(tx, driver.id, orderId)) {
+      await setDeliveryStatus(tx, r.order, "AWAITING_DRIVER", actor.id, "released by driver");
+      await tx.deliveryRecord.update({ where: { id: r.id }, data: { driverId: null, assignedAt: null, feeStatus: "NONE", feeExpectedCents: r.order.deliveryFeeCents } });
+      await notifyInTx(tx, { userId: r.order.merchant.ownerId, type: "DELIVERY_FAILED", title: "السائق تراجع عن الطلب", body: `السائق تراجع عن توصيل الطلب رقم ${r.order.number} وعاد الطلب لقائمة السائقين.`, data: { orderId: r.orderId }, dedupeKey: `board-released:${r.orderId}:${Date.now()}` });
+      await writeAudit({ actorId: actor.id, action: "DELIVERY_RELEASED", entityType: "Order", entityId: r.orderId }, tx);
+    }
     return { ok: true };
   });
 }
