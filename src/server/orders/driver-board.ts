@@ -76,8 +76,8 @@ export async function claimOrder(actor: Actor, orderId: string): Promise<ClaimRe
     await tx.orderEvent.create({ data: { orderId, field: "deliveryStatus", fromValue: order.deliveryStatus, toValue: "DRIVER_ASSIGNED", actorId: actor.id, note: `driver ${driver.id} accepted from the board` } });
     await tx.deliveryRecord.upsert({
       where: { orderId },
-      create: { orderId, driverId: driver.id, feeExpectedCents: order.deliveryFeeCents, assignedAt: now },
-      update: { driverId: driver.id, assignedAt: now, pickedUpAt: null, deliveredAt: null },
+      create: { orderId, driverId: driver.id, feeExpectedCents: order.deliveryFeeCents, feeStatus: "NONE", assignedAt: now },
+      update: { driverId: driver.id, assignedAt: now, pickedUpAt: null, deliveredAt: null, feeStatus: "NONE", feeExpectedCents: order.deliveryFeeCents },
     });
     const me = await tx.user.findUniqueOrThrow({ where: { id: actor.id }, select: { name: true } });
     await notifyInTx(tx, { userId: order.merchant.ownerId, type: "DELIVERY_ASSIGNED", title: "سائق قبل الطلب", body: `السائق ${me.name} قبل توصيل الطلب رقم ${order.number}.`, data: { orderId }, dedupeKey: `board-claimed-shop:${orderId}:${now.getTime()}` });
@@ -96,7 +96,7 @@ export async function releaseOrder(actor: Actor, orderId: string): Promise<Relea
     const order = await tx.order.findUniqueOrThrow({ where: { id: orderId }, include: { merchant: true } });
     if (order.deliveryStatus !== "DRIVER_ASSIGNED") return { ok: false, error: "WRONG_STATE" };
     await setDeliveryStatus(tx, order, "AWAITING_DRIVER", actor.id, "released by driver");
-    await tx.deliveryRecord.update({ where: { id: record.id }, data: { driverId: null, assignedAt: null } });
+    await tx.deliveryRecord.update({ where: { id: record.id }, data: { driverId: null, assignedAt: null, feeStatus: "NONE" } });
     await notifyInTx(tx, { userId: order.merchant.ownerId, type: "DELIVERY_FAILED", title: "السائق تراجع عن الطلب", body: `السائق تراجع عن توصيل الطلب رقم ${order.number} وعاد الطلب لقائمة السائقين.`, data: { orderId }, dedupeKey: `board-released:${orderId}:${Date.now()}` });
     await writeAudit({ actorId: actor.id, action: "DELIVERY_RELEASED", entityType: "Order", entityId: orderId }, tx);
     return { ok: true };

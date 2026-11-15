@@ -9,7 +9,7 @@ import type { MainOrderView, SubOrderView } from "@/features/shared/types";
 import { formatDateTime, formatNumber } from "@/lib/format";
 import { formatEgp } from "@/lib/money";
 import { Icon } from "@/components/ui/icon";
-import { CancelControl, ComplaintForm, PayForm, type PayAccount } from "./order-actions";
+import { CancelControl, ComplaintForm, PayForm, FeeDecision, type PayAccount } from "./order-actions";
 
 export function OrdersListView({ orders, base }: { orders: MainOrderView[]; base: string }) {
   if (orders.length === 0) {
@@ -36,7 +36,7 @@ export function OrdersListView({ orders, base }: { orders: MainOrderView[]; base
               ))}
             </ul>
             <div className="flex items-center justify-between rounded-b-card bg-surface-muted px-5 py-3 text-sm">
-              <span className="text-ink-muted">الإجمالي مع التوصيل</span>
+              <span className="text-ink-muted">الإجمالي التقديري مع التوصيل</span>
               <span className="num font-bold">{formatEgp(o.totalCents)}</span>
             </div>
           </Card>
@@ -56,7 +56,7 @@ export interface ComplaintNote {
   adminResponse: string | null;
 }
 
-function SubOrderCard({ s, accounts, code, complaints }: { s: SubOrderView; accounts: PayAccount[]; code?: string; complaints?: ComplaintNote[] }) {
+function SubOrderCard({ s, accounts, code, fee, complaints }: { s: SubOrderView; accounts: PayAccount[]; code?: string; fee?: { status: string; cents: number }; complaints?: ComplaintNote[] }) {
   const needsReceipt = s.paymentStatus === "NOT_REQUIRED_YET" || s.paymentStatus === "REJECTED";
   return (
     <Card className="flex flex-col gap-4">
@@ -69,6 +69,9 @@ function SubOrderCard({ s, accounts, code, complaints }: { s: SubOrderView; acco
           {s.refundStatus !== "NONE" ? <StatusBadge status={REFUND_STATUS[s.refundStatus]} /> : null}
         </div>
       </div>
+
+      {fee?.status === "PROPOSED" && s.deliveryStatus === "DRIVER_ASSIGNED" ? <FeeDecision orderId={s.id} feeCents={fee.cents} {...(s.driverName ? { driverName: s.driverName } : {})} /> : null}
+      {fee?.status === "APPROVED" && s.deliveryStatus === "DRIVER_ASSIGNED" ? <Notice tone="success">وافقت على سعر التوصيل <span className="num">{formatEgp(fee.cents)}</span>. تدفعه للمندوب كاش.</Notice> : null}
 
       {code ? (
         <Notice tone="info">
@@ -103,7 +106,7 @@ function SubOrderCard({ s, accounts, code, complaints }: { s: SubOrderView; acco
               <span className="num text-xs">أُرسل {formatDateTime(s.payment.submittedAt)}</span>
             </p>
           ) : null}
-          {needsReceipt && s.orderStatus === "AWAITING_PAYMENT" ? <PayForm orderId={s.id} merchantName={s.merchantName} amountCents={s.totalCents ?? s.subtotalCents} accounts={accounts} /> : null}
+          {needsReceipt && s.orderStatus === "AWAITING_PAYMENT" ? <PayForm orderId={s.id} merchantName={s.merchantName} amountCents={s.subtotalCents} accounts={accounts} /> : null}
           {s.paymentStatus === "REJECTED" ? <Notice tone="danger">رفض النشاط الإيصال السابق. أرسل إيصالاً صحيحاً.</Notice> : null}
         </div>
         <div className="flex flex-col gap-3">
@@ -124,7 +127,7 @@ function SubOrderCard({ s, accounts, code, complaints }: { s: SubOrderView; acco
   );
 }
 
-export function OrderDetailView({ order, base, accountsByOrder = {}, codesByOrder = {}, complaints = [] }: { order: MainOrderView; base: string; accountsByOrder?: Record<string, PayAccount[]>; codesByOrder?: Record<string, string>; complaints?: ComplaintNote[] }) {
+export function OrderDetailView({ order, base, accountsByOrder = {}, codesByOrder = {}, feeByOrder = {}, complaints = [] }: { order: MainOrderView; base: string; accountsByOrder?: Record<string, PayAccount[]>; codesByOrder?: Record<string, string>; feeByOrder?: Record<string, { status: string; cents: number }>; complaints?: ComplaintNote[] }) {
   const productsTotal = order.subOrders.reduce((n, s) => n + s.subtotalCents, 0);
   return (
     <div className="flex flex-col gap-5">
@@ -138,13 +141,13 @@ export function OrderDetailView({ order, base, accountsByOrder = {}, codesByOrde
       </div>
       <p className="text-sm text-ink-muted">التوصيل إلى: {order.addressLine}</p>
 
-      {order.subOrders.map((s) => <SubOrderCard key={s.id} s={s} accounts={accountsByOrder[s.id] ?? []} code={codesByOrder[s.id]} complaints={complaints.filter((c) => c.orderId === s.id)} />)}
+      {order.subOrders.map((s) => <SubOrderCard key={s.id} s={s} accounts={accountsByOrder[s.id] ?? []} code={codesByOrder[s.id]} fee={feeByOrder[s.id]} complaints={complaints.filter((c) => c.orderId === s.id)} />)}
 
       <Card className="flex flex-col gap-2 text-sm">
         <h2 className="text-lg font-bold">الحساب</h2>
         <div className="flex justify-between"><span className="text-ink-muted">إجمالي المنتجات (لكل نشاط تحويل مستقل)</span><span className="num font-semibold">{formatEgp(productsTotal)}</span></div>
-        <div className="flex justify-between"><span className="text-ink-muted">رسوم التوصيل</span><span className="num font-semibold">{formatEgp(order.deliveryFeeCents)}</span></div>
-        <div className="flex justify-between border-t border-line pt-2 text-base"><span className="font-bold">الإجمالي</span><span className="num font-bold">{formatEgp(order.totalCents)}</span></div>
+        <div className="flex justify-between"><span className="text-ink-muted">رسوم التوصيل (تقديرية؛ يحدد المندوب السعر وتوافق عليه وتدفعه له كاش)</span><span className="num font-semibold">{formatEgp(order.deliveryFeeCents)}</span></div>
+        <div className="flex justify-between border-t border-line pt-2 text-base"><span className="font-bold">الإجمالي التقديري</span><span className="num font-bold">{formatEgp(order.totalCents)}</span></div>
         <Badge className="w-fit">المبالغ كما سجّلها الخادم</Badge>
       </Card>
     </div>

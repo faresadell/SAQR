@@ -56,6 +56,7 @@ export async function pickUp(actor: Actor, orderId: string): Promise<LifecycleRe
   return run(async (tx) => {
     const { record, order } = await loadMyDelivery(tx, actor, orderId);
     if (order.deliveryStatus !== "DRIVER_ASSIGNED") fail("WRONG_STATE");
+    if (record.feeStatus !== "APPROVED") fail("FEE_NOT_APPROVED"); // the customer must agree to the driver's price first
     if (order.orderStatus === "READY") await moveStatus(tx, order, "OUT_FOR_DELIVERY", actor.id, "picked up by driver");
     else if (order.orderStatus !== "OUT_FOR_DELIVERY") fail("WRONG_STATE"); // the shop has not finished preparing it
     await setDeliveryStatus(tx, order, "PICKED_UP", actor.id, null);
@@ -142,9 +143,47 @@ export async function listMyDeliveries(actor: Actor, scope: "ACTIVE" | "HISTORY"
     deliveryStatus: r.order.deliveryStatus,
     feeToCollectCents: r.feeExpectedCents,
     collectionStatus: r.collectionStatus,
+    feeStatus: r.feeStatus,
+    maxFeeCents: maxDriverFeeCents(r.order.deliveryFeeCents),
     address: r.order.addressSnap,
     customer: { name: r.order.customer.name, phone: r.order.customer.phone },
     assignedAt: r.assignedAt,
     deliveredAt: r.deliveredAt,
   }));
+}
+
+/** The driver may ask at most this much: twice the zone's reference fee, and never less than 50 EGP of room. */
+export const maxDriverFeeCents = (referenceCents: number): number => Math.max(referenceCents * 2, 5_000);
+
+/** The driver who took the order from the board names the delivery price; the customer is asked to approve it. Can be re-proposed until approved. */
+export async function proposeDeliveryFee(actor: Actor, orderId: string, feeCents: number): Promise<LifecycleResult> {
+  if (!Number.isInteger(feeCents) || feeCents < 100) return { ok: false, error: "INVALID_REQUEST" };
+  return run(async (tx) => {
+    const { record, order } = await loadMyDelivery(tx, actor, orderId);
+    if (order.deliveryStatus !== "DRIVER_ASSIGNED" || record.feeStatus === "APPROVED") fail("WRONG_STATE");
+    if (feeCents > maxDriverFeeCents(order.deliveryFeeCents)) fail("FEE_TOO_HIGH");
+    await tx.deliveryRecord.update({ where: { id: record.id }, data: { feeExpectedCents: feeCents, feeStatus: "PROPOSED" } });
+    await notifyInTx(tx, { userId: order.customerId, type: "DELIVERY_FEE_PROPOSED", title: "وافق على سعر التوصيل", body: `المندوب طلب ${(feeCents / 100).toFixed(2)} ج.م توصيل للطلب رقم ${order.number}. وافق أو ارفض من صفحة الطلب. تدفعه للمندوب كاش.`, data: { orderId }, dedupeKey: `fee-proposed:${orderId}:${feeCents}:${Date.now()}` });
+    await writeAudit({ actorId: actor.id, action: "DELIVERY_FEE_PROPOSED", entityType: "Order", entityId: orderId, after: { feeCents } }, tx);
+  });
+}
+
+/** The customer answers the driver's price. Approving lets the driver pick up; refusing sends the order back to the open board. */
+export async function answerDeliveryFee(actor: Actor, orderId: string, approve: boolean): Promise<LifecycleResult> {
+  return run(async (tx) => {
+    const order = await tx.order.findUnique({ where: { id: orderId }, include: { delivery: { include: { driver: true } } } });
+    if (!order || actor.role !== "CUSTOMER" || order.customerId !== actor.id) throw new NotFoundError();
+    const record = order.delivery;
+    if (!record || order.deliveryStatus !== "DRIVER_ASSIGNED" || record.feeStatus !== "PROPOSED") fail("WRONG_STATE");
+    const driverUserId = record!.driver?.userId;
+    if (approve) {
+      await tx.deliveryRecord.update({ where: { id: record!.id }, data: { feeStatus: "APPROVED" } });
+      if (driverUserId) await notifyInTx(tx, { userId: driverUserId, type: "DELIVERY_FEE_APPROVED", title: "العميل وافق على السعر", body: `وافق العميل على توصيل الطلب رقم ${order.number} بـ ${(record!.feeExpectedCents / 100).toFixed(2)} ج.م.`, data: { orderId }, dedupeKey: `fee-approved:${orderId}:${Date.now()}` });
+    } else {
+      await setDeliveryStatus(tx, order, "AWAITING_DRIVER", actor.id, "customer refused the driver's price");
+      await tx.deliveryRecord.update({ where: { id: record!.id }, data: { driverId: null, assignedAt: null, feeStatus: "NONE", feeExpectedCents: order.deliveryFeeCents } });
+      if (driverUserId) await notifyInTx(tx, { userId: driverUserId, type: "DELIVERY_FEE_REFUSED", title: "العميل رفض السعر", body: `رفض العميل سعر توصيل الطلب رقم ${order.number} وعاد الطلب للقائمة.`, data: { orderId }, dedupeKey: `fee-refused:${orderId}:${Date.now()}` });
+    }
+    await writeAudit({ actorId: actor.id, action: approve ? "DELIVERY_FEE_APPROVED" : "DELIVERY_FEE_REFUSED", entityType: "Order", entityId: orderId }, tx);
+  });
 }

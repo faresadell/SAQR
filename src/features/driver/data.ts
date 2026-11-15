@@ -30,6 +30,8 @@ export interface DriverDeliveryRow {
   deliveryStatus: "DRIVER_ASSIGNED" | "PICKED_UP" | "OUT_FOR_DELIVERY" | "DELIVERED" | "FAILED" | string;
   feeToCollectCents: number;
   collectionStatus: string;
+  feeStatus: string;
+  maxFeeCents: number;
   addressLine: string;
   customerName: string;
   customerPhone: string;
@@ -47,6 +49,8 @@ function toRow(r: Awaited<ReturnType<typeof listMyDeliveries>>[number]): DriverD
     deliveryStatus: r.deliveryStatus,
     feeToCollectCents: r.feeToCollectCents,
     collectionStatus: r.collectionStatus,
+    feeStatus: r.feeStatus,
+    maxFeeCents: r.maxFeeCents,
     addressLine: typeof line === "string" ? line : "",
     customerName: r.customer.name,
     customerPhone: r.customer.phone,

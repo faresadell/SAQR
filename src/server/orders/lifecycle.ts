@@ -20,6 +20,7 @@ export type LifecycleError =
   | "INSUFFICIENT_STARS"
   | "DRIVER_NOT_AVAILABLE"
   | "INVALID_CODE" | "TOO_MANY_ATTEMPTS"
+  | "FEE_NOT_APPROVED" | "FEE_TOO_HIGH"
   | "CONFLICT";
 export type LifecycleResult = { ok: true } | { ok: false; error: LifecycleError };
 
@@ -137,7 +138,7 @@ export async function submitPayment(actor: Actor, orderId: string, input: Submit
         receiverValue: account!.accountValue,
         receiptKey: upload!.storageKey,
         referenceNo,
-        amountCents: order.totalCents,
+        amountCents: order.subtotalCents, // products only: the delivery fee is paid in cash to the driver
         flagged: flagReason !== null,
         flagReason,
       },
