@@ -250,6 +250,18 @@ model Driver {
   user      User             @relation(fields: [userId], references: [id])
   merchant  Merchant?        @relation(fields: [merchantId], references: [id])
   deliveries DeliveryRecord[]
+  location   DriverLocation?
+}
+
+/// Last shared position of a driver who is out delivering. Overwritten in place, never a history; removed when the driver stops or has nothing left to deliver.
+model DriverLocation {
+  driverId  String   @id
+  lat       Float
+  lng       Float
+  accuracyM Int?
+  updatedAt DateTime @updatedAt
+
+  driver Driver @relation(fields: [driverId], references: [id], onDelete: Cascade)
 }
 
 // ───────────── Catalog ─────────────

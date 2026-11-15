@@ -11,6 +11,7 @@ import { AuthorizationError, NotFoundError } from "@/server/errors";
 import { createDriver, listMyDrivers, setDriverActive } from "@/server/drivers/service";
 import { placeOrder } from "@/server/orders/checkout";
 import { answerDeliveryFee, assignDriver, deliver, listMyDeliveries, pickUp, proposeDeliveryFee, reportFailure } from "@/server/orders/delivery";
+import { getDriverPositionForCustomer, shareLocation, stopSharing } from "@/server/drivers/location";
 import { claimOrder, listBoard, releaseOrder } from "@/server/orders/driver-board";
 import { advanceOrder, cancelOrder, confirmPayment, decideOrder, requestCancellation, resolveCancellation, submitPayment } from "@/server/orders/lifecycle";
 import { applyStarMove, getStarBalance } from "@/server/stars/ledger";
@@ -155,6 +156,34 @@ describe("one trip for one customer order", () => {
     await claimOrder(b, second);
     expect(await releaseOrder(b, first)).toEqual({ ok: true });
     expect((await listBoard(a)).length).toBe(2);
+  });
+});
+
+describe("driver live location", () => {
+  it("is shared only with an active delivery, shown only to the order's customer while out for delivery, and deleted afterwards", async () => {
+    const id = await approvedOrder();
+    const d = await user("DRIVER");
+    expect(await shareLocation(d, 30.04, 31.23)).toEqual({ ok: false, error: "NO_ACTIVE_DELIVERY" });
+    await claimOrder(d, id);
+    expect(await shareLocation(d, 120, 31.23)).toEqual({ ok: false, error: "INVALID_REQUEST" });
+    expect(await shareLocation(d, 30.04, 31.23, 12)).toEqual({ ok: true });
+    expect(await getDriverPositionForCustomer(w.customer, id)).toBeNull(); // not out for delivery yet
+    await agreeFee(d, id);
+    await advanceOrder(w.owner, id, "PREPARING");
+    await advanceOrder(w.owner, id, "READY");
+    await pickUp(d, id);
+    expect(await getDriverPositionForCustomer(w.customer, id)).toMatchObject({ lat: 30.04, lng: 31.23 });
+    await expect(getDriverPositionForCustomer(w.stranger, id)).rejects.toBeInstanceOf(NotFoundError); // someone else's order
+    await expect(shareLocation(w.customer, 30, 31)).rejects.toBeInstanceOf(AuthorizationError);
+    await db.driverLocation.updateMany({ data: { updatedAt: new Date(Date.now() - 11 * 60_000) } });
+    expect(await getDriverPositionForCustomer(w.customer, id)).toBeNull(); // stale positions are hidden
+    expect(await shareLocation(d, 30.05, 31.24)).toEqual({ ok: true });
+    expect((await deliver(d, id, { feeCollected: true, code: await codeOf(id) })).ok).toBe(true);
+    expect(await db.driverLocation.count()).toBe(0); // nothing left to deliver: nothing kept
+    await claimOrder(d, await approvedOrder());
+    expect(await shareLocation(d, 30.04, 31.23)).toEqual({ ok: true });
+    await stopSharing(d);
+    expect(await db.driverLocation.count()).toBe(0);
   });
 });
 
