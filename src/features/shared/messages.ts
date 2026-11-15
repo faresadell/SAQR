@@ -44,6 +44,7 @@ export const PLACE_ORDER_MESSAGES: Record<string, string> = {
 export const ADDRESS_MESSAGES: Record<string, string> = {
   INVALID_REQUEST: "اكتب عنواناً واضحاً (٥ أحرف على الأقل) واختر المنطقة.",
   ZONE_UNAVAILABLE: "هذه المنطقة غير متاحة حالياً.",
+  BAD_LOCATION: "الموقع المحدد على الخريطة خارج مصر. حرّك الخريطة وأكّد الموقع من جديد.",
   TOO_MANY_ADDRESSES: "وصلت للحد الأقصى من العناوين المحفوظة. احذف عنواناً قديماً أولاً.",
 };
 

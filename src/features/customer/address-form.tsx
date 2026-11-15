@@ -9,6 +9,7 @@ import { Select } from "@/components/ui/select";
 import type { FormState } from "@/lib/form-state";
 import { formatEgp } from "@/lib/money";
 import { addAddressAction } from "./actions";
+import { LocationPicker } from "./location-picker";
 
 export interface ZoneOption {
   id: string;
@@ -27,6 +28,7 @@ export function AddressForm({ zones }: { zones: ZoneOption[] }) {
       <form action={action} className="flex flex-col gap-3">
         <Field label="اسم العنوان (اختياري)" name="label" maxLength={40} placeholder="البيت، العمل..." />
         <Field label="العنوان بالتفصيل" name="line" required minLength={5} maxLength={200} error={state.fieldErrors?.line} />
+        <LocationPicker />
         <Select label="المنطقة" name="zoneId" required defaultValue={zones[0]?.id}>
           {zones.map((z) => <option key={z.id} value={z.id}>{z.name} — رسوم التوصيل {formatEgp(z.feeCents)}</option>)}
         </Select>

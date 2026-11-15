@@ -18,6 +18,7 @@ describe("buildCsp (production)", () => {
   });
 
   it("embeds nothing except the robot-check widget and the OpenStreetMap embed", () => {
+    expect(csp).toContain("img-src 'self' data: blob: https://tile.openstreetmap.org;");
     expect(csp).toContain("frame-src https://challenges.cloudflare.com https://www.openstreetmap.org;");
     expect(csp).toContain("connect-src 'self' https://challenges.cloudflare.com");
   });

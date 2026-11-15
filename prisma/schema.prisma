@@ -1087,7 +1087,9 @@ model Message {
   conversationId String
   conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
   senderId       String
-  body           String
+  body           String // may be empty when the message is only a picture
+  imageKey       String? // private storage key of an attached picture (served only to the two people in the chat)
+  imageType      String?
   createdAt      DateTime     @default(now())
 
   @@index([conversationId, createdAt])
