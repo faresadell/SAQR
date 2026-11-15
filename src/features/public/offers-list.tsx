@@ -1,10 +1,12 @@
 import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
+import { LinkButton } from "@/components/ui/link-button";
 import { EmptyState } from "@/components/ui/states";
 import { formatDate } from "@/lib/format";
 import { formatEgp } from "@/lib/money";
 import type { PublicOfferView } from "./data";
+import { OrderNow } from "./order-now";
 
 export function OffersList({ offers }: { offers: PublicOfferView[] }) {
   if (offers.length === 0) return <EmptyState icon="tag" title="لا توجد عروض سارية الآن">ستظهر هنا العروض عندما تنشرها الأنشطة.</EmptyState>;
@@ -24,15 +26,20 @@ export function OffersList({ offers }: { offers: PublicOfferView[] }) {
             {o.products.length > 0 ? (
               <ul className="flex flex-col gap-1.5 text-sm">
                 {o.products.map((p) => (
-                  <li key={p.id} className="flex items-center justify-between gap-3">
+                  <li key={p.id} className="flex flex-wrap items-center justify-between gap-3">
                     <Link href={`/shops/${o.shop.id}/products/${p.id}`} className="underline">{p.name}</Link>
-                    <span className="num">
-                      <s className="text-ink-muted">{formatEgp(p.priceCents)}</s> <strong>{formatEgp(p.finalPriceCents)}</strong>
+                    <span className="flex items-center gap-3">
+                      <span className="num">
+                        <s className="text-ink-muted">{formatEgp(p.priceCents)}</s> <strong>{formatEgp(p.finalPriceCents)}</strong>
+                      </span>
+                      <OrderNow productId={p.id} merchantId={o.shop.id} merchantName={o.shop.name} name={p.name} priceCents={p.finalPriceCents} />
                     </span>
                   </li>
                 ))}
               </ul>
-            ) : null}
+            ) : (
+              <LinkButton href={`/shops/${o.shop.id}`} size="sm" className="w-fit">اطلب الآن من النشاط</LinkButton>
+            )}
             <p className="mt-auto text-xs text-ink-muted">ينتهي العرض في <span className="num">{formatDate(o.endsAt)}</span></p>
           </Card>
         </li>
