@@ -21,7 +21,10 @@ async function myDriver(actor: Actor) {
 /** The driver shares their position. Only while they hold an undelivered order, and only the last position is kept. */
 export async function shareLocation(actor: Actor, lat: number, lng: number, accuracyM?: number): Promise<ShareResult> {
   if (!Number.isFinite(lat) || !Number.isFinite(lng) || Math.abs(lat) > 90 || Math.abs(lng) > 180) return { ok: false, error: "INVALID_REQUEST" };
-  const driver = await myDriver(actor);
+  if (actor.role !== "DRIVER") throw new AuthorizationError();
+  const driver = await db.driver.findUnique({ where: { userId: actor.id } });
+  if (!driver) return { ok: false, error: "NO_ACTIVE_DELIVERY" }; // never held an order
+  if (!driver.isActive) throw new AuthorizationError();
   const active = await db.order.count({ where: { deliveryStatus: { in: [...ACTIVE] }, delivery: { driverId: driver.id } } });
   if (active === 0) return { ok: false, error: "NO_ACTIVE_DELIVERY" };
   if (!(await consumeRateLimit(`driver-location:${driver.id}`, 12, 60))) return { ok: false, error: "RATE_LIMITED" };
