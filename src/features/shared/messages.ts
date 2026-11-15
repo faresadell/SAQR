@@ -7,7 +7,7 @@ export const LIFECYCLE_MESSAGES: Record<string, string> = {
   INVALID_REQUEST: "البيانات المرسلة غير صحيحة. راجعها وحاول مرة أخرى.",
   WRONG_STATE: "لا يمكن تنفيذ هذا الإجراء في حالة الطلب الحالية.",
   PAYMENT_METHOD_DISABLED: "وسيلة الدفع هذه غير مفعّلة حالياً.",
-  PAYMENT_RECEIVER_NOT_SET: "لم تحدّد الإدارة بعد رقم استلام هذه الوسيلة.",
+  PAYMENT_RECEIVER_NOT_SET: "حساب الدفع ده مش متاح عند النشاط. اختر حساب تاني.",
   DUPLICATE_TRANSFER: "رقم عملية التحويل هذا مؤكَّد على طلب آخر.",
   PAYMENT_NOT_CONFIRMED: "يجب تأكيد الدفع أولاً.",
   INSUFFICIENT_STARS: "رصيد النجوم لا يكفي لإتمام هذا الإجراء.",

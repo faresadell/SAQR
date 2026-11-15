@@ -10,36 +10,62 @@ import type { FormState } from "@/lib/form-state";
 import { formatEgp } from "@/lib/money";
 import { cancelOrderAction, fileComplaintAction, payOrderAction } from "./actions";
 
-export interface PayMethod {
-  code: string;
-  label: string;
-  receiverNumber: string | null;
+export interface PayAccount {
+  id: string;
+  methodLabel: string;
+  accountValue: string;
+  holderName: string | null;
 }
 
 const idle: FormState = {};
 
-/** Transfer to the shop, then send the receipt and the transfer number. The shop confirms; this never marks anything paid. */
-export function PayForm({ orderId, merchantName, amountCents, methods }: { orderId: string; merchantName: string; amountCents: number; methods: PayMethod[] }) {
+function CopyButton({ value }: { value: string }) {
+  const [done, setDone] = useState(false);
+  return (
+    <Button
+      type="button"
+      variant="outline"
+      size="sm"
+      onClick={async () => {
+        try {
+          await navigator.clipboard.writeText(value);
+          setDone(true);
+          setTimeout(() => setDone(false), 1500);
+        } catch {
+          setDone(false); // the number stays visible and selectable
+        }
+      }}
+    >
+      {done ? "تم النسخ" : "نسخ الرقم"}
+    </Button>
+  );
+}
+
+/** Pick one of the shop's own accounts, transfer straight to it, then send the receipt. The shop confirms; this never marks anything paid. */
+export function PayForm({ orderId, merchantName, amountCents, accounts }: { orderId: string; merchantName: string; amountCents: number; accounts: PayAccount[] }) {
   const [state, action, pending] = useActionState(payOrderAction, idle);
-  const [method, setMethod] = useState(methods[0]?.code ?? "");
-  const chosen = methods.find((m) => m.code === method);
+  const [accountId, setAccountId] = useState(accounts[0]?.id ?? "");
   const errors = state.fieldErrors ?? {};
-  if (methods.length === 0) return <Notice tone="warning">لا توجد وسيلة دفع مفعّلة حالياً. حاول لاحقاً.</Notice>;
+  if (accounts.length === 0) return <Notice tone="warning">النشاط لم يضف حساب دفع بعد. تواصل معه من المحادثات.</Notice>;
+  const chosen = accounts.find((x) => x.id === accountId);
   return (
     <form action={action} className="flex flex-col gap-3" aria-label={`إرسال إيصال ${merchantName}`}>
       <input type="hidden" name="orderId" value={orderId} />
-      <fieldset className="flex flex-wrap gap-2">
-        <legend className="mb-1 text-sm font-semibold">وسيلة التحويل</legend>
-        {methods.map((m) => (
-          <label key={m.code} className="flex cursor-pointer items-center gap-2 rounded-control border border-line bg-surface px-3 py-2 text-sm font-semibold has-[:checked]:border-brand has-[:checked]:bg-brand-soft">
-            <input type="radio" name="method" value={m.code} checked={method === m.code} onChange={() => setMethod(m.code)} />
-            {m.label}
+      <p className="text-sm font-semibold">1) اختر حساب {merchantName} وحوّل <strong className="num">{formatEgp(amountCents)}</strong></p>
+      <fieldset className="flex flex-col gap-2">
+        <legend className="sr-only">حساب الدفع</legend>
+        {accounts.map((x) => (
+          <label key={x.id} className="flex cursor-pointer items-center gap-3 rounded-control border border-line bg-surface p-3 has-[:checked]:border-brand has-[:checked]:bg-brand-soft">
+            <input type="radio" name="accountId" value={x.id} checked={accountId === x.id} onChange={() => setAccountId(x.id)} />
+            <span className="flex min-w-0 flex-1 flex-col">
+              <span className="text-sm font-semibold">{x.methodLabel}{x.holderName ? ` — ${x.holderName}` : ""}</span>
+              <span className="ltr-isolate num select-all text-base font-bold">{x.accountValue}</span>
+            </span>
           </label>
         ))}
       </fieldset>
-      <p className="rounded-control bg-canvas p-3 text-sm">
-        حوّل <strong className="num">{formatEgp(amountCents)}</strong> للنشاط عبر {chosen?.label ?? "الوسيلة المختارة"}. بيانات استلام النشاط تظهر في صفحته؛ لا تحوّل لرقم غير معلَن.
-      </p>
+      {chosen ? <CopyButton value={chosen.accountValue} /> : null}
+      <p className="text-sm font-semibold">2) ابعت صورة الإيصال ورقم العملية</p>
       <Field label="رقم عملية التحويل" name="referenceNo" dir="ltr" required error={errors.referenceNo} />
       <FileUpload label="صورة إيصال هذا النشاط" name="receipt" required error={errors.receipt} />
       {state.error ? <Notice tone="danger">{state.error}</Notice> : null}

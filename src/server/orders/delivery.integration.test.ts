@@ -3,7 +3,7 @@
  * WARNING: they TRUNCATE tables (including "User"). Use a throwaway database.
  */
 import { beforeEach, describe, expect, it } from "vitest";
-import { grantPackage } from "@/test-support/package";
+import { accountForOrder, giveAccount, grantPackage } from "@/test-support/package";
 import { db } from "@/lib/db";
 import type { Actor } from "@/lib/auth/permissions";
 import { invalidateSettingsCache } from "@/lib/settings";
@@ -63,6 +63,8 @@ beforeEach(async () => {
   await grantPackage(otherOwner.id);
   const shop = await db.merchant.create({ data: { ownerId: owner.id, name: "A", businessType: "restaurant", status: "APPROVED" } });
   const other = await db.merchant.create({ data: { ownerId: otherOwner.id, name: "B", businessType: "restaurant", status: "APPROVED" } });
+  await giveAccount(shop.id);
+  await giveAccount(other.id);
   const product = await db.product.create({ data: { merchantId: shop.id, categoryId: category.id, nameAr: "منتج", priceCents: 5000 } });
   w = { customer, stranger, owner, otherOwner, shopId: shop.id, otherShopId: other.id, productId: product.id, addressId: address.id };
 });
@@ -76,7 +78,7 @@ async function paidOrder(): Promise<string> {
   const id = r.suborderIds[0]!;
   uploads += 1;
   const up = await db.receiptUpload.create({ data: { orderId: id, uploaderId: w.customer.id, storageKey: `receipts/${id}/${uploads}.jpg`, contentType: "image/jpeg", sizeBytes: 10, sha256: `d${uploads}` } });
-  expect((await submitPayment(w.customer, id, { method: "instapay", referenceNo: `DREF-${keyNo}000`, uploadId: up.id })).ok).toBe(true);
+  expect((await submitPayment(w.customer, id, { accountId: await accountForOrder(id), referenceNo: `DREF-${keyNo}000`, uploadId: up.id })).ok).toBe(true);
   expect((await confirmPayment(w.owner, id)).ok).toBe(true);
   return id;
 }

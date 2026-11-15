@@ -7,7 +7,6 @@ import { canTransition, type OrderStatusName } from "@/lib/orders/status";
 import { ledgerKeys } from "@/lib/stars/rules";
 import { getSetting } from "@/lib/settings";
 import { AuthorizationError, NotFoundError } from "@/server/errors";
-import { assertPaymentMethodEnabled, PaymentMethodDisabledError } from "@/server/payments/methods";
 import { transferConfirmedElsewhere } from "@/server/payments/transfers";
 import { notifyInTx } from "@/server/notifications/service";
 import { applyStarMoves, getStarBalance, InsufficientStarsError, type StarMove } from "@/server/stars/ledger";
@@ -92,7 +91,8 @@ async function setPaymentStatus(tx: Tx, order: OrderRow, to: PaymentStatus, acto
 const REFERENCE_PATTERN = /^[A-Za-z0-9\-_/ ]{4,64}$/;
 
 export interface SubmitPaymentInput {
-  method: string;
+  /** The shop account the customer chose to pay (MerchantPaymentAccount.id); it must belong to the order's shop and be active. */
+  accountId: string;
   referenceNo: string;
   /** Id returned by POST /orders/{id}/receipt. Must belong to this customer and this order, and can be used once. */
   uploadId: string;
@@ -107,15 +107,16 @@ export async function submitPayment(actor: Actor, orderId: string, input: Submit
   if (!REFERENCE_PATTERN.test(referenceNo) || typeof input.uploadId !== "string" || input.uploadId.length < 8 || input.uploadId.length > 64) {
     return { ok: false, error: "INVALID_REQUEST" };
   }
-  try {
-    await assertPaymentMethodEnabled(String(input.method));
-  } catch (error) {
-    if (error instanceof PaymentMethodDisabledError) return { ok: false, error: error.reason === "NO_RECEIVER" ? "PAYMENT_RECEIVER_NOT_SET" : "PAYMENT_METHOD_DISABLED" };
-    throw error;
-  }
+  if (typeof input.accountId !== "string" || input.accountId.length < 8 || input.accountId.length > 64) return { ok: false, error: "INVALID_REQUEST" };
   return run(async (tx) => {
     const order = await loadOwnCustomerOrder(tx, actor, orderId);
     if (order.orderStatus !== "AWAITING_PAYMENT" || (order.paymentStatus !== "NOT_REQUIRED_YET" && order.paymentStatus !== "REJECTED")) fail("WRONG_STATE");
+
+    // The customer pays one of THIS shop's own accounts, and the method is the one the admin still allows.
+    const account = await tx.merchantPaymentAccount.findFirst({ where: { id: input.accountId, merchantId: order.merchantId, isActive: true } });
+    if (!account) fail("PAYMENT_RECEIVER_NOT_SET");
+    const methodOn = await tx.paymentMethodConfig.findFirst({ where: { code: account!.method, isEnabled: true }, select: { code: true } });
+    if (!methodOn) fail("PAYMENT_METHOD_DISABLED");
 
     // The proof must be an image this customer uploaded for THIS order, and it can be used only once.
     const upload = await tx.receiptUpload.findFirst({ where: { id: input.uploadId, orderId: order.id, uploaderId: actor.id, usedAt: null } });
@@ -124,13 +125,15 @@ export async function submitPayment(actor: Actor, orderId: string, input: Submit
     if (claimed.count !== 1) fail("CONFLICT");
 
     // Reused transfer reference, or the very same picture used on another order: keep it but flag it for the reviewer.
-    const clash = await tx.payment.findFirst({ where: { method: input.method, referenceNo, orderId: { not: order.id }, rejectedReason: null } });
+    const clash = await tx.payment.findFirst({ where: { method: account!.method, referenceNo, orderId: { not: order.id }, rejectedReason: null } });
     const sameImage = await tx.receiptUpload.findFirst({ where: { sha256: upload!.sha256, orderId: { not: order.id }, usedAt: { not: null } } });
     const flagReason = clash ? "Transfer reference already used on another order" : sameImage ? "Same receipt image already used on another order" : null;
     const created = await tx.payment.create({
       data: {
         orderId: order.id,
-        method: input.method,
+        method: account!.method,
+        accountId: account!.id,
+        receiverValue: account!.accountValue,
         receiptKey: upload!.storageKey,
         referenceNo,
         amountCents: order.totalCents,
@@ -140,7 +143,7 @@ export async function submitPayment(actor: Actor, orderId: string, input: Submit
     });
     await setPaymentStatus(tx, order, "AWAITING_MERCHANT_CONFIRMATION", actor.id, "receipt submitted");
     await notifyInTx(tx, { userId: order.merchant.ownerId, type: "PAYMENT_SUBMITTED", title: "إيصال دفع جديد", body: `أرسل العميل إثبات تحويل للطلب رقم ${order.number}. راجعه وأكّد الدفع.`, data: { orderId: order.id }, dedupeKey: `payment-submitted:${created.id}` });
-    await writeAudit({ actorId: actor.id, action: "PAYMENT_SUBMITTED", entityType: "Order", entityId: order.id, after: { method: input.method, flagged: flagReason !== null } }, tx);
+    await writeAudit({ actorId: actor.id, action: "PAYMENT_SUBMITTED", entityType: "Order", entityId: order.id, after: { method: account!.method, flagged: flagReason !== null } }, tx);
   });
 }
 

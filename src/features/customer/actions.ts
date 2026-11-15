@@ -99,7 +99,7 @@ export async function payOrderAction(_prev: FormState, formData: FormData): Prom
   try {
     const upload = await uploadReceipt(user, orderId, bytes);
     if (!upload.ok) return { error: UPLOAD_MESSAGES[upload.error] ?? GENERIC_ERROR };
-    const result = await submitPayment(user, orderId, { method: text(formData, "method"), referenceNo: text(formData, "referenceNo"), uploadId: upload.uploadId });
+    const result = await submitPayment(user, orderId, { accountId: text(formData, "accountId"), referenceNo: text(formData, "referenceNo"), uploadId: upload.uploadId });
     if (!result.ok) return { error: LIFECYCLE_MESSAGES[result.error] ?? GENERIC_ERROR };
     revalidatePath("/account/orders", "layout");
     return { message: "تم إرسال الإيصال. بانتظار تأكيد النشاط للدفع." };

@@ -3,7 +3,7 @@
  * WARNING: they TRUNCATE tables (including "User"). Use a throwaway database.
  */
 import { beforeEach, describe, expect, it } from "vitest";
-import { grantPackage } from "@/test-support/package";
+import { giveAccount, grantPackage } from "@/test-support/package";
 import { db } from "@/lib/db";
 import type { Actor } from "@/lib/auth/permissions";
 import { invalidateSettingsCache } from "@/lib/settings";
@@ -61,6 +61,7 @@ beforeEach(async () => {
   addressId = (await db.address.create({ data: { userId: customer.id, line: "شارع 9", zoneId: zone.id } })).id;
   const shop = await db.merchant.create({ data: { ownerId: owner.id, name: "متجر", businessType: "restaurant", status: "APPROVED" } });
   shopId = shop.id;
+  await giveAccount(shop.id);
   p1 = await db.product.create({ data: { merchantId: shop.id, categoryId: category.id, nameAr: "منتج 1", priceCents: 10_000 } });
   p2 = await db.product.create({ data: { merchantId: shop.id, categoryId: category.id, nameAr: "منتج 2", priceCents: 4_000 } });
 });

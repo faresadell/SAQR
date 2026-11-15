@@ -216,6 +216,7 @@ model Merchant {
   membershipPurchases MembershipPurchase[]
   settlements     CommissionSettlement[]
   offers          Offer[]
+  paymentAccounts MerchantPaymentAccount[]
 
   @@index([status])
 }
@@ -533,6 +534,8 @@ model Payment {
   rejectedReason String?
   flagged        Boolean   @default(false)
   flagReason     String?
+  accountId      String? // the shop account the customer chose to pay (MerchantPaymentAccount; plain id, the account may be deleted later)
+  receiverValue  String? // snapshot of that account's number/handle at payment time
   order          Order     @relation(fields: [orderId], references: [id])
 
   @@index([orderId])
@@ -1097,4 +1100,19 @@ model OrderRequest {
 
   @@index([customerId, createdAt])
   @@index([merchantId, status, createdAt])
+}
+
+// Where a shop receives customer payments (Vodafone Cash numbers, InstaPay handles...). A shop may add as many as it wants;
+// the customer picks one when paying. Platform receiving numbers (PaymentMethodConfig) are only for platform purchases.
+model MerchantPaymentAccount {
+  id           String   @id @default(cuid())
+  merchantId   String
+  method       String // PaymentMethodConfig.code
+  accountValue String
+  holderName   String?
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  merchant     Merchant @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+
+  @@index([merchantId, isActive])
 }
