@@ -53,7 +53,8 @@ export async function generateSettlements(monthKey: string, actor: Actor | null,
     FROM "OrderEvent" e JOIN "Order" o ON o."id" = e."orderId"
     WHERE e."field" = 'orderStatus' AND e."toValue" = 'DELIVERED' AND e."createdAt" >= ${start} AND e."createdAt" < ${end}
       AND NOT EXISTS (SELECT 1 FROM "CommissionSettlementLine" l WHERE l."orderId" = o."id" AND l."kind" = 'ORDER')`;
-  const orders = delivered.length ? await db.order.findMany({ where: { id: { in: delivered.map((d) => d.orderId) } }, select: { id: true, merchantId: true, commissionBaseCents: true, commissionBp: true, totalCents: true } }) : [];
+  // Orders placed after the percentage commission was removed carry 0% and are never settled.
+  const orders = delivered.length ? await db.order.findMany({ where: { id: { in: delivered.map((d) => d.orderId) }, commissionBp: { gt: 0 } }, select: { id: true, merchantId: true, commissionBaseCents: true, commissionBp: true, totalCents: true } }) : [];
 
   // Earlier ORDER lines whose order has since got a COMPLETED refund and has no adjustment yet: give the difference back, once.
   const charged = await db.$queryRaw<{ orderId: string; commissionCents: number; merchantId: string }[]>`

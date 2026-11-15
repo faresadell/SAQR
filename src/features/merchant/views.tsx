@@ -9,7 +9,6 @@ import { StatusBadge } from "@/components/saqr/status-badge";
 import { DELIVERY_STATUS, ORDER_STATUS, PAYMENT_STATUS } from "@/features/shared/status";
 import { formatDate, formatDateTime, formatNumber } from "@/lib/format";
 import { formatEgp } from "@/lib/money";
-import { formatPercent } from "@/lib/commission";
 import { OrderControls } from "./order-controls";
 import type { MerchantDriverOption, MerchantOrderRow, MerchantReport } from "./types";
 
@@ -61,20 +60,16 @@ export function MerchantReportView({ data }: { data: MerchantReport }) {
     { key: "n", header: "الطلب", cell: (r) => <span className="num font-bold">#{formatNumber(r.orderNumber)}</span> },
     { key: "d", header: "التاريخ", cell: (r) => <span className="num">{formatDate(r.date)}</span> },
     { key: "s", header: "المنتجات", numeric: true, cell: (r) => <span className="num">{formatEgp(r.subtotalCents)}</span> },
-    { key: "r", header: "نسبة العمولة (وقت الطلب)", numeric: true, cell: (r) => <span className="num">{formatPercent(r.commissionBp)}%</span> },
-    { key: "c", header: "العمولة", numeric: true, cell: (r) => <span className="num font-bold">{formatEgp(r.commissionCents)}</span> },
   ];
   return (
     <div className="flex flex-col gap-6">
       <p className="text-sm text-ink-muted">{data.periodLabel}</p>
-      <div className="grid gap-4 sm:grid-cols-3">
+      <div className="grid gap-4 sm:grid-cols-1">
         <StatCard label="المبيعات" icon="dollar" value={formatEgp(data.salesCents)} />
-        <StatCard label="العمولات" icon="percent" tone="warning" value={formatEgp(data.commissionCents)} />
-        <StatCard label="صافي التسوية" icon="wallet" tone="success" value={formatEgp(data.settlementCents)} />
       </div>
       <Card><BarChart title="المبيعات الشهرية" data={data.monthly} format={(v) => formatEgp(v)} /></Card>
-      <DataTable caption="عمولات الطلبات" columns={columns} rows={data.rows} rowKey={(r) => String(r.orderNumber)} empty={<EmptyState icon="chart" title="لا توجد بيانات بعد" />} />
-      <p className="text-xs text-ink-muted">تُعرض نسبة وقيمة العمولة كما سُجّلت وقت كل طلب، ولا تتغير بتغيّر النسب لاحقاً.</p>
+      <DataTable caption="طلبات الشهر" columns={columns} rows={data.rows} rowKey={(r) => String(r.orderNumber)} empty={<EmptyState icon="chart" title="لا توجد بيانات بعد" />} />
+      <p className="text-xs text-ink-muted">العميل يدفع لك مباشرة. عمولة المنصة نجمتان على كل طلب تُخصم من رصيد نجومك.</p>
     </div>
   );
 }

@@ -4,16 +4,12 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { formatCairo } from "@/lib/cairo-time";
-import { formatPercent, TIER_LABELS_AR, type TierName } from "@/lib/commission";
-import { pickEffective } from "@/lib/effective";
 import { formatEgp } from "@/lib/money";
 import { hasPermission } from "@/lib/auth/permissions";
 import { requireRole } from "@/server/auth/guards";
-import { listCommissionHistory } from "@/server/commissions/service";
 import { listZones } from "@/server/delivery/zones";
 import { listPaymentMethods } from "@/server/payments/methods";
 import { listSettingStates, type SettingState } from "@/server/settings/service";
-import { CommissionForm } from "./commission-form";
 import { SettingsForm, type SettingFieldView } from "./settings-form";
 import { CreateZoneForm, ZoneFeeForm } from "./zone-forms";
 import { setPaymentReceiverAction, setZoneActiveAction, togglePaymentMethodAction } from "./actions";
@@ -45,19 +41,16 @@ export default async function AdminSettingsPage({ searchParams }: { searchParams
   if (!hasPermission(user, "settings.view") && !hasPermission(user, "settings.manage")) notFound();
   const canEdit = hasPermission(user, "settings.manage");
   const { notice } = await searchParams;
-  const now = new Date();
 
-  const [orders, security, offers, contest, history, methods, zones] = await Promise.all([
+  const [orders, security, offers, contest, methods, zones] = await Promise.all([
     listSettingStates(user, "orders"),
     listSettingStates(user, "security"),
     listSettingStates(user, "offers"),
     listSettingStates(user, "contest"),
-    listCommissionHistory(user),
     listPaymentMethods(user),
     listZones(user),
   ]);
 
-  const tiers: TierName[] = ["REGULAR", "BUSINESS"];
   const merchantResponseUnset = orders.some((s) => s.key === "orders.merchant_response_minutes" && s.current === null);
 
   return (
@@ -65,52 +58,10 @@ export default async function AdminSettingsPage({ searchParams }: { searchParams
       <h1 className="text-2xl font-bold">إعدادات المنصة</h1>
       {notice && notices[notice] ? <p role="status" className="rounded-control bg-brand-soft p-3 text-sm font-medium">{notices[notice]}</p> : null}
 
-      {/* ───────── Commissions ───────── */}
-      <Card className="flex flex-col gap-4">
-        <h2 className="text-lg font-bold">عمولة المنصة حسب عضوية التاجر</h2>
-        <p className="text-sm text-ink-muted">
-          تُحسب على قيمة المنتجات فقط (بدون رسوم التوصيل) وتُنسخ داخل كل طلب عند إنشائه، فلا يغيّر أي تعديل لاحق الطلبات القديمة.
-        </p>
-        <div className="grid gap-3 sm:grid-cols-2">
-          {tiers.map((tier) => {
-            const rows = history.filter((r) => r.tier === tier);
-            const current = pickEffective(rows, now);
-            return (
-              <div key={tier} className="rounded-control border border-line p-4">
-                <p className="text-sm text-ink-muted">{TIER_LABELS_AR[tier]}</p>
-                <p className="text-3xl font-bold" dir="ltr">{current ? `${formatPercent(current.basisPoints)}%` : "غير مضبوطة"}</p>
-              </div>
-            );
-          })}
-        </div>
-
-        {canEdit ? <CommissionForm /> : null}
-
-        <details>
-          <summary className="cursor-pointer text-sm font-semibold text-brand">سجل النسب</summary>
-          <div className="mt-3 overflow-x-auto">
-            <table className="w-full text-start text-sm">
-              <thead>
-                <tr className="text-ink-muted">
-                  <th className="p-2 text-start">العضوية</th>
-                  <th className="p-2 text-start">النسبة</th>
-                  <th className="p-2 text-start">تسري من</th>
-                  <th className="p-2 text-start">سجّلها</th>
-                </tr>
-              </thead>
-              <tbody>
-                {history.map((r) => (
-                  <tr key={r.id} className="border-t border-line">
-                    <td className="p-2">{TIER_LABELS_AR[r.tier]}</td>
-                    <td className="p-2" dir="ltr">{formatPercent(r.basisPoints)}%</td>
-                    <td className="p-2">{formatCairo(r.effectiveFrom)} {r.effectiveFrom > now ? <Badge tone="warning">مجدولة</Badge> : null}</td>
-                    <td className="p-2">{r.createdByName ?? "النظام"}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </details>
+      {/* ───────── Commission ───────── */}
+      <Card className="flex flex-col gap-2">
+        <h2 className="text-lg font-bold">عمولة المنصة</h2>
+        <p className="text-sm text-ink-muted">العمولة نجمتان على كل طرف (العميل والتاجر) عند اعتماد الطلب. لا توجد نسبة مئوية، والعميل يدفع للتاجر مباشرة.</p>
       </Card>
 
       {/* ───────── Orders / stars / refunds ───────── */}
