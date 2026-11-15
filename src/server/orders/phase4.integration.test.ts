@@ -108,7 +108,7 @@ describe("placeOrder", () => {
     expect(parent.totalCents).toBe(17000);
     expect(parent.suborders.reduce((s, o) => s + o.totalCents, 0)).toBe(parent.totalCents);
     const subA = parent.suborders.find((o) => o.merchantId === w.a.merchant.id)!;
-    expect(subA.commissionCents).toBe(800); // 8% of 10000
+    expect([subA.commissionBp, subA.commissionCents]).toEqual([0, 0]); // no percentage commission any more (2 stars per side instead)
     expect(subA.orderStatus).toBe("AWAITING_PAYMENT");
   });
 

@@ -30,7 +30,7 @@ export async function resolveCommissionRate(tier: MerchantTier, at: Date = new D
 
 export interface OrderCommissionSnapshot extends CommissionSnapshot {
   merchantTierSnap: MerchantTier;
-  rateId: string;
+  rateId: string | null;
 }
 
 /**
@@ -44,8 +44,11 @@ export async function buildCommissionSnapshot(
   at: Date = new Date(),
   client: Client = db,
 ): Promise<OrderCommissionSnapshot> {
-  const rate = await resolveCommissionRate(tier, at, client);
-  return { merchantTierSnap: tier, rateId: rate.rateId, ...computeCommission(baseCents, rate.basisPoints) };
+  // No percentage commission any more: the platform earns 2 stars from each side per order (see lifecycle.ts).
+  // New orders store a 0% snapshot, so monthly settlements and reports have nothing to charge for them.
+  void at;
+  void client;
+  return { merchantTierSnap: tier, rateId: null, ...computeCommission(baseCents, 0) };
 }
 
 export type ScheduleRateResult =

@@ -106,8 +106,8 @@ describe("offer discounts", () => {
     expect(i1).toMatchObject({ unitPriceCents: 10_000, unitDiscountCents: 1_500, discountCents: 3_000, lineTotalCents: 17_000, offerId: created.ok ? created.offerId : "" });
     expect(order.items.find((i) => i.productId === p2.id)).toMatchObject({ unitPriceCents: 4_000, unitDiscountCents: 500, lineTotalCents: 3_500 });
     expect(order.subtotalCents).toBe(20_500); // product value after discount
-    expect(order.commissionBaseCents).toBe(20_500); // commission only on the discounted product value, never delivery
-    expect(order.commissionCents).toBe(1_640); // 8% of 20500
+    expect(order.commissionBaseCents).toBe(20_500); // base still recorded on the discounted product value, never delivery
+    expect([order.commissionBp, order.commissionCents]).toEqual([0, 0]); // percentage commission removed
     expect(order.totalCents).toBe(22_500);
 
     // a later price change does not touch the stored snapshot

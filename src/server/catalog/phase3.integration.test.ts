@@ -126,8 +126,8 @@ describe("merchant profile and review", () => {
     const owner = await approvedMerchant();
     const shop = await db.merchant.findFirstOrThrow({ where: { ownerId: owner.id } });
 
-    const orderSnapshot = await buildCommissionSnapshot(shop.tier, 20_000); // priced as Basic
-    expect(orderSnapshot.commissionBp).toBe(800);
+    const orderSnapshot = await buildCommissionSnapshot(shop.tier, 20_000); // percentage commission is gone: 0%
+    expect(orderSnapshot.commissionBp).toBe(0);
 
     expect(await setMerchantTier(admin, shop.id, "BUSINESS", "ترقية")).toEqual({ ok: true });
     expect(await setMerchantTier(admin, shop.id, "BUSINESS", "ترقية")).toEqual({ ok: true }); // no-op
@@ -135,9 +135,9 @@ describe("merchant profile and review", () => {
 
     const after = await db.merchant.findFirstOrThrow();
     expect(after.tier).toBe("BUSINESS");
-    expect(orderSnapshot.commissionBp).toBe(800); // the stored order numbers did not move
-    expect(orderSnapshot.commissionCents).toBe(1_600);
-    expect((await buildCommissionSnapshot(after.tier, 20_000)).commissionBp).toBe(500); // only new orders use 5%
+    expect(orderSnapshot.commissionBp).toBe(0); // the stored order numbers did not move
+    expect(orderSnapshot.commissionCents).toBe(0);
+    expect((await buildCommissionSnapshot(after.tier, 20_000)).commissionBp).toBe(0); // a tier change no longer affects pricing
     expect(await setMerchantTier(admin, shop.id, "REGULAR", " ")).toEqual({ ok: false });
   });
 });

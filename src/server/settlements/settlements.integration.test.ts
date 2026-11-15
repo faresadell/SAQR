@@ -122,6 +122,15 @@ describe("generateSettlements", () => {
   });
 });
 
+describe("orders without a percentage commission", () => {
+  it("are never settled: no statement is issued for a shop whose delivered orders carry 0%", async () => {
+    const a = await shop();
+    await order(a, { base: 10_000, bp: 0, deliveredAt: SEPT });
+    await generateSettlements("2026-09", admin, NOW);
+    expect(await db.commissionSettlement.count()).toBe(0);
+  });
+});
+
 describe("statement protection", () => {
   it("cannot be edited or deleted at the database level, even with raw SQL", async () => {
     const a = await shop();
