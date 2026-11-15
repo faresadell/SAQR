@@ -35,7 +35,7 @@ function DeliveryCard({ d, actionable }: { d: DriverDeliveryRow; actionable: boo
         <div><dt className="text-ink-muted">{d.feeStatus === "APPROVED" ? "رسوم التوصيل المتفق عليها (نقداً من العميل)" : "السعر المرجعي للمنطقة"}</dt><dd className="num font-bold">{formatEgp(d.feeToCollectCents)}</dd></div>
         <div><dt className="text-ink-muted">أُسند في</dt><dd className="num">{formatDateTime(d.assignedAt)}</dd></div>
       </dl>
-      {actionable && !picked && d.feeStatus !== "APPROVED" ? (
+      {actionable && !picked && d.feeStatus !== "APPROVED" && d.feeToCollectCents > 0 ? (
         <form action={action} className="flex flex-col gap-2 border-t border-line pt-3">
           <input type="hidden" name="orderId" value={d.orderId} />
           <label className="flex flex-col gap-1 text-sm font-semibold">
@@ -51,9 +51,13 @@ function DeliveryCard({ d, actionable }: { d: DriverDeliveryRow; actionable: boo
           <input type="hidden" name="orderId" value={d.orderId} />
           {picked ? (
             <>
-              <label className="flex items-center gap-2 text-sm font-semibold">
-                <input type="checkbox" name="feeCollected" value="yes" defaultChecked /> حصّلت رسوم التوصيل نقداً
-              </label>
+              {d.feeToCollectCents > 0 ? (
+                <label className="flex items-center gap-2 text-sm font-semibold">
+                  <input type="checkbox" name="feeCollected" value="yes" defaultChecked /> حصّلت رسوم التوصيل نقداً
+                </label>
+              ) : (
+                <input type="hidden" name="feeCollected" value="yes" /> // same trip as another order: its delivery price is collected on that one
+              )}
               <label className="flex flex-col gap-1 text-sm font-semibold">
                 كود التسليم (من العميل)
                 <input name="code" inputMode="numeric" pattern="[0-9]{4}" maxLength={4} autoComplete="off" placeholder="0000" className="ltr-isolate num w-28 rounded-control border border-line bg-surface px-3 py-2 text-center text-lg tracking-widest" />

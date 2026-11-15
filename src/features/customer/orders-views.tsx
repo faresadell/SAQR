@@ -70,8 +70,8 @@ function SubOrderCard({ s, accounts, code, fee, complaints }: { s: SubOrderView;
         </div>
       </div>
 
-      {fee?.status === "PROPOSED" && s.deliveryStatus === "DRIVER_ASSIGNED" ? <FeeDecision orderId={s.id} feeCents={fee.cents} {...(s.driverName ? { driverName: s.driverName } : {})} /> : null}
-      {fee?.status === "APPROVED" && s.deliveryStatus === "DRIVER_ASSIGNED" ? <Notice tone="success">وافقت على سعر التوصيل <span className="num">{formatEgp(fee.cents)}</span>. تدفعه للمندوب كاش.</Notice> : null}
+      {fee?.status === "PROPOSED" && fee.cents > 0 && s.deliveryStatus === "DRIVER_ASSIGNED" ? <FeeDecision orderId={s.id} feeCents={fee.cents} {...(s.driverName ? { driverName: s.driverName } : {})} /> : null}
+      {fee?.status === "APPROVED" && fee.cents > 0 && s.deliveryStatus === "DRIVER_ASSIGNED" ? <Notice tone="success">وافقت على سعر التوصيل <span className="num">{formatEgp(fee.cents)}</span>. تدفعه للمندوب كاش.</Notice> : null}
 
       {code ? (
         <Notice tone="info">
