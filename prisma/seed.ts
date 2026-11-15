@@ -61,9 +61,10 @@ async function main() {
     { code: "pharmacy", nameAr: "صيدليات", sortOrder: 4 },
     { code: "bakery", nameAr: "مخابز وحلويات", sortOrder: 5 },
     { code: "greengrocer", nameAr: "خضار وفاكهة", sortOrder: 6 },
-    { code: "clothes", nameAr: "ملابس", sortOrder: 7 },
+    { code: "fish", nameAr: "أسماك", sortOrder: 7 },
     { code: "electronics", nameAr: "أجهزة وإلكترونيات", sortOrder: 8 },
     { code: "home", nameAr: "أدوات منزلية", sortOrder: 9 },
+    { code: "cosmetics", nameAr: "مستحضرات تجميل", sortOrder: 10 },
   ];
   for (const type of businessTypes) {
     await db.businessType.upsert({ where: { code: type.code }, update: {}, create: type });

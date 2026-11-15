@@ -8,9 +8,10 @@ const STYLES: Record<string, { icon: IconName; tint: string }> = {
   pharmacy: { icon: "activity", tint: "bg-brand-soft text-brand" },
   bakery: { icon: "gift", tint: "bg-brand-soft text-brand" },
   greengrocer: { icon: "sun", tint: "bg-brand-soft text-brand" },
-  clothes: { icon: "tag", tint: "bg-brand-soft text-brand" },
+  fish: { icon: "tag", tint: "bg-brand-soft text-brand" },
   electronics: { icon: "layers", tint: "bg-brand-soft text-brand" },
   home: { icon: "home", tint: "bg-brand-soft text-brand" },
+  cosmetics: { icon: "heart", tint: "bg-brand-soft text-brand" },
 };
 const FALLBACK = { icon: "store" as IconName, tint: "bg-brand-soft text-brand" };
 
