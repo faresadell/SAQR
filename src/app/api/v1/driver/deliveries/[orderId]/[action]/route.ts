@@ -6,7 +6,7 @@ import type { LifecycleResult } from "@/server/orders/lifecycle";
 
 const schemas = {
   pickup: z.object({}).strict(),
-  deliver: z.object({ feeCollected: z.boolean(), note: z.string().max(300).optional() }).strict(),
+  deliver: z.object({ feeCollected: z.boolean(), note: z.string().max(300).optional(), code: z.string().max(8).optional() }).strict(),
   fail: z.object({ reason: z.string().min(3).max(300) }).strict(),
 } as const;
 type Action = keyof typeof schemas;
@@ -15,7 +15,7 @@ const isAction = (value: string): value is Action => Object.hasOwn(schemas, valu
 /**
  * POST /api/v1/driver/deliveries/{orderId}/{action}  (driver only, only for orders given to this driver)
  *   pickup   {}                              collected from the shop -> order OUT_FOR_DELIVERY
- *   deliver  {feeCollected, note?}           delivered; the cash delivery fee is recorded (note required if not collected)
+ *   deliver  {feeCollected, note?, code}         delivered; the cash delivery fee is recorded (note required if not collected)
  *   fail     {reason}                        could not deliver; the shop is told and can reassign
  */
 export async function POST(request: NextRequest, context: { params: Promise<{ orderId: string; action: string }> }): Promise<NextResponse> {

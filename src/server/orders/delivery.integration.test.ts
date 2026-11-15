@@ -89,6 +89,8 @@ const approvedOrder = async () => {
 };
 const status = async (id: string) => (await db.order.findUniqueOrThrow({ where: { id } })).orderStatus;
 
+const codeOf = async (id: string) => (await db.order.findUniqueOrThrow({ where: { id } })).deliveryCode ?? undefined;
+
 describe("cancellation request", () => {
   it("customer asks, shop accepts: stars go back to both once, refund opens, repeats do nothing", async () => {
     const id = await approvedOrder();
@@ -188,9 +190,21 @@ describe("delivery", () => {
     expect(await status(id)).toBe("OUT_FOR_DELIVERY");
     expect(await pickUp(d.actor, id)).toEqual({ ok: false, error: "WRONG_STATE" });
     expect(await advanceOrder(w.owner, id, "DELIVERED")).toEqual({ ok: false, error: "WRONG_STATE" }); // only the driver confirms delivery now
-    expect(await deliver(d.actor, id, { feeCollected: false })).toEqual({ ok: false, error: "INVALID_REQUEST" });
+    expect(await deliver(d.actor, id, { feeCollected: false, code: await codeOf(id) })).toEqual({ ok: false, error: "INVALID_REQUEST" });
 
-    const both = await Promise.all([deliver(d.actor, id, { feeCollected: true }), deliver(d.actor, id, { feeCollected: true })]);
+    // The customer-only handover code: wrong or missing code is refused, five wrong tries lock the order (even for the right code).
+    const right = (await codeOf(id))!;
+    expect(right).toMatch(/^\d{4}$/);
+    const wrong = right === "0000" ? "1111" : "0000";
+    expect(await deliver(d.actor, id, { feeCollected: true })).toEqual({ ok: false, error: "INVALID_CODE" });
+    expect(await deliver(d.actor, id, { feeCollected: true, code: wrong })).toEqual({ ok: false, error: "INVALID_CODE" });
+    expect(await status(id)).toBe("OUT_FOR_DELIVERY");
+    expect((await db.notification.findFirstOrThrow({ where: { userId: w.customer.id, type: "ORDER_OUT_FOR_DELIVERY" } })).body).toContain(right);
+    for (let i = 0; i < 3; i++) await deliver(d.actor, id, { feeCollected: true, code: wrong });
+    expect(await deliver(d.actor, id, { feeCollected: true, code: right })).toEqual({ ok: false, error: "TOO_MANY_ATTEMPTS" });
+    await db.rateLimitHit.deleteMany({ where: { key: `delivery-code:${id}` } }); // the lock lasts 15 minutes; clear it for the rest of this test
+
+    const both = await Promise.all([deliver(d.actor, id, { feeCollected: true, code: await codeOf(id) }), deliver(d.actor, id, { feeCollected: true, code: await codeOf(id) })]);
     expect(both.filter((r) => r.ok).length).toBe(1);
     expect(await status(id)).toBe("DELIVERED");
     const rec = await db.deliveryRecord.findUniqueOrThrow({ where: { orderId: id } });
@@ -209,7 +223,7 @@ describe("delivery", () => {
     await advanceOrder(w.owner, id, "PREPARING");
     await advanceOrder(w.owner, id, "READY");
     await pickUp(d.actor, id);
-    expect((await deliver(d.actor, id, { feeCollected: false, note: "العميل رفض الدفع" })).ok).toBe(true);
+    expect((await deliver(d.actor, id, { feeCollected: false, note: "العميل رفض الدفع", code: await codeOf(id) })).ok).toBe(true);
     expect(await db.deliveryRecord.findUniqueOrThrow({ where: { orderId: id } })).toMatchObject({ collectionStatus: "EXCEPTION", exceptionNote: "العميل رفض الدفع" });
   });
 
@@ -249,12 +263,12 @@ describe("delivery", () => {
     expect(await reportFailure(d1.actor, id, "")).toEqual({ ok: false, error: "INVALID_REQUEST" });
     expect((await reportFailure(d1.actor, id, "العميل مش بيرد")).ok).toBe(true);
     expect(await db.notification.count({ where: { userId: w.owner.id, type: "DELIVERY_FAILED" } })).toBe(1);
-    expect(await deliver(d1.actor, id, { feeCollected: true })).toEqual({ ok: false, error: "WRONG_STATE" });
+    expect(await deliver(d1.actor, id, { feeCollected: true, code: await codeOf(id) })).toEqual({ ok: false, error: "WRONG_STATE" });
     expect((await assignDriver(w.owner, id, d2.driverId)).ok).toBe(true);
     await expect(pickUp(d1.actor, id)).rejects.toBeInstanceOf(NotFoundError); // no longer theirs
     expect((await pickUp(d2.actor, id)).ok).toBe(true);
     expect(await status(id)).toBe("OUT_FOR_DELIVERY"); // moved once, not again
-    expect((await deliver(d2.actor, id, { feeCollected: true })).ok).toBe(true);
+    expect((await deliver(d2.actor, id, { feeCollected: true, code: await codeOf(id) })).ok).toBe(true);
     expect(await db.orderEvent.count({ where: { orderId: id, field: "orderStatus", toValue: "OUT_FOR_DELIVERY" } })).toBe(1);
   });
 });
@@ -347,7 +361,7 @@ describe("open driver board", () => {
     expect((await pickUp(a, id)).ok).toBe(true);
     const mine = await listMyDeliveries(a, "ACTIVE");
     expect(mine[0]).toMatchObject({ orderId: id, address: expect.objectContaining({ line: "شارع 9" }) });
-    expect((await deliver(a, id, { feeCollected: true })).ok).toBe(true);
+    expect((await deliver(a, id, { feeCollected: true, code: await codeOf(id) })).ok).toBe(true);
     expect((await db.order.findUniqueOrThrow({ where: { id } })).orderStatus).toBe("DELIVERED");
     expect((await db.deliveryRecord.findUniqueOrThrow({ where: { orderId: id } })).collectionStatus).toBe("COLLECTED");
   });

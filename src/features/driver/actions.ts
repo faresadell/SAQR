@@ -11,6 +11,8 @@ import { DENIED_ERROR, GENERIC_ERROR, LIFECYCLE_MESSAGES, NOT_FOUND_ERROR } from
 const DRIVER_MESSAGES: Record<string, string> = {
   ...LIFECYCLE_MESSAGES,
   WRONG_STATE: "لا يمكن تنفيذ هذا الإجراء الآن. قد لا يكون النشاط جهّز الطلب بعد.",
+  INVALID_CODE: "كود التسليم غير صحيح. اطلبه من العميل.",
+  TOO_MANY_ATTEMPTS: "محاولات كثيرة خاطئة. انتظر ١٥ دقيقة أو تواصل مع العميل.",
 };
 
 /** pickUp / deliver / reportFailure for the driver's own delivery. The service refuses anyone else's order. */
@@ -25,7 +27,7 @@ export async function driverDeliveryAction(_prev: FormState, formData: FormData)
     let result: LifecycleResult;
     switch (get("command")) {
       case "pickUp": result = await pickUp(user, orderId); break;
-      case "deliver": result = await deliver(user, orderId, { feeCollected: get("feeCollected") === "yes", note: get("note") }); break;
+      case "deliver": result = await deliver(user, orderId, { feeCollected: get("feeCollected") === "yes", note: get("note"), code: get("code") }); break;
       case "fail": result = await reportFailure(user, orderId, get("note")); break;
       default: return { error: DRIVER_MESSAGES.INVALID_REQUEST! };
     }

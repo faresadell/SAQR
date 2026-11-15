@@ -100,6 +100,14 @@ test("a full order: stars bought, order placed and paid, shop accepts and prepar
   await expect(driver.page.getByRole("button", { name: "تم التسليم" })).toBeVisible({ timeout: 30_000 }).catch(async (error: unknown) => {
     throw new Error(`pickup did not lead to delivery. Page said:\n${(await driver.page.locator("main").innerText()).slice(0, 1500)}\n${String(error).slice(0, 200)}`);
   });
+  // The handover code is shown only to the customer; a wrong code is refused, the right one delivers.
+  await customer.page.reload();
+  const handoverCode = (await customer.page.getByTestId("delivery-code").innerText()).trim();
+  expect(handoverCode).toMatch(/^\d{4}$/);
+  await driver.page.getByLabel("كود التسليم (من العميل)").fill(handoverCode === "0000" ? "1111" : "0000");
+  await driver.page.getByRole("button", { name: "تم التسليم" }).click();
+  await expect(driver.page.getByText("كود التسليم غير صحيح")).toBeVisible();
+  await driver.page.getByLabel("كود التسليم (من العميل)").fill(handoverCode);
   await driver.page.getByRole("button", { name: "تم التسليم" }).click();
   await expect(driver.page.getByRole("button", { name: "تم التسليم" })).toBeHidden();
 
