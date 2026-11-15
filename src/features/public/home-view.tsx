@@ -76,6 +76,7 @@ export function HomeView({ types, shops, offers }: { types: BusinessTypeOption[]
                     <span className="font-bold">{o.title}</span>
                     <span className="text-sm text-ink-muted">{o.shop.name}</span>
                     <span className="mt-auto text-xs text-ink-faint">ينتهي {formatDateTime(o.endsAt)}</span>
+                    <span className="w-fit rounded-control bg-brand px-3 py-1.5 text-sm font-semibold text-white">اطلب الآن</span>
                   </Link>
                 </li>
               ))}
