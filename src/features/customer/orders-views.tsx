@@ -56,7 +56,7 @@ export interface ComplaintNote {
   adminResponse: string | null;
 }
 
-function SubOrderCard({ s, accounts, complaints }: { s: SubOrderView; accounts: PayAccount[]; complaints?: ComplaintNote[] }) {
+function SubOrderCard({ s, accounts, code, complaints }: { s: SubOrderView; accounts: PayAccount[]; code?: string; complaints?: ComplaintNote[] }) {
   const needsReceipt = s.paymentStatus === "NOT_REQUIRED_YET" || s.paymentStatus === "REJECTED";
   return (
     <Card className="flex flex-col gap-4">
@@ -69,6 +69,14 @@ function SubOrderCard({ s, accounts, complaints }: { s: SubOrderView; accounts: 
           {s.refundStatus !== "NONE" ? <StatusBadge status={REFUND_STATUS[s.refundStatus]} /> : null}
         </div>
       </div>
+
+      {code ? (
+        <Notice tone="info">
+          كود التسليم: <strong className="ltr-isolate num text-2xl tracking-widest">{code}</strong>
+          <br />
+          أعطه للمندوب عند استلام الطلب فقط. لا تعطه لأحد قبل ذلك.
+        </Notice>
+      ) : null}
 
       <ul className="flex flex-col gap-1.5 text-sm">
         {s.items.map((i) => (
@@ -116,7 +124,7 @@ function SubOrderCard({ s, accounts, complaints }: { s: SubOrderView; accounts: 
   );
 }
 
-export function OrderDetailView({ order, base, accountsByOrder = {}, complaints = [] }: { order: MainOrderView; base: string; accountsByOrder?: Record<string, PayAccount[]>; complaints?: ComplaintNote[] }) {
+export function OrderDetailView({ order, base, accountsByOrder = {}, codesByOrder = {}, complaints = [] }: { order: MainOrderView; base: string; accountsByOrder?: Record<string, PayAccount[]>; codesByOrder?: Record<string, string>; complaints?: ComplaintNote[] }) {
   const productsTotal = order.subOrders.reduce((n, s) => n + s.subtotalCents, 0);
   return (
     <div className="flex flex-col gap-5">
@@ -130,7 +138,7 @@ export function OrderDetailView({ order, base, accountsByOrder = {}, complaints 
       </div>
       <p className="text-sm text-ink-muted">التوصيل إلى: {order.addressLine}</p>
 
-      {order.subOrders.map((s) => <SubOrderCard key={s.id} s={s} accounts={accountsByOrder[s.id] ?? []} complaints={complaints.filter((c) => c.orderId === s.id)} />)}
+      {order.subOrders.map((s) => <SubOrderCard key={s.id} s={s} accounts={accountsByOrder[s.id] ?? []} code={codesByOrder[s.id]} complaints={complaints.filter((c) => c.orderId === s.id)} />)}
 
       <Card className="flex flex-col gap-2 text-sm">
         <h2 className="text-lg font-bold">الحساب</h2>

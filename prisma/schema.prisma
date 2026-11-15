@@ -437,6 +437,7 @@ model Order {
   commissionBp         Int // commission rate (basis points) copied at order time
   commissionBaseCents  Int // amount the rate was applied to (see docs/PHASE2.md: base is an open decision)
   commissionCents      Int // resulting commission, provisional until refunds/settlement (phases 7, 11)
+  deliveryCode     String? // 4-digit handover code, created at pickup, shown only to the customer; the driver types it to deliver
   deliveryRuleSnap Json // fee rule used, frozen at order time
   addressSnap      Json // delivery address, frozen at order time
 

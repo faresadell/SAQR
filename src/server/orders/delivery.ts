@@ -1,7 +1,9 @@
 import "server-only";
+import { randomInt, timingSafeEqual } from "node:crypto";
 import type { DeliveryStatus } from "@prisma/client";
 import { db } from "@/lib/db";
 import { writeAudit } from "@/lib/audit";
+import { consumeRateLimit } from "@/lib/rate-limit";
 import type { Actor } from "@/lib/auth/permissions";
 import { AuthorizationError, NotFoundError } from "@/server/errors";
 import { notifyInTx } from "@/server/notifications/service";
@@ -58,7 +60,10 @@ export async function pickUp(actor: Actor, orderId: string): Promise<LifecycleRe
     else if (order.orderStatus !== "OUT_FOR_DELIVERY") fail("WRONG_STATE"); // the shop has not finished preparing it
     await setDeliveryStatus(tx, order, "PICKED_UP", actor.id, null);
     await tx.deliveryRecord.update({ where: { id: record.id }, data: { pickedUpAt: new Date() } });
-    await notifyInTx(tx, { userId: order.customerId, type: "ORDER_OUT_FOR_DELIVERY", title: "طلبك في الطريق", body: `خرج الطلب رقم ${order.number} للتوصيل.`, data: { orderId }, dedupeKey: `order-OUT_FOR_DELIVERY:${orderId}` });
+    // The handover code is created once and shown only to the customer; the driver must type it to deliver.
+    const code = order.deliveryCode ?? String(randomInt(0, 10_000)).padStart(4, "0");
+    if (!order.deliveryCode) await tx.order.update({ where: { id: order.id }, data: { deliveryCode: code } });
+    await notifyInTx(tx, { userId: order.customerId, type: "ORDER_OUT_FOR_DELIVERY", title: "طلبك في الطريق", body: `خرج الطلب رقم ${order.number} للتوصيل. كود التسليم: ${code}. أعطه للمندوب عند الاستلام فقط.`, data: { orderId }, dedupeKey: `order-OUT_FOR_DELIVERY:${orderId}` });
     await writeAudit({ actorId: actor.id, action: "DELIVERY_PICKED_UP", entityType: "Order", entityId: orderId }, tx);
   });
 }
@@ -67,7 +72,13 @@ export interface DeliverInput {
   feeCollected: boolean;
   /** Required when the fee was not collected (what happened). */
   note?: string;
+  /** The 4-digit code the customer shows. Required for every order that has one. */
+  code?: string;
 }
+
+const CODE_ATTEMPTS = 5;
+const CODE_WINDOW_SECONDS = 15 * 60;
+const sameCode = (a: string, b: string) => a.length === b.length && timingSafeEqual(Buffer.from(a), Buffer.from(b));
 
 /** Delivered. The delivery fee is paid in cash to the driver: it is recorded as COLLECTED, or as an EXCEPTION with a note. */
 export async function deliver(actor: Actor, orderId: string, input: DeliverInput): Promise<LifecycleResult> {
@@ -76,6 +87,17 @@ export async function deliver(actor: Actor, orderId: string, input: DeliverInput
   return run(async (tx) => {
     const { record, order } = await loadMyDelivery(tx, actor, orderId);
     if (order.deliveryStatus !== "PICKED_UP" || order.orderStatus !== "OUT_FOR_DELIVERY") fail("WRONG_STATE");
+    // Orders picked up before codes existed have none and are delivered as before.
+    if (order.deliveryCode) {
+      const key = `delivery-code:${orderId}`;
+      const since = new Date(Date.now() - CODE_WINDOW_SECONDS * 1000);
+      // Locked out after too many wrong tries, even for the right code, so the 10,000 combinations cannot be walked through.
+      if ((await db.rateLimitHit.count({ where: { key, createdAt: { gte: since } } })) >= CODE_ATTEMPTS) fail("TOO_MANY_ATTEMPTS");
+      if (!sameCode(order.deliveryCode, (input.code ?? "").trim())) {
+        await consumeRateLimit(key, CODE_ATTEMPTS, CODE_WINDOW_SECONDS); // separate connection: the wrong try is counted even though this transaction rolls back
+        fail("INVALID_CODE");
+      }
+    }
     const now = new Date();
     await moveStatus(tx, order, "DELIVERED", actor.id, null);
     await setDeliveryStatus(tx, order, "DELIVERED", actor.id, null);

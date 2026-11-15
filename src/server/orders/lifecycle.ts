@@ -19,6 +19,7 @@ export type LifecycleError =
   | "PAYMENT_NOT_CONFIRMED"
   | "INSUFFICIENT_STARS"
   | "DRIVER_NOT_AVAILABLE"
+  | "INVALID_CODE" | "TOO_MANY_ATTEMPTS"
   | "CONFLICT";
 export type LifecycleResult = { ok: true } | { ok: false; error: LifecycleError };
 
