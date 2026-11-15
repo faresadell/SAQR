@@ -17,13 +17,13 @@ async function user(role: "CUSTOMER" | "MERCHANT", name: string) {
   n += 1;
   return db.user.create({ data: { phone: `+2015${String(n).padStart(8, "0")}`, name, passwordHash: "x", role, status: "ACTIVE" } });
 }
-const asActor = (u: { id: string; role: "CUSTOMER" | "MERCHANT" }): Actor => ({ id: u.id, role: u.role, isSuperAdmin: false, permissions: [] });
+const asActor = (u: { id: string; role: string }): Actor => ({ id: u.id, role: u.role as Actor["role"], isSuperAdmin: false, permissions: [] });
 
 async function setup() {
   const c = await user("CUSTOMER", "منى أحمد");
   const m = await user("MERCHANT", "تاجر");
   const shop = await db.merchant.create({ data: { ownerId: m.id, name: "متجر", businessType: "restaurant", status: "APPROVED" } });
-  const order = async (status: "DELIVERED" | "PLACED" = "DELIVERED") =>
+  const order = async (status: "DELIVERED" | "PREPARING" = "DELIVERED") =>
     db.order.create({ data: { customerId: c.id, merchantId: shop.id, orderStatus: status, subtotalCents: 10_000, deliveryFeeCents: 0, totalCents: 10_000, merchantTierSnap: "REGULAR", commissionBp: 0, commissionBaseCents: 10_000, commissionCents: 0, deliveryRuleSnap: {}, addressSnap: {} } });
   return { c, m, shop, order, customer: asActor(c) };
 }
@@ -48,7 +48,7 @@ describe("reviews", () => {
 
   it("refuses an order that is not delivered, bad ratings and other customers", async () => {
     const s = await setup();
-    const open = await s.order("PLACED");
+    const open = await s.order("PREPARING");
     expect(await createReview(s.customer, { orderId: open.id, rating: 5 })).toEqual({ ok: false, error: "NOT_DELIVERED" });
     const done = await s.order();
     expect(await createReview(s.customer, { orderId: done.id, rating: 6 })).toEqual({ ok: false, error: "INVALID_REQUEST" });
