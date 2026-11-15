@@ -6,6 +6,7 @@ import { ResultState } from "@/features/shared/result-state";
 import { listMyComplaints } from "@/server/complaints/service";
 import { requireRole } from "@/server/auth/guards";
 import { db } from "@/lib/db";
+import { reviewedOrderIds } from "@/server/reviews/service";
 import { getDriverPositionForCustomer, type DriverPosition } from "@/server/drivers/location";
 import { listShopAccountsForCustomer } from "@/server/payments/merchant-accounts";
 
@@ -23,10 +24,11 @@ export default async function OrderPage({ params }: { params: Promise<{ id: stri
   const feeByOrder = Object.fromEntries(records.map((r) => [r.orderId, { status: r.feeStatus, cents: r.feeExpectedCents }]));
   const positions = await Promise.all(subs.filter((x) => x.deliveryStatus === "PICKED_UP").map(async (x) => [x.id, await getDriverPositionForCustomer(user, x.id)] as const));
   const positionByOrder = Object.fromEntries(positions.filter((p): p is readonly [string, DriverPosition] => p[1] !== null));
+  const reviewedIds = [...(await reviewedOrderIds(user, subs.map((x) => x.id)))];
   const codesByOrder = Object.fromEntries(subs.filter((x) => x.deliveryCode && x.deliveryStatus === "PICKED_UP").map((x) => [x.id, x.deliveryCode as string]));
   const accountsByOrder = Object.fromEntries(subs.map((x) => [x.id, shopAccounts.filter((a) => a.merchantId === x.merchantId).map((a) => ({ id: a.id, methodLabel: a.methodLabel, accountValue: a.accountValue, holderName: a.holderName }))]));
   const mine = await listMyComplaints(user);
   const ids = new Set(result.data.subOrders.map((s) => s.id));
   const complaints = mine.filter((c) => ids.has(c.orderId)).map((c) => ({ id: c.id, orderId: c.orderId, subject: c.subject, status: c.status, adminResponse: c.adminResponse }));
-  return <OrderDetailView order={result.data} base="/account" accountsByOrder={accountsByOrder} codesByOrder={codesByOrder} feeByOrder={feeByOrder} positionByOrder={positionByOrder} complaints={complaints} />;
+  return <OrderDetailView order={result.data} base="/account" accountsByOrder={accountsByOrder} codesByOrder={codesByOrder} feeByOrder={feeByOrder} positionByOrder={positionByOrder} reviewedIds={reviewedIds} complaints={complaints} />;
 }

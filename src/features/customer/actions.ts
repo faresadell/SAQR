@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import type { FormState } from "@/lib/form-state";
 import { fileComplaint } from "@/server/complaints/service";
+import { createReview } from "@/server/reviews/service";
 import { createAddress, deleteAddress } from "@/server/addresses/service";
 import { requireRole } from "@/server/auth/guards";
 import { AuthorizationError, NotFoundError } from "@/server/errors";
@@ -153,6 +154,27 @@ export async function fileComplaintAction(_prev: FormState, formData: FormData):
     if (!result.ok) return { error: COMPLAINT_MESSAGES[result.error] ?? GENERIC_ERROR };
     revalidatePath("/account/orders", "layout");
     return { message: "وصلت شكواك للنشاط وللإدارة وسنرد عليك هنا." };
+  } catch (error) {
+    return failure(error);
+  }
+}
+
+// ───────────── reviews ─────────────
+
+const REVIEW_MESSAGES: Record<string, string> = {
+  INVALID_REQUEST: "اختر عدد النجوم من 1 إلى 5. التعليق حتى 500 حرف.",
+  RATE_LIMITED: "قيّمت طلبات كثيرة اليوم. حاول لاحقاً.",
+  NOT_DELIVERED: "تقدر تقيّم الطلب بعد وصوله.",
+  ALREADY_REVIEWED: "قيّمت هذا الطلب قبل كده.",
+};
+
+export async function createReviewAction(_prev: FormState, formData: FormData): Promise<FormState> {
+  const { user } = await requireRole("CUSTOMER");
+  try {
+    const result = await createReview(user, { orderId: text(formData, "orderId"), rating: Number(text(formData, "rating")), comment: text(formData, "comment") });
+    if (!result.ok) return { error: REVIEW_MESSAGES[result.error] ?? GENERIC_ERROR };
+    revalidatePath("/account/orders", "layout");
+    return { message: "شكراً على تقييمك." };
   } catch (error) {
     return failure(error);
   }

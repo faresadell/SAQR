@@ -9,6 +9,7 @@ import { approveAward, excludeParticipant, markAwardPaid, proposeFromStandings, 
 import { stopOffer } from "@/server/offers/service";
 import { decidePlanPurchase, updatePlan } from "@/server/plans/service";
 import { reviewRefund } from "@/server/refunds/service";
+import { setReviewHidden } from "@/server/reviews/service";
 import { ADMIN_MESSAGES, DENIED_ERROR, GENERIC_ERROR, NOT_FOUND_ERROR, PLAN_MESSAGES } from "@/features/shared/messages";
 
 type AnyResult = { ok: true } | { ok: false; error: string };
@@ -91,4 +92,9 @@ export async function contestAction(_prev: FormState, formData: FormData): Promi
     case "paid": return run((u) => markAwardPaid(u, id, get(formData, "reference")), paths, "تم تسجيل الصرف.");
     default: return { error: ADMIN_MESSAGES.INVALID_REQUEST! };
   }
+}
+
+export async function setReviewHiddenAction(_prev: FormState, formData: FormData): Promise<FormState> {
+  const hidden = get(formData, "hidden") === "1";
+  return run(async (u) => { await setReviewHidden(u, get(formData, "id"), hidden); return { ok: true }; }, ["/admin/reviews"], hidden ? "تم إخفاء التقييم." : "تم إظهار التقييم.");
 }

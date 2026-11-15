@@ -11,7 +11,7 @@ import { formatEgp } from "@/lib/money";
 import { Icon } from "@/components/ui/icon";
 import type { DriverPosition } from "@/server/drivers/location";
 import { DriverMap } from "./driver-map";
-import { CancelControl, ComplaintForm, PayForm, FeeDecision, type PayAccount } from "./order-actions";
+import { CancelControl, ComplaintForm, ReviewForm, PayForm, FeeDecision, type PayAccount } from "./order-actions";
 
 export function OrdersListView({ orders, base }: { orders: MainOrderView[]; base: string }) {
   if (orders.length === 0) {
@@ -58,7 +58,7 @@ export interface ComplaintNote {
   adminResponse: string | null;
 }
 
-function SubOrderCard({ s, accounts, code, fee, position, complaints }: { s: SubOrderView; accounts: PayAccount[]; code?: string; position?: DriverPosition; fee?: { status: string; cents: number }; complaints?: ComplaintNote[] }) {
+function SubOrderCard({ s, accounts, code, fee, position, reviewed, complaints }: { s: SubOrderView; reviewed?: boolean; accounts: PayAccount[]; code?: string; position?: DriverPosition; fee?: { status: string; cents: number }; complaints?: ComplaintNote[] }) {
   const needsReceipt = s.paymentStatus === "NOT_REQUIRED_YET" || s.paymentStatus === "REJECTED";
   return (
     <Card className="flex flex-col gap-4">
@@ -121,6 +121,7 @@ function SubOrderCard({ s, accounts, code, fee, position, complaints }: { s: Sub
           {s.orderStatus === "CANCELLATION_REQUESTED" ? <Notice tone="info">طلب الإلغاء بانتظار رد النشاط.</Notice> : null}
         </div>
       </div>
+      {s.orderStatus === "DELIVERED" && !reviewed ? <ReviewForm orderId={s.id} shopName={s.merchantName} /> : null}
       <ComplaintForm orderId={s.id} />
       {(complaints ?? []).map((c) => (
         <Notice key={c.id} tone={c.status === "RESOLVED" ? "success" : "info"}>
@@ -131,7 +132,7 @@ function SubOrderCard({ s, accounts, code, fee, position, complaints }: { s: Sub
   );
 }
 
-export function OrderDetailView({ order, base, accountsByOrder = {}, codesByOrder = {}, feeByOrder = {}, positionByOrder = {}, complaints = [] }: { order: MainOrderView; base: string; accountsByOrder?: Record<string, PayAccount[]>; codesByOrder?: Record<string, string>; feeByOrder?: Record<string, { status: string; cents: number }>; positionByOrder?: Record<string, DriverPosition>; complaints?: ComplaintNote[] }) {
+export function OrderDetailView({ order, base, accountsByOrder = {}, codesByOrder = {}, feeByOrder = {}, positionByOrder = {}, reviewedIds = [], complaints = [] }: { order: MainOrderView; base: string; accountsByOrder?: Record<string, PayAccount[]>; codesByOrder?: Record<string, string>; feeByOrder?: Record<string, { status: string; cents: number }>; positionByOrder?: Record<string, DriverPosition>; reviewedIds?: string[]; complaints?: ComplaintNote[] }) {
   const productsTotal = order.subOrders.reduce((n, s) => n + s.subtotalCents, 0);
   return (
     <div className="flex flex-col gap-5">
@@ -145,7 +146,7 @@ export function OrderDetailView({ order, base, accountsByOrder = {}, codesByOrde
       </div>
       <p className="text-sm text-ink-muted">التوصيل إلى: {order.addressLine}</p>
 
-      {order.subOrders.map((s) => <SubOrderCard key={s.id} s={s} accounts={accountsByOrder[s.id] ?? []} code={codesByOrder[s.id]} fee={feeByOrder[s.id]} position={positionByOrder[s.id]} complaints={complaints.filter((c) => c.orderId === s.id)} />)}
+      {order.subOrders.map((s) => <SubOrderCard key={s.id} s={s} accounts={accountsByOrder[s.id] ?? []} code={codesByOrder[s.id]} fee={feeByOrder[s.id]} position={positionByOrder[s.id]} reviewed={reviewedIds.includes(s.id)} complaints={complaints.filter((c) => c.orderId === s.id)} />)}
 
       <Card className="flex flex-col gap-2 text-sm">
         <h2 className="text-lg font-bold">الحساب</h2>

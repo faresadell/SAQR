@@ -1137,3 +1137,19 @@ model MerchantPaymentAccount {
 
   @@index([merchantId, isActive])
 }
+
+/// A customer's rating of one delivered sub-order (one review per sub-order, never edited). Admins can hide abusive ones.
+model Review {
+  id         String   @id @default(cuid())
+  orderId    String   @unique
+  merchantId String
+  customerId String
+  rating     Int // 1..5
+  comment    String?
+  isHidden   Boolean  @default(false)
+  hiddenById String?
+  createdAt  DateTime @default(now())
+
+  @@index([merchantId, isHidden, createdAt])
+  @@index([isHidden, createdAt])
+}
