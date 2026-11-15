@@ -72,7 +72,7 @@ function SubOrderCard({ s, accounts, code, complaints }: { s: SubOrderView; acco
 
       {code ? (
         <Notice tone="info">
-          كود التسليم: <strong className="ltr-isolate num text-2xl tracking-widest">{code}</strong>
+          كود التسليم: <strong data-testid="delivery-code" className="ltr-isolate num text-2xl tracking-widest">{code}</strong>
           <br />
           أعطه للمندوب عند استلام الطلب فقط. لا تعطه لأحد قبل ذلك.
         </Notice>
