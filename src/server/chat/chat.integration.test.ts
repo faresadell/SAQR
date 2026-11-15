@@ -6,7 +6,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { db } from "@/lib/db";
 import type { Actor } from "@/lib/auth/permissions";
 import { NotFoundError } from "@/server/errors";
-import { listConversations, openConversation, sendMessage, startConversation } from "@/server/chat/service";
+import { listConversations, openConversation, readChatImage, sendMessage, startConversation } from "@/server/chat/service";
 
 if (!process.env.DATABASE_URL) throw new Error("DATABASE_URL is required for integration tests");
 
@@ -82,5 +82,31 @@ describe("chat", () => {
     await sendMessage(c, r.conversationId, "2");
     await sendMessage(c, r.conversationId, "3");
     expect(await db.notification.count({ where: { userId: mo.id, type: "CHAT_MESSAGE" } })).toBeLessThanOrEqual(2); // 2 only if the bucket boundary is crossed mid-test
+  });
+
+  it("a picture can be sent alone, is checked by its real bytes, and only the two people in the chat can read it", async () => {
+    const c = await user("CUSTOMER");
+    const mo = await user("MERCHANT");
+    const shop = await shopOf(mo);
+    const r = await startConversation(c, { merchantId: shop.id, body: "مرحبا" });
+    if (!r.ok) throw new Error("setup");
+    const png = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 13, 73, 72, 68, 82, 0, 0, 0, 1]);
+
+    expect(await sendMessage(c, r.conversationId, "", new Uint8Array(40))).toEqual({ ok: false, error: "INVALID_FILE" }); // not a picture
+    expect(await sendMessage(c, r.conversationId, "", new Uint8Array(6 * 1024 * 1024))).toEqual({ ok: false, error: "FILE_TOO_LARGE" });
+    expect(await sendMessage(c, r.conversationId, "")).toEqual({ ok: false, error: "INVALID_MESSAGE" }); // nothing at all
+
+    expect((await sendMessage(c, r.conversationId, "", png)).ok).toBe(true); // picture only
+    const view = await openConversation(mo, r.conversationId);
+    const photo = view.messages.at(-1)!;
+    expect(photo.hasImage).toBe(true);
+    expect(photo.body).toBe("");
+    expect((await listConversations(mo))[0]?.lastBody).toBe("📷 صورة");
+
+    expect((await readChatImage(mo, photo.id)).contentType).toBe("image/png");
+    expect((await readChatImage(c, photo.id)).bytes.length).toBe(png.length);
+    await expect(readChatImage(await user("CUSTOMER"), photo.id)).rejects.toBeInstanceOf(NotFoundError);
+    await expect(readChatImage(await user("ADMIN"), photo.id)).rejects.toBeInstanceOf(NotFoundError);
+    await expect(readChatImage(c, view.messages[0]!.id)).rejects.toBeInstanceOf(NotFoundError); // a text message has no picture
   });
 });

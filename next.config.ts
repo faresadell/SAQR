@@ -15,6 +15,7 @@ const securityHeaders = [
 const nextConfig: NextConfig = {
   poweredByHeader: false,
   reactStrictMode: true,
+  experimental: { serverActions: { bodySizeLimit: "4mb" } }, // pictures are shrunk in the browser first; Vercel itself caps a request at 4.5 MB
   async headers() {
     return [
       { source: "/:path*", headers: securityHeaders },

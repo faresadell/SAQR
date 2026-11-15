@@ -11,6 +11,8 @@ import { DENIED_ERROR, GENERIC_ERROR, NOT_FOUND_ERROR } from "@/features/shared/
 const MESSAGES: Record<ChatError, string> = {
   INVALID_MESSAGE: "اكتب رسالة من 1 إلى 1000 حرف.",
   RATE_LIMITED: "أرسلت رسائل كثيرة. انتظر قليلاً ثم حاول مرة أخرى.",
+  INVALID_FILE: "الملف ليس صورة صالحة. اختر صورة JPG أو PNG أو WebP.",
+  FILE_TOO_LARGE: "الصورة كبيرة. الحد الأقصى 5 ميجابايت.",
   SHOP_UNAVAILABLE: "هذا النشاط غير متاح للمحادثة الآن.",
 };
 
@@ -39,11 +41,17 @@ export async function startChatAction(_prev: FormState, formData: FormData): Pro
   redirect(`/account/chats/${id}`);
 }
 
+async function imageBytes(formData: FormData): Promise<Uint8Array | null> {
+  const file = formData.get("image");
+  if (!(file instanceof File) || file.size === 0) return null;
+  return new Uint8Array(await file.arrayBuffer());
+}
+
 export async function sendMessageAction(_prev: FormState, formData: FormData): Promise<FormState> {
   const { user } = await requireRole("CUSTOMER", "MERCHANT");
   const id = text(formData, "conversationId");
   try {
-    const r = await sendMessage(user, id, text(formData, "body"));
+    const r = await sendMessage(user, id, text(formData, "body"), await imageBytes(formData));
     if (!r.ok) return { error: MESSAGES[r.error] };
   } catch (e) {
     return failure(e);

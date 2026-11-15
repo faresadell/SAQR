@@ -35,10 +35,22 @@ function failure(error: unknown): FormState {
 
 // ───────────── addresses ─────────────
 
+/** The optional pin from the map picker: both numbers inside Egypt, or neither. Returns null when the pair is wrong. */
+function mapPoint(formData: FormData): { lat: number; lng: number } | Record<string, never> | null {
+  const a = text(formData, "lat");
+  const b = text(formData, "lng");
+  if (!a && !b) return {};
+  const lat = Number(a);
+  const lng = Number(b);
+  return Number.isFinite(lat) && Number.isFinite(lng) && lat >= 21.5 && lat <= 32 && lng >= 24.5 && lng <= 37 ? { lat, lng } : null;
+}
+
 export async function addAddressAction(_prev: FormState, formData: FormData): Promise<FormState> {
   const { user } = await requireRole("CUSTOMER");
   try {
-    const result = await createAddress(user, { label: text(formData, "label") || null, line: text(formData, "line"), zoneId: text(formData, "zoneId") });
+    const spot = mapPoint(formData);
+    if (!spot) return { error: ADDRESS_MESSAGES.BAD_LOCATION! };
+    const result = await createAddress(user, { label: text(formData, "label") || null, line: text(formData, "line"), zoneId: text(formData, "zoneId"), ...spot });
     if (!result.ok) return { error: ADDRESS_MESSAGES[result.error] ?? GENERIC_ERROR };
     revalidatePath("/account/addresses");
     revalidatePath("/checkout");

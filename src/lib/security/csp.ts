@@ -1,4 +1,5 @@
 const CAPTCHA_ORIGIN = "https://challenges.cloudflare.com";
+const TILE_ORIGIN = "https://tile.openstreetmap.org"; // map tiles for the address picker (plain <img>, no script from outside)
 const MAP_ORIGIN = "https://www.openstreetmap.org"; // the OpenStreetMap embed that shows the driver on the customer's order page
 
 export interface CspOptions {
@@ -17,7 +18,7 @@ export function buildCsp({ nonce, isDev }: CspOptions): string {
     "default-src": ["'self'"],
     "script-src": ["'self'", `'nonce-${nonce}'`, "'strict-dynamic'", ...(isDev ? ["'unsafe-eval'"] : [])],
     "style-src": isDev ? ["'self'", "'unsafe-inline'"] : ["'self'", `'nonce-${nonce}'`],
-    "img-src": ["'self'", "data:", "blob:"],
+    "img-src": ["'self'", "data:", "blob:", TILE_ORIGIN],
     "font-src": ["'self'"],
     "connect-src": ["'self'", CAPTCHA_ORIGIN, ...(isDev ? ["ws:", "wss:"] : [])],
     "frame-src": [CAPTCHA_ORIGIN, MAP_ORIGIN], // the "not a robot" widget (Cloudflare Turnstile) and the OpenStreetMap embed are the only things we embed
