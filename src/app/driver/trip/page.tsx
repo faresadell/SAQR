@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { PageHeader } from "@/components/ui/page-header";
 import { loadMyDeliveries } from "@/features/driver/data";
+import { LocationSharer } from "@/features/driver/location-sharer";
 import { DeliveryList } from "@/features/driver/views";
 import { ResultState } from "@/features/shared/result-state";
 import { requireRole } from "@/server/auth/guards";
@@ -13,6 +14,7 @@ export default async function DriverTripPage() {
   return (
     <>
       <PageHeader title="قيد التوصيل" description="طلبات استلمتها وفي الطريق للعميل." />
+      {result.status === "ready" && result.data.some((r) => r.deliveryStatus === "PICKED_UP") ? <LocationSharer /> : null}
       {result.status === "ready" ? (
         <DeliveryList rows={result.data.filter((r) => r.deliveryStatus !== "DRIVER_ASSIGNED")} actionable emptyTitle="لا يوجد طلب قيد التوصيل" emptyText="بعد استلام الطلب من النشاط يظهر هنا." />
       ) : (

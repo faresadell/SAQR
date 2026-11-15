@@ -17,8 +17,8 @@ describe("buildCsp (production)", () => {
     expect(csp).toContain("form-action 'self'");
   });
 
-  it("embeds nothing except the robot-check widget", () => {
-    expect(csp).toContain("frame-src https://challenges.cloudflare.com;");
+  it("embeds nothing except the robot-check widget and the OpenStreetMap embed", () => {
+    expect(csp).toContain("frame-src https://challenges.cloudflare.com https://www.openstreetmap.org;");
     expect(csp).toContain("connect-src 'self' https://challenges.cloudflare.com");
   });
 

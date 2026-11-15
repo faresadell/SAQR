@@ -4,6 +4,7 @@ import type { DeliveryStatus } from "@prisma/client";
 import { db } from "@/lib/db";
 import { writeAudit } from "@/lib/audit";
 import { consumeRateLimit } from "@/lib/rate-limit";
+import { clearLocationIfIdle } from "@/server/drivers/location";
 import type { Actor } from "@/lib/auth/permissions";
 import { AuthorizationError, NotFoundError } from "@/server/errors";
 import { notifyInTx } from "@/server/notifications/service";
@@ -120,6 +121,7 @@ export async function deliver(actor: Actor, orderId: string, input: DeliverInput
       where: { id: record.id },
       data: input.feeCollected ? { deliveredAt: now, collectionStatus: "COLLECTED", collectedAt: now } : { deliveredAt: now, collectionStatus: "EXCEPTION", exceptionNote: note },
     });
+    await clearLocationIfIdle(tx, record.driverId!);
     await notifyInTx(tx, { userId: order.customerId, type: "ORDER_DELIVERED", title: "تم توصيل طلبك", body: `تم توصيل الطلب رقم ${order.number}.`, data: { orderId }, dedupeKey: `order-DELIVERED:${orderId}` });
     await writeAudit({ actorId: actor.id, action: "DELIVERY_DELIVERED", entityType: "Order", entityId: orderId, after: { feeCollected: input.feeCollected } }, tx);
   });
@@ -130,9 +132,10 @@ export async function reportFailure(actor: Actor, orderId: string, reason: strin
   const clean = typeof reason === "string" ? reason.trim() : "";
   if (clean.length < 3 || clean.length > 300) return { ok: false, error: "INVALID_REQUEST" };
   return run(async (tx) => {
-    const { order } = await loadMyDelivery(tx, actor, orderId);
+    const { driver, order } = await loadMyDelivery(tx, actor, orderId);
     if (order.deliveryStatus !== "DRIVER_ASSIGNED" && order.deliveryStatus !== "PICKED_UP") fail("WRONG_STATE");
     await setDeliveryStatus(tx, order, "FAILED", actor.id, clean);
+    await clearLocationIfIdle(tx, driver.id);
     await notifyInTx(tx, { userId: order.merchant.ownerId, type: "DELIVERY_FAILED", title: "تعذّر التوصيل", body: `أبلغ السائق بتعذر توصيل الطلب رقم ${order.number}: ${clean}.`, data: { orderId }, dedupeKey: `delivery-failed:${orderId}:${Date.now()}` });
     await writeAudit({ actorId: actor.id, action: "DELIVERY_FAILED", entityType: "Order", entityId: orderId, after: { reason: clean } }, tx);
   });

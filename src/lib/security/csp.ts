@@ -1,4 +1,5 @@
 const CAPTCHA_ORIGIN = "https://challenges.cloudflare.com";
+const MAP_ORIGIN = "https://www.openstreetmap.org"; // the OpenStreetMap embed that shows the driver on the customer's order page
 
 export interface CspOptions {
   nonce: string;
@@ -19,7 +20,7 @@ export function buildCsp({ nonce, isDev }: CspOptions): string {
     "img-src": ["'self'", "data:", "blob:"],
     "font-src": ["'self'"],
     "connect-src": ["'self'", CAPTCHA_ORIGIN, ...(isDev ? ["ws:", "wss:"] : [])],
-    "frame-src": [CAPTCHA_ORIGIN], // the "not a robot" widget (Cloudflare Turnstile) is the only thing we embed
+    "frame-src": [CAPTCHA_ORIGIN, MAP_ORIGIN], // the "not a robot" widget (Cloudflare Turnstile) and the OpenStreetMap embed are the only things we embed
     "manifest-src": ["'self'"],
     "worker-src": ["'self'"],
     "object-src": ["'none'"],
