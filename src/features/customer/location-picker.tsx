@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
 
 /**
- * Free OpenStreetMap picker with no map library: plain tile images, drag to move, +/- to zoom, the pin stays in the middle.
+ * Free OpenStreetMap picker with no map library: plain tile images, drag to move, pinch or +/- to zoom, the pin stays in the middle.
  * The customer presses "تأكيد هذا الموقع" and only then are lat/lng posted with the form. It is optional.
  */
 const TILE = 256;
@@ -23,11 +23,17 @@ const toLatLng = (x: number, y: number, z: number) => ({
   lat: (Math.atan(Math.sinh(Math.PI * (1 - (2 * y) / worldSize(z)))) * 180) / Math.PI,
 });
 
+const fingerGap = (m: Map<number, { x: number; y: number }>) => {
+  const [a, b] = [...m.values()];
+  return Math.max(1, Math.hypot((a?.x ?? 0) - (b?.x ?? 0), (a?.y ?? 0) - (b?.y ?? 0)));
+};
+
 export interface PickedLocation { lat: number; lng: number }
 
 export function LocationPicker({ initial }: { initial?: PickedLocation | null }) {
   const box = useRef<HTMLDivElement>(null);
-  const drag = useRef<{ x: number; y: number } | null>(null);
+  const pointers = useRef(new Map<number, { x: number; y: number }>());
+  const pinch = useRef<number | null>(null); // finger distance when the current zoom step began
   const [size, setSize] = useState({ w: 360, h: 288 });
   const [zoom, setZoom] = useState(initial ? 16 : 12);
   const [center, setCenter] = useState<PickedLocation>(initial ?? START);
@@ -64,6 +70,11 @@ export function LocationPicker({ initial }: { initial?: PickedLocation | null })
     });
   }, [zoom]);
 
+  function endPointer(e: React.PointerEvent) {
+    pointers.current.delete(e.pointerId);
+    pinch.current = null;
+  }
+
   function locateMe() {
     setNote(null);
     if (!navigator.geolocation) return setNote("جهازك لا يدعم تحديد الموقع. حرّك الخريطة يدوياً.");
@@ -86,16 +97,28 @@ export function LocationPicker({ initial }: { initial?: PickedLocation | null })
         aria-label="خريطة اختيار الموقع. اسحب الخريطة ليكون الدبوس على موقعك."
         className="relative h-72 w-full touch-none select-none overflow-hidden rounded-card border border-line bg-canvas"
         onPointerDown={(e) => {
-          drag.current = { x: e.clientX, y: e.clientY };
+          pointers.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
           e.currentTarget.setPointerCapture(e.pointerId);
+          pinch.current = pointers.current.size === 2 ? fingerGap(pointers.current) : null;
         }}
         onPointerMove={(e) => {
-          if (!drag.current) return;
-          moveBy(e.clientX - drag.current.x, e.clientY - drag.current.y);
-          drag.current = { x: e.clientX, y: e.clientY };
+          const last = pointers.current.get(e.pointerId);
+          if (!last) return;
+          pointers.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+          if (pointers.current.size === 1) return moveBy(e.clientX - last.x, e.clientY - last.y);
+          if (pointers.current.size !== 2 || pinch.current === null) return;
+          // Two fingers: each doubling / halving of the distance between them is one zoom step.
+          const gap = fingerGap(pointers.current);
+          if (gap >= pinch.current * 2) {
+            setZoom((z) => Math.min(MAX_ZOOM, z + 1));
+            pinch.current = gap;
+          } else if (gap <= pinch.current / 2) {
+            setZoom((z) => Math.max(MIN_ZOOM, z - 1));
+            pinch.current = gap;
+          }
         }}
-        onPointerUp={() => (drag.current = null)}
-        onPointerCancel={() => (drag.current = null)}
+        onPointerUp={endPointer}
+        onPointerCancel={endPointer}
         onWheel={(e) => setZoom((z) => Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, z + (e.deltaY < 0 ? 1 : -1))))}
       >
         {tiles.map((t) => (

@@ -82,8 +82,15 @@ export function ReplyForm({ conversationId }: { conversationId: string }) {
         <label className="inline-flex cursor-pointer items-center gap-2 rounded-control border border-line px-3 py-2 text-sm font-semibold hover:bg-canvas">
           <Icon name="image" className="size-4" />
           {picked ? "تغيير الصورة" : "إرفاق صورة"}
-          <input ref={picker} type="file" name="image" accept="image/jpeg,image/png,image/webp" className="sr-only" onChange={(e) => void onPick(e.target.files?.[0])} />
+          <input type="file" accept="image/jpeg,image/png,image/webp" className="sr-only" onChange={(e) => void onPick(e.target.files?.[0])} />
         </label>
+        {/* On a phone, capture opens the camera directly. On a computer it falls back to the file picker. */}
+        <label className="inline-flex cursor-pointer items-center gap-2 rounded-control border border-line px-3 py-2 text-sm font-semibold hover:bg-canvas">
+          <span aria-hidden>📷</span>
+          تصوير بالكاميرا
+          <input type="file" accept="image/*" capture="environment" className="sr-only" onChange={(e) => void onPick(e.target.files?.[0])} />
+        </label>
+        <input ref={picker} type="file" name="image" tabIndex={-1} aria-hidden className="hidden" />
         {picked ? <span className="truncate text-xs text-ink-muted" dir="ltr">{picked}</span> : null}
       </div>
       {pickError ? <Notice tone="danger">{pickError}</Notice> : null}
