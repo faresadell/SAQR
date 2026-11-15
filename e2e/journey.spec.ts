@@ -93,6 +93,13 @@ test("a full order: stars bought, order placed and paid, shop accepts and prepar
   await card.getByRole("button", { name: "قبول الطلب" }).click();
   await expect(card).toBeHidden({ timeout: 60_000 }); // a claimed order leaves the open board
   await driver.page.goto("/driver/tasks");
+  // The driver names the delivery price (pre-filled with the zone price); the customer must approve it before pickup.
+  await driver.page.getByRole("button", { name: "إرسال السعر للعميل" }).click();
+  await expect(driver.page.getByText("في انتظار موافقة العميل")).toBeVisible({ timeout: 60_000 });
+  await customer.page.reload();
+  await customer.page.getByRole("button", { name: "موافق" }).click();
+  await expect(customer.page.getByText("وافقت على سعر التوصيل")).toBeVisible({ timeout: 60_000 });
+  await driver.page.reload();
   const pickUp = driver.page.getByRole("button", { name: "استلمت الطلب من النشاط" });
   await pickUp.click();
   await expect(pickUp).toBeHidden({ timeout: 60_000 });

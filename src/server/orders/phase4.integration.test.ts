@@ -278,7 +278,7 @@ describe("refunds", () => {
   it("goes PENDING -> UNDER_REVIEW -> COMPLETED only through the right people", async () => {
     const { id, owner, refund } = await cancelledPaidOrder();
     expect(refund.status).toBe("PENDING");
-    expect(refund.amountCents).toBe((await db.order.findUniqueOrThrow({ where: { id } })).totalCents);
+    expect(refund.amountCents).toBe((await db.order.findUniqueOrThrow({ where: { id } })).subtotalCents); // the transfer was products only
     const other = owner.id === w.ownerA.id ? w.ownerB : w.ownerA;
 
     await expect(submitRefundProof(other, refund.id, await proofFor(id, other))).rejects.toBeInstanceOf(NotFoundError);

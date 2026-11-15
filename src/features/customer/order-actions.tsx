@@ -8,7 +8,7 @@ import { Notice } from "@/components/ui/states";
 import { Textarea } from "@/components/ui/textarea";
 import type { FormState } from "@/lib/form-state";
 import { formatEgp } from "@/lib/money";
-import { cancelOrderAction, fileComplaintAction, payOrderAction } from "./actions";
+import { answerFeeAction, cancelOrderAction, fileComplaintAction, payOrderAction } from "./actions";
 
 export interface PayAccount {
   id: string;
@@ -76,6 +76,22 @@ export function PayForm({ orderId, merchantName, amountCents, accounts }: { orde
 }
 
 /** Before the shop accepts, cancelling is immediate; after acceptance the customer can only ask the shop. */
+/** The driver named a delivery price; the customer agrees (and pays the driver in cash) or sends the order back to the board. */
+export function FeeDecision({ orderId, feeCents, driverName }: { orderId: string; feeCents: number; driverName?: string }) {
+  const [state, action, pending] = useActionState(answerFeeAction, idle);
+  return (
+    <form action={action} className="flex flex-col gap-2 rounded-control border border-brand bg-brand-soft p-3">
+      <input type="hidden" name="orderId" value={orderId} />
+      <p className="text-sm font-semibold">{driverName ?? "المندوب"} طلب <strong className="num text-lg">{formatEgp(feeCents)}</strong> توصيل. تدفعها له كاش عند الاستلام.</p>
+      {state.error ? <Notice tone="danger">{state.error}</Notice> : null}
+      <div className="flex flex-wrap gap-2">
+        <Button type="submit" name="answer" value="approve" loading={pending}>موافق</Button>
+        <Button type="submit" name="answer" value="refuse" variant="outline" disabled={pending}>أرفض وأبحث عن مندوب تاني</Button>
+      </div>
+    </form>
+  );
+}
+
 export function CancelControl({ orderId, mode }: { orderId: string; mode: "direct" | "request" }) {
   const [open, setOpen] = useState(false);
   const [state, action, pending] = useActionState(cancelOrderAction, idle);

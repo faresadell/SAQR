@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import type { FormState } from "@/lib/form-state";
 import { requireRole } from "@/server/auth/guards";
 import { AuthorizationError, NotFoundError } from "@/server/errors";
-import { deliver, pickUp, reportFailure } from "@/server/orders/delivery";
+import { deliver, pickUp, proposeDeliveryFee, reportFailure } from "@/server/orders/delivery";
 import type { LifecycleResult } from "@/server/orders/lifecycle";
 import { DENIED_ERROR, GENERIC_ERROR, LIFECYCLE_MESSAGES, NOT_FOUND_ERROR } from "@/features/shared/messages";
 
@@ -28,6 +28,7 @@ export async function driverDeliveryAction(_prev: FormState, formData: FormData)
     switch (get("command")) {
       case "pickUp": result = await pickUp(user, orderId); break;
       case "deliver": result = await deliver(user, orderId, { feeCollected: get("feeCollected") === "yes", note: get("note"), code: get("code") }); break;
+      case "proposeFee": result = await proposeDeliveryFee(user, orderId, Math.round(Number(get("fee").replace(",", ".")) * 100)); break;
       case "fail": result = await reportFailure(user, orderId, get("note")); break;
       default: return { error: DRIVER_MESSAGES.INVALID_REQUEST! };
     }

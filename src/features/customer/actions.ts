@@ -8,6 +8,7 @@ import { createAddress, deleteAddress } from "@/server/addresses/service";
 import { requireRole } from "@/server/auth/guards";
 import { AuthorizationError, NotFoundError } from "@/server/errors";
 import { placeOrder } from "@/server/orders/checkout";
+import { answerDeliveryFee } from "@/server/orders/delivery";
 import { cancelOrder, requestCancellation, submitPayment } from "@/server/orders/lifecycle";
 import { currentUnitPrices } from "@/server/orders/prices";
 import { uploadReceipt } from "@/server/orders/receipts";
@@ -103,6 +104,18 @@ export async function payOrderAction(_prev: FormState, formData: FormData): Prom
     if (!result.ok) return { error: LIFECYCLE_MESSAGES[result.error] ?? GENERIC_ERROR };
     revalidatePath("/account/orders", "layout");
     return { message: "تم إرسال الإيصال. بانتظار تأكيد النشاط للدفع." };
+  } catch (error) {
+    return failure(error);
+  }
+}
+
+export async function answerFeeAction(_prev: FormState, formData: FormData): Promise<FormState> {
+  const { user } = await requireRole("CUSTOMER");
+  try {
+    const result = await answerDeliveryFee(user, text(formData, "orderId"), text(formData, "answer") === "approve");
+    if (!result.ok) return { error: LIFECYCLE_MESSAGES[result.error] ?? GENERIC_ERROR };
+    revalidatePath("/account/orders", "layout");
+    return { message: "تم تسجيل ردك." };
   } catch (error) {
     return failure(error);
   }

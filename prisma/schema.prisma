@@ -86,6 +86,13 @@ enum DeliveryStatus {
   FAILED
 }
 
+/// The delivery price of a board-claimed order: the driver proposes it, the customer approves it before pickup.
+enum DeliveryFeeStatus {
+  NONE
+  PROPOSED
+  APPROVED
+}
+
 enum FeeCollectionStatus {
   PENDING
   COLLECTED
@@ -801,6 +808,7 @@ model DeliveryRecord {
   orderId           String              @unique
   driverId          String?
   feeExpectedCents  Int
+  feeStatus         DeliveryFeeStatus   @default(APPROVED) // existing rows and the shop's own drivers keep the zone fee; board claims start at NONE
   collectionStatus  FeeCollectionStatus @default(PENDING)
   collectedAt       DateTime?
   exceptionNote     String?

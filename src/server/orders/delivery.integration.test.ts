@@ -10,7 +10,7 @@ import { invalidateSettingsCache } from "@/lib/settings";
 import { AuthorizationError, NotFoundError } from "@/server/errors";
 import { createDriver, listMyDrivers, setDriverActive } from "@/server/drivers/service";
 import { placeOrder } from "@/server/orders/checkout";
-import { assignDriver, deliver, listMyDeliveries, pickUp, reportFailure } from "@/server/orders/delivery";
+import { answerDeliveryFee, assignDriver, deliver, listMyDeliveries, pickUp, proposeDeliveryFee, reportFailure } from "@/server/orders/delivery";
 import { claimOrder, listBoard, releaseOrder } from "@/server/orders/driver-board";
 import { advanceOrder, cancelOrder, confirmPayment, decideOrder, requestCancellation, resolveCancellation, submitPayment } from "@/server/orders/lifecycle";
 import { applyStarMove, getStarBalance } from "@/server/stars/ledger";
@@ -89,6 +89,11 @@ const approvedOrder = async () => {
 };
 const status = async (id: string) => (await db.order.findUniqueOrThrow({ where: { id } })).orderStatus;
 
+/** A board-claimed order may only be picked up after the customer agreed to the driver's price. */
+const agreeFee = async (driver: Actor, id: string, cents = 2000) => {
+  expect(await proposeDeliveryFee(driver, id, cents)).toEqual({ ok: true });
+  expect(await answerDeliveryFee(w.customer, id, true)).toEqual({ ok: true });
+};
 const codeOf = async (id: string) => (await db.order.findUniqueOrThrow({ where: { id } })).deliveryCode ?? undefined;
 
 describe("cancellation request", () => {
@@ -345,8 +350,32 @@ describe("open driver board", () => {
     await expect(releaseOrder(a, id)).rejects.toBeInstanceOf(NotFoundError); // no longer hers
     await advanceOrder(w.owner, id, "PREPARING");
     await advanceOrder(w.owner, id, "READY");
+    await agreeFee(b, id);
     expect((await pickUp(b, id)).ok).toBe(true);
     expect(await releaseOrder(b, id)).toEqual({ ok: false, error: "WRONG_STATE" });
+  });
+
+  it("the driver names the price, the customer must approve it before pickup; a refusal sends the order back to the board", async () => {
+    const id = await approvedOrder();
+    const a = await user("DRIVER");
+    const b = await user("DRIVER");
+    await claimOrder(a, id);
+    await advanceOrder(w.owner, id, "PREPARING");
+    await advanceOrder(w.owner, id, "READY");
+    expect(await pickUp(a, id)).toEqual({ ok: false, error: "FEE_NOT_APPROVED" });
+    expect(await proposeDeliveryFee(a, id, 50)).toEqual({ ok: false, error: "INVALID_REQUEST" });
+    expect(await proposeDeliveryFee(a, id, 1_000_000)).toEqual({ ok: false, error: "FEE_TOO_HIGH" }); // reference 2000 -> at most 5000
+    expect(await proposeDeliveryFee(a, id, 3500)).toEqual({ ok: true });
+    expect(await pickUp(a, id)).toEqual({ ok: false, error: "FEE_NOT_APPROVED" }); // proposed is not approved
+    await expect(answerDeliveryFee(await user("CUSTOMER"), id, true)).rejects.toBeInstanceOf(NotFoundError); // only this order's customer
+    expect(await answerDeliveryFee(w.customer, id, false)).toEqual({ ok: true });
+    expect(await db.deliveryRecord.findUniqueOrThrow({ where: { orderId: id } })).toMatchObject({ driverId: null, feeStatus: "NONE", feeExpectedCents: 2000 });
+    expect((await listBoard(b)).map((r) => r.orderId)).toContain(id);
+    expect(await claimOrder(b, id)).toEqual({ ok: true });
+    await agreeFee(b, id, 3000);
+    expect(await db.deliveryRecord.findUniqueOrThrow({ where: { orderId: id } })).toMatchObject({ feeStatus: "APPROVED", feeExpectedCents: 3000 });
+    expect(await answerDeliveryFee(w.customer, id, true)).toEqual({ ok: false, error: "WRONG_STATE" }); // nothing left to answer
+    expect((await pickUp(b, id)).ok).toBe(true);
   });
 
   it("the holder completes the delivery and alone sees the customer's address and phone", async () => {
@@ -358,6 +387,7 @@ describe("open driver board", () => {
     await advanceOrder(w.owner, id, "READY");
     await expect(pickUp(b, id)).rejects.toBeInstanceOf(AuthorizationError); // b has never held an order, so no driver profile exists yet
     expect(await listMyDeliveries(b, "ACTIVE")).toEqual([]);
+    await agreeFee(a, id);
     expect((await pickUp(a, id)).ok).toBe(true);
     const mine = await listMyDeliveries(a, "ACTIVE");
     expect(mine[0]).toMatchObject({ orderId: id, address: expect.objectContaining({ line: "شارع 9" }) });
