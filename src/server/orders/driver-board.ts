@@ -1,5 +1,5 @@
 import "server-only";
-import type { DeliveryStatus, OrderStatus } from "@prisma/client";
+import type { DeliveryStatus, Merchant, Order, OrderStatus } from "@prisma/client";
 import { db } from "@/lib/db";
 import { writeAudit } from "@/lib/audit";
 import type { Actor } from "@/lib/auth/permissions";
@@ -54,8 +54,7 @@ export async function listBoard(actor: Actor) {
   }));
 }
 
-type ClaimableOrder = Awaited<ReturnType<typeof loadClaimable>>;
-const loadClaimable = (tx: Tx, id: string) => tx.order.findUniqueOrThrow({ where: { id }, include: { merchant: true } });
+type ClaimableOrder = Order & { merchant: Merchant };
 
 /** Flip one order out of the board (atomic: only one driver can win) and give the driver its delivery record. */
 async function takeOrder(tx: Tx, actor: Actor, driverId: string, order: ClaimableOrder, fee: { cents: number; status: "NONE" | "PROPOSED" | "APPROVED" }, driverName: string): Promise<boolean> {
