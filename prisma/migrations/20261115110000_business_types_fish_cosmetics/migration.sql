@@ -4,6 +4,5 @@ INSERT INTO "BusinessType" ("code", "nameAr", "isActive", "sortOrder", "updatedA
   ('cosmetics', 'مستحضرات تجميل', true, 10, CURRENT_TIMESTAMP)
 ON CONFLICT ("code") DO NOTHING;
 
--- "Clothes" is removed: deleted when no shop uses it, otherwise only hidden so those shops keep a valid kind.
-DELETE FROM "BusinessType" WHERE "code" = 'clothes' AND NOT EXISTS (SELECT 1 FROM "Merchant" WHERE "businessType" = 'clothes');
+-- "Clothes" is removed from the offered kinds. It is hidden, not deleted, so shops that already use it stay valid (an admin can delete it later).
 UPDATE "BusinessType" SET "isActive" = false WHERE "code" = 'clothes';
