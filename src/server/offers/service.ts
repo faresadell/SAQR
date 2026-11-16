@@ -266,7 +266,7 @@ export async function extendOffer(actor: Actor, offerId: string, input: { hours:
 
 class ConflictAbort extends Error {}
 
-const offerSelect = { id: true, title: true, description: true, startsAt: true, endsAt: true, status: true, stoppedAt: true, stopReason: true, createdAt: true, discountType: true, discountValue: true } as const;
+const offerSelect = { id: true, title: true, description: true, startsAt: true, endsAt: true, status: true, stoppedAt: true, stopReason: true, createdAt: true, discountType: true, discountValue: true, imageKey: true } as const;
 
 export async function listMyOffers(actor: Actor) {
   const shop = await ownShop(actor);
@@ -284,7 +284,7 @@ export async function listPublicOffers() {
     orderBy: { endsAt: "asc" },
     take: 100,
     select: {
-      id: true, title: true, description: true, endsAt: true, discountType: true, discountValue: true,
+      id: true, title: true, description: true, endsAt: true, discountType: true, discountValue: true, imageKey: true,
       merchant: { select: { id: true, name: true } },
       products: { select: { product: { select: { id: true, nameAr: true, priceCents: true, archivedAt: true } } } },
     },
@@ -292,7 +292,7 @@ export async function listPublicOffers() {
   return rows.map((o) => {
     const discount = discountsOn && o.discountType && o.discountValue !== null ? { type: o.discountType, value: o.discountValue } : null;
     return {
-      id: o.id, title: o.title, description: o.description, endsAt: o.endsAt, shop: o.merchant,
+      id: o.id, title: o.title, description: o.description, endsAt: o.endsAt, shop: o.merchant, hasImage: o.imageKey !== null,
       discount,
       products: discount
         ? o.products.filter((p) => p.product.archivedAt === null).map((p) => {

@@ -6,6 +6,8 @@ import { z } from "zod";
 import { parseHoursFields } from "@/lib/catalog/opening-hours";
 import type { FormState } from "@/lib/form-state";
 import { requireRole } from "@/server/auth/guards";
+import { uploadProductImage } from "@/server/catalog/product-images";
+import { pickedImage } from "@/server/uploads/form-image";
 import { archiveProduct, createProduct, setProductAvailability, updateProduct } from "@/server/catalog/products";
 import { AuthorizationError, NotFoundError } from "@/server/errors";
 import { resubmitOwnMerchant, saveOwnMerchant } from "@/server/merchants/service";
@@ -64,6 +66,7 @@ export async function resubmitMerchantAction(): Promise<void> {
 
 // ───────────── products ─────────────
 
+
 const idSchema = z.string().min(1).max(64);
 
 function productFields(formData: FormData) {
@@ -86,8 +89,12 @@ export async function createProductAction(_prev: FormState, formData: FormData):
   const { user } = await requireRole("MERCHANT");
   try {
     const result = await createProduct(user, productFields(formData));
-    if (result.ok) revalidatePath("/merchant");
-    return result.ok ? { message: "تمت إضافة المنتج." } : productFailure(result);
+    if (!result.ok) return productFailure(result);
+    // The picture is optional and never blocks the product: if it cannot be stored, the product still exists and the person is told how to retry.
+    const image = await pickedImage(formData);
+    const stored = image ? await uploadProductImage(user, result.id, image) : null;
+    revalidatePath("/merchant");
+    return { message: stored && !stored.ok ? "تمت إضافة المنتج، لكن تعذر رفع الصورة. افتح المنتج وأضفها من هناك." : "تمت إضافة المنتج." };
   } catch (error) {
     return failure(error);
   }

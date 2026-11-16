@@ -3,6 +3,7 @@ import { Logo } from "@/components/brand/logo";
 import { Icon } from "@/components/ui/icon";
 import { LinkButton } from "@/components/ui/link-button";
 import { SectionTitle } from "@/components/ui/page-header";
+import { SafeImage } from "@/components/ui/safe-image";
 import { EmptyState } from "@/components/ui/states";
 import { formatDateTime } from "@/lib/format";
 import type { PublicOfferView } from "./data";
@@ -72,6 +73,7 @@ export function HomeView({ types, shops, offers }: { types: BusinessTypeOption[]
               {topOffers.map((o) => (
                 <li key={o.id} className="w-64 shrink-0 sm:w-auto">
                   <Link href={`/shops/${o.shop.id}`} className="flex h-full flex-col gap-2 rounded-card border border-line border-s-4 border-s-success bg-surface p-4 shadow-card transition-all hover:-translate-y-0.5 hover:shadow-pop">
+                    {o.hasImage ? <SafeImage alt="" src={`/api/v1/offers/${o.id}/image`} fallbackIcon="tag" className="aspect-[16/9] w-full rounded-control" /> : null}
                     {o.discountLabel ? <span className="w-fit rounded-full bg-success-soft px-2.5 py-0.5 text-xs font-bold text-success-ink">{o.discountLabel}</span> : <span className="w-fit rounded-full bg-brand-soft px-2.5 py-0.5 text-xs font-bold text-navy-700">عرض</span>}
                     <span className="font-bold">{o.title}</span>
                     <span className="text-sm text-ink-muted">{o.shop.name}</span>

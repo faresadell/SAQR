@@ -11,6 +11,8 @@ import type { FormState } from "@/lib/form-state";
 import { formatDateTime, formatNumber } from "@/lib/format";
 import { formatEgp } from "@/lib/money";
 import { createOfferAction, extendOfferAction, stopOfferAction } from "./offer-actions";
+import { ImageField } from "@/features/media/image-field";
+import { ImageUploader } from "@/features/media/image-uploader";
 import type { MerchantOfferRow, MerchantOffersData } from "./types";
 
 const idle: FormState = {};
@@ -32,6 +34,10 @@ function CreateOffer({ data }: { data: MerchantOffersData }) {
       <form action={action} className="flex flex-col gap-3">
         <Field label="عنوان العرض" name="title" required minLength={3} maxLength={80} error={state.fieldErrors?.title} />
         <Field label="وصف (اختياري)" name="description" maxLength={500} />
+        <div className="flex flex-col gap-1">
+          <span className="text-sm font-semibold">صورة العرض (اختياري)</span>
+          <ImageField label="اختيار صورة من الجهاز" />
+        </div>
         {free ? null : <Field label="مدة العرض (ساعات)" name="paidHours" type="number" min={1} max={1000} step={1} defaultValue={24} required hint={`التكلفة نجمة لكل ساعة (${formatNumber(data.extensionStarsPerHour)} نجمة/ساعة).`} />}
         {d.enabled ? (
           <>
@@ -79,6 +85,7 @@ function OfferCard({ offer, perHour }: { offer: MerchantOfferRow; perHour: numbe
       </div>
       {offer.description ? <p className="text-sm text-ink-muted">{offer.description}</p> : null}
       <p className="text-xs text-ink-muted">ينتهي: <span className="num">{formatDateTime(offer.endsAt)}</span></p>
+      <ImageUploader endpoint={`/api/v1/offers/${offer.id}/image`} hasImage={offer.hasImage} addLabel="إضافة صورة للعرض" changeLabel="تغيير صورة العرض" />
       {offer.state === "ACTIVE" ? (
         <div className="flex flex-wrap items-end gap-3 border-t border-line pt-2">
           <form action={extend} className="flex items-end gap-2">

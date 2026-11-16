@@ -2,6 +2,7 @@ import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { LinkButton } from "@/components/ui/link-button";
+import { SafeImage } from "@/components/ui/safe-image";
 import { EmptyState } from "@/components/ui/states";
 import { formatDate } from "@/lib/format";
 import { formatEgp } from "@/lib/money";
@@ -15,6 +16,7 @@ export function OffersList({ offers }: { offers: PublicOfferView[] }) {
       {offers.map((o) => (
         <li key={o.id}>
           <Card className="flex h-full flex-col gap-3">
+            {o.hasImage ? <SafeImage alt="" src={`/api/v1/offers/${o.id}/image`} fallbackIcon="tag" className="aspect-[16/9] w-full rounded-control" /> : null}
             <div className="flex items-start justify-between gap-2">
               <div>
                 <h2 className="text-lg font-bold">{o.title}</h2>

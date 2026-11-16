@@ -12,6 +12,9 @@ import { excludeParticipant, getStandings, proposeFromStandings, restoreParticip
 import { approveLegalPage } from "@/server/legal/service";
 import { createOffer, createOfferAsAdmin, listPublicOffers, stopOffer } from "@/server/offers/service";
 import { placeOrder } from "@/server/orders/checkout";
+import { uploadProductImage, readProductImage } from "@/server/catalog/product-images";
+import { readOfferImage, uploadOfferImage } from "@/server/offers/images";
+import { setStorageForTests } from "@/server/uploads/storage";
 import { applyStarMove } from "@/server/stars/ledger";
 
 if (!process.env.DATABASE_URL) throw new Error("DATABASE_URL is required for integration tests");
@@ -229,5 +232,33 @@ describe("admin creates an offer on behalf of a shop", () => {
     expect((await createOfferAsAdmin(superAdmin, shopId, d(1000, [p1.id]))).ok).toBe(true);
     expect(await createOfferAsAdmin(superAdmin, shopId, d(1000, [p2.id]))).toEqual({ ok: false, error: "TOO_MANY_DISCOUNTED_OFFERS" }); // counts the owner's and admin's offers together
     expect(await createOffer(owner, d(1000, [p2.id]))).toEqual({ ok: false, error: "TOO_MANY_DISCOUNTED_OFFERS" });
+  });
+
+  it("pictures: owner-only, type decided from the bytes, public only while visible, and the offer image replaces the old one", async () => {
+    const files = new Map<string, Uint8Array>();
+    setStorageForTests({ put: async (k, b) => void files.set(k, b), get: async (k) => files.get(k) ?? null });
+    try {
+      const jpeg = (size = 64) => Uint8Array.from([0xff, 0xd8, 0xff, ...Array.from({ length: size }, (_, i) => i % 250)]);
+      const made = await createOffer(owner, { title: "عرض بصورة" });
+      if (!made.ok) throw new Error("offer not created");
+      expect(await readOfferImage(made.offerId)).toBeNull();
+      expect(await uploadOfferImage(owner, made.offerId, new Uint8Array(40))).toEqual({ ok: false, error: "INVALID_FILE" });
+      expect(await uploadOfferImage(owner, made.offerId, jpeg(6 * 1024 * 1024))).toEqual({ ok: false, error: "FILE_TOO_LARGE" });
+      await expect(uploadOfferImage(customer, made.offerId, jpeg())).rejects.toBeInstanceOf(AuthorizationError);
+      const stranger = await user("MERCHANT");
+      await db.merchant.create({ data: { ownerId: stranger.id, name: "غريب", businessType: "restaurant", status: "APPROVED" } });
+      await expect(uploadOfferImage(stranger, made.offerId, jpeg())).rejects.toThrow(); // another shop's offer is "not found"
+      expect(await uploadOfferImage(owner, made.offerId, jpeg())).toEqual({ ok: true });
+      expect((await readOfferImage(made.offerId))?.contentType).toBe("image/jpeg");
+      expect((await listPublicOffers()).find((o) => o.id === made.offerId)?.hasImage).toBe(true);
+      await stopOffer(owner, made.offerId, "اختبار");
+      expect(await readOfferImage(made.offerId)).toBeNull();
+
+      // a product picture can be added right after creation by its owner
+      expect(await uploadProductImage(owner, p1.id, jpeg())).toEqual({ ok: true });
+      expect((await readProductImage(p1.id))?.contentType).toBe("image/jpeg");
+    } finally {
+      setStorageForTests(undefined);
+    }
   });
 });

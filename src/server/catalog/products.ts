@@ -8,7 +8,7 @@ import { validateProductInput, type ProductField } from "@/lib/catalog/product-i
 import { AuthorizationError, NotFoundError } from "@/server/errors";
 
 type Client = Prisma.TransactionClient | typeof db;
-export type ProductResult = { ok: true } | { ok: false; error: "INVALID"; errors: Partial<Record<ProductField, string>> } | { ok: false; error: "CATEGORY_UNAVAILABLE" };
+export type ProductResult = { ok: true; id: string } | { ok: false; error: "INVALID"; errors: Partial<Record<ProductField, string>> } | { ok: false; error: "CATEGORY_UNAVAILABLE" };
 
 /**
  * The merchant whose catalog this actor may change. Derived from the SESSION user, never from the request,
@@ -69,7 +69,7 @@ export async function createProduct(actor: Actor, raw: Parameters<typeof validat
       data: { merchantId: shop.id, categoryId, nameAr: parsed.value.nameAr, description: parsed.value.description, priceCents: parsed.value.priceCents, isAvailable: parsed.value.isAvailable },
     });
     await writeAudit({ actorId: actor.id, action: "PRODUCT_CREATED", entityType: "Product", entityId: product.id, after: { nameAr: product.nameAr, priceCents: product.priceCents } }, tx);
-    return { ok: true };
+    return { ok: true, id: product.id };
   });
 }
 
@@ -93,7 +93,7 @@ export async function updateProduct(actor: Actor, productId: string, raw: Parame
       { actorId: actor.id, action: "PRODUCT_UPDATED", entityType: "Product", entityId: current.id, before: { nameAr: current.nameAr, priceCents: current.priceCents, isAvailable: current.isAvailable }, after: { nameAr: parsed.value.nameAr, priceCents: parsed.value.priceCents, isAvailable: parsed.value.isAvailable } },
       tx,
     );
-    return { ok: true };
+    return { ok: true, id: current.id };
   });
 }
 
