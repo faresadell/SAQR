@@ -2,6 +2,7 @@ import "server-only";
 import type { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
 import type { Actor } from "@/lib/auth/permissions";
+import { MUTABLE_GROUPS, mutableTypes } from "@/lib/notifications/mutable";
 
 export interface NewNotification {
   userId: string;
@@ -16,8 +17,13 @@ export interface NewNotification {
 /** Writes in the caller's transaction. A repeated dedupeKey is silently ignored (retry-safe). */
 export async function notifyInTx(tx: Prisma.TransactionClient, ...items: NewNotification[]): Promise<void> {
   if (items.length === 0) return;
+  // Respect a user's choice to mute a non-critical kind (the mute table only ever holds those kinds).
+  const mutes = await tx.notificationMute.findMany({ where: { userId: { in: [...new Set(items.map((n) => n.userId))] }, type: { in: [...new Set(items.map((n) => n.type))] } }, select: { userId: true, type: true } });
+  const muted = new Set(mutes.map((m) => `${m.userId}:${m.type}`));
+  const wanted = items.filter((n) => !muted.has(`${n.userId}:${n.type}`));
+  if (wanted.length === 0) return;
   await tx.notification.createMany({
-    data: items.map((n) => ({ userId: n.userId, type: n.type, title: n.title, body: n.body, dedupeKey: n.dedupeKey, ...(n.data !== undefined ? { data: n.data } : {}) })),
+    data: wanted.map((n) => ({ userId: n.userId, type: n.type, title: n.title, body: n.body, dedupeKey: n.dedupeKey, ...(n.data !== undefined ? { data: n.data } : {}) })),
     skipDuplicates: true,
   });
 }
@@ -46,4 +52,20 @@ export async function markNotificationsRead(actor: Actor, ids: string[] | "all")
     data: { readAt: new Date() },
   });
   return { updated: result.count };
+}
+
+/** Which groups of non-critical notifications this user has switched off. */
+export async function listMyMutedGroups(actor: Actor): Promise<string[]> {
+  const rows = await db.notificationMute.findMany({ where: { userId: actor.id }, select: { type: true } });
+  const muted = new Set(rows.map((r) => r.type));
+  return MUTABLE_GROUPS.filter((g) => g.types.every((t) => muted.has(t))).map((g) => g.key);
+}
+
+/** Switch a non-critical group off or on for the caller. Unknown groups (including every critical kind) are refused. */
+export async function setGroupMuted(actor: Actor, groupKey: string, muted: boolean): Promise<{ ok: boolean }> {
+  const types = mutableTypes(groupKey);
+  if (types.length === 0) return { ok: false };
+  if (muted) await db.notificationMute.createMany({ data: types.map((type) => ({ userId: actor.id, type })), skipDuplicates: true });
+  else await db.notificationMute.deleteMany({ where: { userId: actor.id, type: { in: [...types] } } });
+  return { ok: true };
 }
