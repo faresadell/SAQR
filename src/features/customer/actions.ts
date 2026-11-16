@@ -5,6 +5,8 @@ import { z } from "zod";
 import type { FormState } from "@/lib/form-state";
 import { fileComplaint } from "@/server/complaints/service";
 import { createReview } from "@/server/reviews/service";
+import { checkCouponForCart } from "@/server/coupons/service";
+import type { CouponKind } from "@/lib/coupons/discount";
 import { createAddress, deleteAddress } from "@/server/addresses/service";
 import { requireRole } from "@/server/auth/guards";
 import { AuthorizationError, NotFoundError } from "@/server/errors";
@@ -76,6 +78,7 @@ export async function deleteAddressAction(formData: FormData): Promise<void> {
 const placeSchema = z.object({
   idempotencyKey: z.string().regex(/^[A-Za-z0-9_-]{8,64}$/),
   addressId: z.string().min(1).max(64),
+  couponCode: z.string().trim().max(20).optional(),
   lines: z.array(z.object({ productId: z.string().min(1).max(64), quantity: z.number().int().min(1).max(99), expectedUnitPriceCents: z.number().int().min(0).optional() })).min(1).max(60),
 });
 
@@ -96,6 +99,21 @@ export async function placeOrderAction(input: unknown): Promise<PlaceOrderAction
     }
     revalidatePath("/account/orders");
     return { ok: true, parentOrderId: result.parentOrderId };
+  } catch (error) {
+    console.error(error);
+    return { ok: false, error: GENERIC_ERROR };
+  }
+}
+
+export type CouponCheckResult = { ok: true; code: string; kind: CouponKind; value: number; merchantId: string | null } | { ok: false; error: string };
+
+/** Is this code usable for the shops in the cart? Only a preview; the order transaction decides the real discount. */
+export async function checkCouponAction(code: string, merchantIds: string[]): Promise<CouponCheckResult> {
+  const { user } = await requireRole("CUSTOMER");
+  try {
+    const r = await checkCouponForCart(user, String(code ?? "").slice(0, 40), merchantIds.slice(0, 60).map(String));
+    if (!r.ok) return { ok: false, error: PLACE_ORDER_MESSAGES[r.error] ?? (r.error === "RATE_LIMITED" ? "حاولت كثيراً. انتظر قليلاً." : GENERIC_ERROR) };
+    return { ok: true, code: r.coupon.code, kind: r.coupon.kind, value: r.coupon.value, merchantId: r.coupon.merchantId };
   } catch (error) {
     console.error(error);
     return { ok: false, error: GENERIC_ERROR };

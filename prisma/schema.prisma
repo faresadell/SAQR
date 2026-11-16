@@ -449,7 +449,9 @@ model Order {
   deliveryStatus DeliveryStatus @default(NOT_STARTED)
 
   subtotalCents    Int
-  discountCents    Int  @default(0)
+  discountCents    Int  @default(0) // coupon discount on the products of this sub-order (subtotal stays the gross after offers)
+  couponCode       String? // the coupon used, copied at order time
+  couponFundedBy   String? // "MERCHANT" or "PLATFORM": who bears the discount
   deliveryFeeCents Int
   totalCents       Int
   merchantTierSnap     MerchantTier // merchant membership at order time
@@ -498,6 +500,7 @@ model ParentOrder {
   // Client-supplied key; one checkout request creates at most one parent (retry-safe).
   idempotencyKey   String
   subtotalCents    Int
+  discountCents    Int      @default(0)
   deliveryFeeCents Int
   totalCents       Int
   addressSnap      Json
@@ -1154,4 +1157,20 @@ model Review {
 
   @@index([merchantId, isHidden, createdAt])
   @@index([isHidden, createdAt])
+}
+
+/// A discount code. merchantId set = the shop pays for it; null = created by the platform (an admin) and valid on every shop.
+model Coupon {
+  id          String   @id @default(cuid())
+  code        String   @unique
+  kind        String // PERCENT | FIXED
+  value       Int // percent, or piasters for FIXED
+  merchantId  String?
+  expiresAt   DateTime
+  isActive    Boolean  @default(true)
+  createdById String
+  createdAt   DateTime @default(now())
+
+  @@index([merchantId, createdAt])
+  @@index([isActive, expiresAt])
 }

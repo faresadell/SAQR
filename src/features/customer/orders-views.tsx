@@ -96,6 +96,18 @@ function SubOrderCard({ s, accounts, code, fee, position, reviewed, complaints }
           <span>منتجات هذا النشاط</span>
           <span className="num">{formatEgp(s.subtotalCents)}</span>
         </li>
+        {s.discountCents ? (
+          <>
+            <li className="flex items-center justify-between gap-3 text-success">
+              <span>خصم كوبون {s.couponCode ? <span dir="ltr" className="font-semibold">{s.couponCode}</span> : null}</span>
+              <span className="num">− {formatEgp(s.discountCents)}</span>
+            </li>
+            <li className="flex items-center justify-between gap-3 font-bold">
+              <span>المطلوب تحويله للنشاط</span>
+              <span className="num">{formatEgp(s.subtotalCents - s.discountCents)}</span>
+            </li>
+          </>
+        ) : null}
       </ul>
 
       <div className="grid gap-5 md:grid-cols-2">
@@ -110,7 +122,7 @@ function SubOrderCard({ s, accounts, code, fee, position, reviewed, complaints }
               <span className="num text-xs">أُرسل {formatDateTime(s.payment.submittedAt)}</span>
             </p>
           ) : null}
-          {needsReceipt && s.orderStatus === "AWAITING_PAYMENT" ? <PayForm orderId={s.id} merchantName={s.merchantName} amountCents={s.subtotalCents} accounts={accounts} /> : null}
+          {needsReceipt && s.orderStatus === "AWAITING_PAYMENT" ? <PayForm orderId={s.id} merchantName={s.merchantName} amountCents={s.subtotalCents - (s.discountCents ?? 0)} accounts={accounts} /> : null}
           {s.paymentStatus === "REJECTED" ? <Notice tone="danger">رفض النشاط الإيصال السابق. أرسل إيصالاً صحيحاً.</Notice> : null}
         </div>
         <div className="flex flex-col gap-3">
@@ -133,7 +145,7 @@ function SubOrderCard({ s, accounts, code, fee, position, reviewed, complaints }
 }
 
 export function OrderDetailView({ order, base, accountsByOrder = {}, codesByOrder = {}, feeByOrder = {}, positionByOrder = {}, reviewedIds = [], complaints = [] }: { order: MainOrderView; base: string; accountsByOrder?: Record<string, PayAccount[]>; codesByOrder?: Record<string, string>; feeByOrder?: Record<string, { status: string; cents: number }>; positionByOrder?: Record<string, DriverPosition>; reviewedIds?: string[]; complaints?: ComplaintNote[] }) {
-  const productsTotal = order.subOrders.reduce((n, s) => n + s.subtotalCents, 0);
+  const productsTotal = order.subOrders.reduce((n, s) => n + s.subtotalCents - (s.discountCents ?? 0), 0);
   return (
     <div className="flex flex-col gap-5">
       <Link href={`${base}/orders`} className="flex w-fit items-center gap-1 text-sm font-semibold text-brand">

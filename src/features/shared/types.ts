@@ -94,6 +94,9 @@ export interface SubOrderView {
   merchantName: string;
   items: OrderLine[];
   subtotalCents: number;
+  /** Coupon discount taken off the products (0 when no coupon was used). */
+  discountCents?: number;
+  couponCode?: string;
   /** What this sub-order costs the customer including its delivery fee (the amount to transfer to the shop). */
   totalCents?: number;
   orderStatus: OrderStatus;

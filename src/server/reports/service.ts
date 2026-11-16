@@ -33,7 +33,7 @@ async function build(monthKey: string, merchantId: string | null): Promise<Sales
     ? await db.$queryRaw<{ orderId: string }[]>`SELECT DISTINCT o."id" AS "orderId" FROM "OrderEvent" e JOIN "Order" o ON o."id" = e."orderId" WHERE e."field" = 'orderStatus' AND e."toValue" = 'DELIVERED' AND e."createdAt" >= ${b.start} AND e."createdAt" < ${b.end} AND o."merchantId" = ${merchantId}`
     : await db.$queryRaw<{ orderId: string }[]>`SELECT DISTINCT o."id" AS "orderId" FROM "OrderEvent" e JOIN "Order" o ON o."id" = e."orderId" WHERE e."field" = 'orderStatus' AND e."toValue" = 'DELIVERED' AND e."createdAt" >= ${b.start} AND e."createdAt" < ${b.end}`;
   const ids = delivered.map((d) => d.orderId);
-  const orders = ids.length ? await db.order.findMany({ where: { id: { in: ids } }, select: { id: true, subtotalCents: true, totalCents: true, commissionBaseCents: true, commissionBp: true } }) : [];
+  const orders = ids.length ? await db.order.findMany({ where: { id: { in: ids } }, select: { id: true, subtotalCents: true, discountCents: true, totalCents: true, commissionBaseCents: true, commissionBp: true } }) : [];
   const refunds = ids.length ? await db.refund.groupBy({ by: ["orderId"], where: { orderId: { in: ids }, status: "COMPLETED" }, _sum: { amountCents: true } }) : [];
   const refunded = new Map(refunds.map((r) => [r.orderId, r._sum.amountCents ?? 0]));
   let sales = 0;
@@ -43,7 +43,7 @@ async function build(monthKey: string, merchantId: string | null): Promise<Sales
   for (const o of orders) {
     const refundedCents = refunded.get(o.id) ?? 0;
     const settled = { commissionBaseCents: o.commissionBaseCents, commissionBp: o.commissionBp, totalCents: o.totalCents, refundedCents };
-    sales += o.subtotalCents;
+    sales += o.subtotalCents - o.discountCents; // what the customer actually paid for products
     refundedTotal += Math.min(refundedCents, o.totalCents);
     commission += retainedCommission(settled);
     kept += retainedBase(settled);

@@ -48,7 +48,7 @@ export function merchantNav(base = "/merchant"): { groups: NavGroup[]; mobile: N
   return {
     groups: [
       { items: [home, orders, { href: `${base}/chats`, label: "المحادثات", icon: "message" }, { href: `${base}/requests`, label: "طلبات مخصصة", icon: "box" }, { href: `${base}/drivers`, label: "السائقون", icon: "truck" }] },
-      { title: "الكتالوج", items: [products, offers] },
+      { title: "الكتالوج", items: [products, offers, { href: `${base}/coupons`, label: "الكوبونات", icon: "tag" }] },
       {
         title: "المال",
         items: [
@@ -124,6 +124,7 @@ export function adminNav(base = "/admin"): { groups: NavGroup[]; mobile: NavItem
         items: [
           { href: `${base}/catalog`, label: "التصنيفات وأنواع النشاط", icon: "grid", permission: "catalog.manage" },
           { href: `${base}/offers`, label: "العروض", icon: "tag", permission: "offers.manage" },
+          { href: `${base}/coupons`, label: "الكوبونات", icon: "tag", permission: "offers.manage" },
           { href: `${base}/contest`, label: "المسابقة الشهرية", icon: "gift", permission: "contest.manage" },
           { href: `${base}/settings`, label: "الإعدادات العامة", icon: "settings", permission: "settings.view" },
           { href: `${base}/notifications`, label: "الإشعارات", icon: "bell", permission: "settings.view" },
