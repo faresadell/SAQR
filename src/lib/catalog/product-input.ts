@@ -38,7 +38,8 @@ export function validateProductInput(raw: { name?: string; description?: string;
   }
 
   const categoryId = (raw.categoryId ?? "").trim();
-  if (!categoryId || categoryId.length > 64) errors.categoryId = "اختر التصنيف.";
+  // Optional: a product without a chosen category goes under the default "أخرى" section (see products service).
+  if (categoryId.length > 64) errors.categoryId = "تصنيف غير صالح.";
 
   if (Object.keys(errors).length > 0) return { ok: false, errors };
   return { ok: true, value: { nameAr: name, description: description || null, priceCents, categoryId, isAvailable: raw.isAvailable ?? true } };

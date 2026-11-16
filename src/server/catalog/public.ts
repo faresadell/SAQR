@@ -46,6 +46,24 @@ export async function getPublicMenu(merchantId: string, filter: { q?: string; ca
   return { merchant: shop, products: rows.map(({ imageKey, ...p }) => ({ ...p, hasImage: imageKey !== null })) };
 }
 
+/** Products by name across all approved shops (customer search). Only public fields; the shop name rides along for display. */
+export async function searchPublicProducts(rawQuery: string) {
+  const q = rawQuery.trim().slice(0, 60);
+  if (!q) return [];
+  const rows = await db.product.findMany({
+    where: {
+      archivedAt: null,
+      nameAr: { contains: q, mode: "insensitive" },
+      merchant: { status: "APPROVED" },
+      category: { isActive: true, archivedAt: null, OR: [{ parentId: null }, { parent: { isActive: true, archivedAt: null } }] },
+    },
+    orderBy: [{ isAvailable: "desc" }, { nameAr: "asc" }],
+    take: 60,
+    select: { id: true, nameAr: true, description: true, priceCents: true, isAvailable: true, categoryId: true, imageKey: true, merchant: { select: { id: true, name: true } } },
+  });
+  return rows.map(({ imageKey, merchant, ...p }) => ({ ...p, hasImage: imageKey !== null, shop: merchant }));
+}
+
 /** Public contact details of an approved shop. Links are re-validated on the way out, so nothing unsafe can reach a page. */
 export async function getPublicShopContact(merchantId: string) {
   const shop = await db.merchant.findFirst({ where: { id: merchantId, status: "APPROVED" }, select: { phone: true, contactPhones: true, socialLinks: true } });

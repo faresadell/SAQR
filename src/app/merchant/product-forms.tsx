@@ -31,8 +31,8 @@ export function ProductForm({ categories, defaults, mode }: { categories: { id: 
       <Field label="الوصف (اختياري)" name="description" defaultValue={defaults.description} error={errors.description} />
       <div className="grid gap-3 sm:grid-cols-2">
         <Field label="السعر (جنيه)" name="price" inputMode="decimal" dir="ltr" defaultValue={defaults.price} required error={errors.price} />
-        <Select label="التصنيف" name="categoryId" defaultValue={defaults.categoryId} required error={errors.categoryId}>
-          <option value="" disabled>اختر</option>
+        <Select label="التصنيف (اختياري)" name="categoryId" defaultValue={defaults.categoryId} error={errors.categoryId}>
+          <option value="">بدون تصنيف (أخرى)</option>
           {categories.map((c) => (
             <option key={c.id} value={c.id}>{c.label}</option>
           ))}

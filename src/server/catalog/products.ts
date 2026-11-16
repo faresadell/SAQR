@@ -32,6 +32,22 @@ async function categoryUsable(client: Client, categoryId: string): Promise<boole
   return true;
 }
 
+export const DEFAULT_CATEGORY_NAME = "أخرى";
+
+/** The catch-all section for products the merchant did not file under an admin category. Created on first use. */
+async function defaultCategoryId(client: Client): Promise<string> {
+  const found = await client.category.findFirst({ where: { parentId: null, nameAr: DEFAULT_CATEGORY_NAME, archivedAt: null, isActive: true } });
+  if (found) return found.id;
+  const created = await client.category.create({ data: { nameAr: DEFAULT_CATEGORY_NAME, sortOrder: 9999 } });
+  return created.id;
+}
+
+/** A chosen category must be usable; an empty choice falls back to the default section. */
+async function resolveCategory(client: Client, chosen: string): Promise<string | null> {
+  if (!chosen) return defaultCategoryId(client);
+  return (await categoryUsable(client, chosen)) ? chosen : null;
+}
+
 /** Product lookup that CANNOT cross merchants: the merchant id is part of the query (IDOR protection). */
 async function findOwnProduct(client: Client, merchantId: string, productId: string) {
   const product = await client.product.findFirst({ where: { id: productId, merchantId, archivedAt: null } });
@@ -47,9 +63,10 @@ export async function createProduct(actor: Actor, raw: Parameters<typeof validat
   }
   return db.$transaction(async (tx): Promise<ProductResult> => {
     const shop = await requireOwnApprovedMerchant(actor, tx);
-    if (!(await categoryUsable(tx, parsed.value.categoryId))) return { ok: false, error: "CATEGORY_UNAVAILABLE" };
+    const categoryId = await resolveCategory(tx, parsed.value.categoryId);
+    if (!categoryId) return { ok: false, error: "CATEGORY_UNAVAILABLE" };
     const product = await tx.product.create({
-      data: { merchantId: shop.id, categoryId: parsed.value.categoryId, nameAr: parsed.value.nameAr, description: parsed.value.description, priceCents: parsed.value.priceCents, isAvailable: parsed.value.isAvailable },
+      data: { merchantId: shop.id, categoryId, nameAr: parsed.value.nameAr, description: parsed.value.description, priceCents: parsed.value.priceCents, isAvailable: parsed.value.isAvailable },
     });
     await writeAudit({ actorId: actor.id, action: "PRODUCT_CREATED", entityType: "Product", entityId: product.id, after: { nameAr: product.nameAr, priceCents: product.priceCents } }, tx);
     return { ok: true };
@@ -65,12 +82,11 @@ export async function updateProduct(actor: Actor, productId: string, raw: Parame
   return db.$transaction(async (tx): Promise<ProductResult> => {
     const shop = await requireOwnApprovedMerchant(actor, tx);
     const current = await findOwnProduct(tx, shop.id, productId);
-    if (current.categoryId !== parsed.value.categoryId && !(await categoryUsable(tx, parsed.value.categoryId))) {
-      return { ok: false, error: "CATEGORY_UNAVAILABLE" };
-    }
+    const categoryId = current.categoryId === parsed.value.categoryId ? current.categoryId : await resolveCategory(tx, parsed.value.categoryId);
+    if (!categoryId) return { ok: false, error: "CATEGORY_UNAVAILABLE" };
     await tx.product.update({
       where: { id: current.id },
-      data: { categoryId: parsed.value.categoryId, nameAr: parsed.value.nameAr, description: parsed.value.description, priceCents: parsed.value.priceCents, isAvailable: parsed.value.isAvailable },
+      data: { categoryId, nameAr: parsed.value.nameAr, description: parsed.value.description, priceCents: parsed.value.priceCents, isAvailable: parsed.value.isAvailable },
     });
     // Existing orders keep their own price snapshot, so a price change only affects future orders.
     await writeAudit(
