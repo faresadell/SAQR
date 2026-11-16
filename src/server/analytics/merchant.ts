@@ -3,7 +3,8 @@ import { db } from "@/lib/db";
 import type { Actor } from "@/lib/auth/permissions";
 import { AuthorizationError, NotFoundError } from "@/server/errors";
 import { getShopRating } from "@/server/reviews/service";
-import { cairoDay, fillDays, orderIdsWithEvent, windowStart, WINDOW_DAYS, type DayPoint } from "./queries";
+import { cairoDay, fillDays, windowStart, WINDOW_DAYS, type DayPoint } from "@/lib/analytics/days";
+import { orderIdsWithEvent } from "./queries";
 
 export interface MerchantAnalytics {
   days: number;

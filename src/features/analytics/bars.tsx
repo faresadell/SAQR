@@ -1,4 +1,4 @@
-import type { DayPoint } from "@/server/analytics/queries";
+import type { DayPoint } from "@/lib/analytics/days";
 import { formatEgp } from "@/lib/money";
 
 /** One bar per day for the last 30 days. Plain CSS (no chart library). Quiet days are real zeros, drawn as an empty slot. */

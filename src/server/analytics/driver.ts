@@ -2,7 +2,7 @@ import "server-only";
 import { db } from "@/lib/db";
 import type { Actor } from "@/lib/auth/permissions";
 import { AuthorizationError } from "@/server/errors";
-import { cairoDay, fillDays, windowStart, WINDOW_DAYS, type DayPoint } from "./queries";
+import { cairoDay, fillDays, windowStart, WINDOW_DAYS, type DayPoint } from "@/lib/analytics/days";
 
 export interface DriverAnalytics {
   days: number;

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { fillDays, WINDOW_DAYS } from "./queries";
+import { fillDays, WINDOW_DAYS } from "./days";
 
 describe("fillDays", () => {
   it("returns exactly 30 consecutive days ending today, with real zeros for quiet days", () => {
