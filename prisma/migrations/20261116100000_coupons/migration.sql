@@ -17,3 +17,9 @@ CREATE TABLE "Coupon" (
 CREATE UNIQUE INDEX "Coupon_code_key" ON "Coupon"("code");
 CREATE INDEX "Coupon_merchantId_createdAt_idx" ON "Coupon"("merchantId", "createdAt");
 CREATE INDEX "Coupon_isActive_expiresAt_idx" ON "Coupon"("isActive", "expiresAt");
+
+-- A coupon lowers what the customer pays for products; the parent total must follow (the Order constraint already allows a discount).
+ALTER TABLE "ParentOrder" DROP CONSTRAINT parent_order_money_non_negative;
+ALTER TABLE "ParentOrder" ADD CONSTRAINT parent_order_money_non_negative
+  CHECK ("subtotalCents" >= 0 AND "deliveryFeeCents" >= 0 AND "discountCents" >= 0 AND "discountCents" <= "subtotalCents" AND "totalCents" = "subtotalCents" - "discountCents" + "deliveryFeeCents");
+ALTER TABLE "Order" ADD CONSTRAINT order_discount_range CHECK ("discountCents" >= 0 AND "discountCents" <= "subtotalCents");
