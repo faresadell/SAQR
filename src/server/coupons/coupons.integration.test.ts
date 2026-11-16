@@ -46,14 +46,14 @@ describe("coupons", () => {
   });
 
   it("a shop coupon takes money off that shop's products only; the total and the payment amount follow", async () => {
-    await createCoupon(w.ownerA, { code: "A10", kind: "PERCENT", value: 10, expiresAt: tomorrow });
-    const r = await place("a10");
+    await createCoupon(w.ownerA, { code: "A10OFF", kind: "PERCENT", value: 10, expiresAt: tomorrow });
+    const r = await place("a10off");
     if (!r.ok) throw new Error(r.error);
     const [oa, ob] = await Promise.all([
       db.order.findFirstOrThrow({ where: { merchantId: w.a.merchant.id } }),
       db.order.findFirstOrThrow({ where: { merchantId: w.b.merchant.id } }),
     ]);
-    expect([oa.subtotalCents, oa.discountCents, oa.totalCents, oa.couponCode, oa.couponFundedBy]).toEqual([10_000, 1_000, 11_000, "A10", "MERCHANT"]);
+    expect([oa.subtotalCents, oa.discountCents, oa.totalCents, oa.couponCode, oa.couponFundedBy]).toEqual([10_000, 1_000, 11_000, "A10OFF", "MERCHANT"]);
     expect([ob.discountCents, ob.couponCode, ob.totalCents]).toEqual([0, null, 5_000]);
     const parent = await db.parentOrder.findUniqueOrThrow({ where: { id: r.parentOrderId } });
     expect([parent.discountCents, parent.totalCents]).toEqual([1_000, 16_000]);
