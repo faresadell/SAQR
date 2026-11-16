@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { expect, type Page } from "@playwright/test";
 import { E2E_USER_PW } from "./accounts";
 
-/** The intro screen blocks clicks on the first visit of a session; tests that are not about it mark it as seen. */
+/** The start sound plays on the first touch of a session; tests that are not about it mark it as already played. */
 export async function skipIntro(page: Page): Promise<void> {
   await page.addInitScript(() => window.sessionStorage.setItem("saqr_intro_seen", "1"));
 }

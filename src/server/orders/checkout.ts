@@ -13,6 +13,7 @@ import { buildCommissionSnapshot } from "@/server/commissions/service";
 import { resolveZoneFee, ZoneUnavailableError } from "@/server/delivery/zones";
 import { resolveOfferDiscounts } from "@/server/offers/service";
 import { getStarBalance } from "@/server/stars/ledger";
+import { notifyInTx } from "@/server/notifications/service";
 import { couponDiscounts } from "@/lib/coupons/discount";
 import { findUsableCoupon, type UsableCoupon } from "@/server/coupons/service";
 
@@ -227,6 +228,8 @@ export async function placeOrder(actor: Actor, input: PlaceOrderInput): Promise<
           },
         });
         suborderIds.push(order.id);
+        // The shop hears about the order the moment it is placed (it can act once the customer's transfer proof arrives).
+        await notifyInTx(tx, { userId: merchant.ownerId, type: "ORDER_PLACED", title: "طلب جديد", body: `وصل طلب جديد رقم ${order.number}. بانتظار تحويل العميل وإرسال الإيصال، وسيصلك إشعار بذلك.`, data: { orderId: order.id }, dedupeKey: `order-placed:${order.id}` });
       }
 
       await writeAudit({ actorId: actor.id, action: "ORDER_PLACED", entityType: "ParentOrder", entityId: parent.id, after: { suborders: suborderIds, totalCents: quote.totalCents } }, tx);
