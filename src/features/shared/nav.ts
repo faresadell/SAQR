@@ -100,7 +100,7 @@ export function adminNav(base = "/admin"): { groups: NavGroup[]; mobile: NavItem
   const payments = { href: `${base}/payments`, label: "التحويلات والإيصالات", icon: "receipt", permission: "payments.review" } as const;
   return {
     groups: [
-      { items: [home] },
+      { items: [home, { href: `${base}/monitoring`, label: "مراقبة المنصة", icon: "activity", permission: "orders.view" }] },
       {
         title: "التشغيل",
         items: [
