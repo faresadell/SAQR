@@ -6,6 +6,7 @@ import { Icon } from "@/components/ui/icon";
 import { SafeImage } from "@/components/ui/safe-image";
 import { formatEgp } from "@/lib/money";
 import { AddToCart } from "./add-to-cart";
+import { OrderNow } from "./order-now";
 import type { MenuProduct } from "./types";
 
 const imageSrc = (p: MenuProduct) => (p.hasImage ? `/api/v1/products/${p.id}/image` : null);
@@ -45,7 +46,10 @@ export function ProductRow({ product, merchantId, merchantName }: { product: Men
         {product.description ? <p className="line-clamp-2 text-sm text-ink-muted">{product.description}</p> : null}
         <div className="mt-auto flex items-center justify-between gap-2 pt-1">
           <span className="num font-bold text-ink">{formatEgp(product.priceCents)}</span>
-          <AddToCart {...cart} />
+          <div className="flex items-center gap-2">
+            <AddToCart {...cart} />
+            <OrderNow {...cart} />
+          </div>
         </div>
       </div>
 
@@ -72,6 +76,7 @@ export function ProductRow({ product, merchantId, merchantName }: { product: Men
           {product.description ? <p className="leading-7 text-ink-muted">{product.description}</p> : <p className="text-sm text-ink-faint">لا يوجد وصف لهذا المنتج.</p>}
           <p className="text-xs text-ink-faint">رسوم التوصيل تُحسب منفصلة عند تأكيد الطلب.</p>
           <AddToCart {...cart} withQuantity />
+          <OrderNow {...cart} />
           <Link href={`/shops/${merchantId}/products/${product.id}`} className="text-sm font-semibold text-brand hover:underline">عرض صفحة المنتج</Link>
         </div>
           </>

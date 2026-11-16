@@ -9,6 +9,7 @@ import { emptyWeek, type OpeningHours } from "@/lib/catalog/opening-hours";
 import { buildCommissionSnapshot } from "@/server/commissions/service";
 import { archiveCategory, createBusinessType, createCategory, setBusinessTypeActive, setCategoryActive, updateBusinessType } from "@/server/catalog/categories";
 import { adminArchiveProduct, adminCreateProduct, adminRestoreProduct, adminSetProductAvailability, adminUpdateProduct, listProductsForAdmin, listShopOptions } from "@/server/catalog/admin-products";
+import { searchPublicProducts } from "@/server/catalog/public";
 import { archiveProduct, createProduct, listOwnProducts, setProductAvailability, updateProduct } from "@/server/catalog/products";
 import { getPublicMenu, listPublicMerchants } from "@/server/catalog/public";
 import { AuthorizationError, NotFoundError } from "@/server/errors";
@@ -178,6 +179,19 @@ describe("categories", () => {
 });
 
 describe("products: ownership, validation, archive", () => {
+  it("lets a merchant add a product with no category (goes under أخرى, no admin step) and customers can find it by name", async () => {
+    const owner = await approvedMerchant();
+    expect((await createProduct(owner, product("", { name: "كشري مميز" }))).ok).toBe(true);
+    expect((await createProduct(owner, product("", { name: "كشري ثاني" }))).ok).toBe(true);
+    const cats = await db.category.findMany({ where: { nameAr: "أخرى" } });
+    expect(cats.length).toBe(1);
+    const found = await searchPublicProducts("كشري");
+    expect(found.length).toBe(2);
+    expect(found[0]?.shop.id).toBeTruthy();
+    expect(await searchPublicProducts("")).toEqual([]);
+    expect(await searchPublicProducts("لا يوجد")).toEqual([]);
+  });
+
   it("lets an approved merchant create and edit products; prices are stored as piasters; changes are audited", async () => {
     const owner = await approvedMerchant();
     const category = await usableCategory();

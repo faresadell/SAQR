@@ -26,10 +26,11 @@ describe("validateProductInput", () => {
     expect(validateProductInput({ ...ok, price: "100000" }).ok).toBe(true);
   });
 
-  it("requires a name and a category, and limits lengths", () => {
+  it("requires a name, makes the category optional, and limits lengths", () => {
     expect(validateProductInput({ ...ok, name: "a" }).ok).toBe(false);
     expect(validateProductInput({ ...ok, name: "x".repeat(121) }).ok).toBe(false);
-    expect(validateProductInput({ ...ok, categoryId: "" }).ok).toBe(false);
+    expect(validateProductInput({ ...ok, categoryId: "" }).ok).toBe(true);
+    expect(validateProductInput({ ...ok, categoryId: "x".repeat(65) }).ok).toBe(false);
     expect(validateProductInput({ ...ok, description: "x".repeat(1001) }).ok).toBe(false);
   });
 
