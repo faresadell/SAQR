@@ -112,6 +112,7 @@ export async function loadMerchantOffers(user: U): Promise<Loaded<MerchantOffers
         startsAt: o.startsAt.toISOString(),
         endsAt: o.endsAt.toISOString(),
         state: o.state,
+        hasImage: o.imageKey !== null,
         discountLabel: o.discountType && o.discountValue !== null ? (o.discountType === "PERCENT" ? `خصم ${o.discountValue / 100}%` : `خصم ${o.discountValue / 100} جنيه للوحدة`) : null,
       })),
       products: products.filter((p) => p.isAvailable).map((p) => ({ id: p.id, name: p.nameAr, priceCents: p.priceCents })),

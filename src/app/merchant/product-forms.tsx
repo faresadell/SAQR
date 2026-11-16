@@ -3,9 +3,9 @@
 import { useActionState } from "react";
 import { Button } from "@/components/ui/button";
 import { Field } from "@/components/ui/field";
-import { FileUpload } from "@/components/ui/file-upload";
 import { Notice } from "@/components/ui/states";
 import { Select } from "@/components/ui/select";
+import { ImageField } from "@/features/media/image-field";
 import type { FormState } from "@/lib/form-state";
 import { createProductAction, updateProductAction } from "./actions";
 
@@ -38,10 +38,14 @@ export function ProductForm({ categories, defaults, mode }: { categories: { id: 
           ))}
         </Select>
       </div>
-      <div className="flex flex-col gap-2">
-        <FileUpload label="صورة المنتج (اختياري)" name="image" disabled />
-        <Notice tone="info">رفع صور المنتجات غير مفعّل بعد (يحتاج تخزيناً للملفات على الخادم).</Notice>
-      </div>
+      {mode === "create" ? (
+        <div className="flex flex-col gap-1">
+          <span className="text-sm font-semibold">صورة المنتج (اختياري)</span>
+          <ImageField label="اختيار صورة من الجهاز" />
+        </div>
+      ) : (
+        <Notice tone="info">لتغيير صورة المنتج استخدم خانة الصورة أعلى الصفحة.</Notice>
+      )}
       <label className="flex items-center gap-2 text-sm">
         <input type="checkbox" name="isAvailable" defaultChecked={defaults.isAvailable} />
         متاح للطلب

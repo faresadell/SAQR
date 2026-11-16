@@ -43,6 +43,7 @@ export interface MerchantOfferRow {
   endsAt: string;
   state: "ACTIVE" | "EXPIRED" | "STOPPED";
   discountLabel: string | null;
+  hasImage: boolean;
 }
 
 export interface MerchantOffersData {

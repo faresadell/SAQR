@@ -58,6 +58,7 @@ export interface PublicOfferView {
   description: string | null;
   endsAt: string;
   shop: { id: string; name: string };
+  hasImage: boolean;
   /** Human label such as "خصم 20%" — null when the offer is informational only (discounts off or none set). */
   discountLabel: string | null;
   products: { id: string; name: string; priceCents: number; finalPriceCents: number }[];
@@ -74,6 +75,7 @@ export async function loadOffers(): Promise<Loaded<PublicOfferView[]>> {
         description: o.description,
         endsAt: o.endsAt.toISOString(),
         shop: o.shop,
+        hasImage: o.hasImage,
         discountLabel: o.discount ? (o.discount.type === "PERCENT" ? `خصم ${o.discount.value / 100}%` : `خصم ${o.discount.value / 100} جنيه للوحدة`) : null,
         products: o.products,
       })),
