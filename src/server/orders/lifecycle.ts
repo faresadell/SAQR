@@ -138,7 +138,7 @@ export async function submitPayment(actor: Actor, orderId: string, input: Submit
         receiverValue: account!.accountValue,
         receiptKey: upload!.storageKey,
         referenceNo,
-        amountCents: order.subtotalCents, // products only: the delivery fee is paid in cash to the driver
+        amountCents: order.subtotalCents - order.discountCents, // products minus any coupon; the delivery fee is paid in cash to the driver
         flagged: flagReason !== null,
         flagReason,
       },

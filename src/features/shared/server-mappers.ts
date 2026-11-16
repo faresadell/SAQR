@@ -128,6 +128,7 @@ function toSub(o: OrderRow, names: Map<string, string>): SubOrderView {
     merchantName: names.get(o.merchantId) ?? "نشاط",
     items: o.items.map((i) => ({ id: i.productId ?? `${o.id}:${i.nameSnapshot}`, name: i.nameSnapshot, quantity: i.quantity, unitPriceCents: i.unitPriceCents, lineTotalCents: i.lineTotalCents })),
     subtotalCents: o.subtotalCents,
+    ...(o.discountCents > 0 ? { discountCents: o.discountCents, ...(o.couponCode ? { couponCode: o.couponCode } : {}) } : {}),
     totalCents: o.totalCents,
     orderStatus: o.orderStatus,
     paymentStatus: o.paymentStatus,

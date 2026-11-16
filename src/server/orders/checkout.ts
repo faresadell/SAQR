@@ -13,6 +13,8 @@ import { buildCommissionSnapshot } from "@/server/commissions/service";
 import { resolveZoneFee, ZoneUnavailableError } from "@/server/delivery/zones";
 import { resolveOfferDiscounts } from "@/server/offers/service";
 import { getStarBalance } from "@/server/stars/ledger";
+import { couponDiscounts } from "@/lib/coupons/discount";
+import { findUsableCoupon, type UsableCoupon } from "@/server/coupons/service";
 
 export type PlaceOrderError =
   | CheckoutError
@@ -22,7 +24,10 @@ export type PlaceOrderError =
   | "ZONE_UNAVAILABLE"
   | "TRADING_NOT_CONFIGURED"
   | "CUSTOMER_STARS_TOO_LOW"
-  | "MERCHANT_UNAVAILABLE";
+  | "MERCHANT_UNAVAILABLE"
+  | "COUPON_INVALID"
+  | "COUPON_EXPIRED"
+  | "COUPON_NOT_FOR_CART";
 
 export type PlaceOrderResult =
   | { ok: true; parentOrderId: string; suborderIds: string[]; quote: CheckoutQuote; replayed: boolean }
@@ -33,6 +38,8 @@ export interface PlaceOrderInput {
   idempotencyKey: string;
   addressId: string;
   lines: CartLineInput[];
+  /** Optional discount code. Checked and priced here, inside the order transaction. */
+  couponCode?: string | undefined;
 }
 
 const KEY_PATTERN = /^[A-Za-z0-9_-]{8,64}$/;
@@ -161,13 +168,25 @@ export async function placeOrder(actor: Actor, input: PlaceOrderInput): Promise<
       if (!built.ok) return fail(built.error, built.productId ? { productId: built.productId } : {});
       const quote = built.quote;
 
+      // Coupon: found and priced on the server from the fresh subtotals. A bad code stops the order (the customer is told, nothing is created).
+      let coupon: UsableCoupon | null = null;
+      let off = new Map<string, number>();
+      if (input.couponCode) {
+        const found = await findUsableCoupon(tx, input.couponCode, quote.suborders.map((s) => s.merchantId), now);
+        if (!found.ok) return fail(found.error as PlaceOrderError);
+        coupon = found.coupon;
+        off = couponDiscounts(coupon, quote.suborders);
+      }
+      const totalOff = [...off.values()].reduce((n, v) => n + v, 0);
+
       const parent = await tx.parentOrder.create({
         data: {
           customerId: actor.id,
           idempotencyKey: input.idempotencyKey,
           subtotalCents: quote.subtotalCents,
           deliveryFeeCents: quote.deliveryFeeCents,
-          totalCents: quote.totalCents,
+          discountCents: totalOff,
+          totalCents: quote.totalCents - totalOff,
           addressSnap: { label: address.label, line: address.line, lat: address.lat, lng: address.lng, zoneId: zone.zoneId },
         },
       });
@@ -183,7 +202,9 @@ export async function placeOrder(actor: Actor, input: PlaceOrderInput): Promise<
             merchantId: sub.merchantId,
             subtotalCents: sub.subtotalCents,
             deliveryFeeCents: sub.deliveryFeeCents,
-            totalCents: sub.totalCents,
+            discountCents: off.get(sub.merchantId) ?? 0,
+            ...((off.get(sub.merchantId) ?? 0) > 0 && coupon ? { couponCode: coupon.code, couponFundedBy: coupon.merchantId ? "MERCHANT" : "PLATFORM" } : {}),
+            totalCents: sub.totalCents - (off.get(sub.merchantId) ?? 0),
             merchantTierSnap: commission.merchantTierSnap,
             commissionBp: commission.commissionBp,
             commissionBaseCents: commission.commissionBaseCents,
@@ -209,7 +230,7 @@ export async function placeOrder(actor: Actor, input: PlaceOrderInput): Promise<
       }
 
       await writeAudit({ actorId: actor.id, action: "ORDER_PLACED", entityType: "ParentOrder", entityId: parent.id, after: { suborders: suborderIds, totalCents: quote.totalCents } }, tx);
-      return { ok: true, parentOrderId: parent.id, suborderIds, quote, replayed: false };
+      return { ok: true, parentOrderId: parent.id, suborderIds, quote: { ...quote, totalCents: quote.totalCents - totalOff }, replayed: false };
     });
   } catch (error) {
     if (error instanceof Abort) return error.failure; // the transaction was rolled back: nothing was stored

@@ -11,6 +11,7 @@ const placeSchema = z
   .object({
     idempotencyKey: z.string().regex(/^[A-Za-z0-9_-]{8,64}$/),
     addressId: z.string().min(1).max(64),
+    couponCode: z.string().trim().max(20).optional(),
     lines: z
       .array(z.object({ productId: z.string().min(1).max(64), quantity: z.number().int().min(1).max(99), expectedUnitPriceCents: z.number().int().min(0).max(10_000_000).optional() }).strict())
       .min(1)

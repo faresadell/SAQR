@@ -9,7 +9,9 @@ import { EmptyState, Notice } from "@/components/ui/states";
 import { LinkButton } from "@/components/ui/link-button";
 import { Select } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
-import { placeOrderAction } from "@/features/customer/actions";
+import { checkCouponAction, placeOrderAction, type CouponCheckResult } from "@/features/customer/actions";
+import { couponDiscounts } from "@/lib/coupons/discount";
+import { Field } from "@/components/ui/field";
 import { useCart } from "@/features/cart/cart-provider";
 import { groupByMerchant } from "@/features/cart/cart-state";
 import { formatNumber } from "@/lib/format";
@@ -42,9 +44,25 @@ export function CheckoutView({ signedIn, starRules, addresses = [] }: CheckoutVi
   const [addressId, setAddressId] = useState(addresses[0]?.id ?? "");
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
+  const [codeText, setCodeText] = useState("");
+  const [coupon, setCoupon] = useState<Extract<CouponCheckResult, { ok: true }> | null>(null);
+  const [couponError, setCouponError] = useState<string | null>(null);
+  const [checking, startCheck] = useTransition();
   const chosenAddress = addresses.find((a) => a.id === addressId);
   // One key per attempt-set: retrying after a network error must not create a second order.
   const [idempotencyKey] = useState(() => crypto.randomUUID());
+
+  function applyCoupon(merchantIds: string[]) {
+    setCouponError(null);
+    startCheck(async () => {
+      const r = await checkCouponAction(codeText, merchantIds);
+      if (r.ok) setCoupon(r);
+      else {
+        setCoupon(null);
+        setCouponError(r.error);
+      }
+    });
+  }
 
   function confirm() {
     setError(null);
@@ -52,6 +70,7 @@ export function CheckoutView({ signedIn, starRules, addresses = [] }: CheckoutVi
       const result = await placeOrderAction({
         idempotencyKey,
         addressId,
+        ...(coupon ? { couponCode: coupon.code } : {}),
         lines: lines.map((l) => ({ productId: l.productId, quantity: l.quantity, expectedUnitPriceCents: l.priceCents })),
       });
       if (result.ok) {
@@ -73,6 +92,9 @@ export function CheckoutView({ signedIn, starRules, addresses = [] }: CheckoutVi
     );
   }
   const groups = groupByMerchant(lines);
+  // A preview from the cart prices on screen. The server decides the real discount when the order is placed.
+  const off = coupon ? couponDiscounts(coupon, groups) : new Map<string, number>();
+  const totalOff = [...off.values()].reduce((n, v) => n + v, 0);
 
   return (
     <div className="grid gap-6 lg:grid-cols-[1fr_22rem]">
@@ -134,6 +156,12 @@ export function CheckoutView({ signedIn, starRules, addresses = [] }: CheckoutVi
               <dd className="num font-semibold">{formatEgp(g.subtotalCents)}</dd>
             </div>
           ))}
+          {totalOff > 0 ? (
+            <div className="flex items-center justify-between gap-3 text-success">
+              <dt>خصم الكوبون <span dir="ltr" className="font-semibold">{coupon?.code}</span></dt>
+              <dd className="num font-semibold">− {formatEgp(totalOff)}</dd>
+            </div>
+          ) : null}
           <div className="flex items-center justify-between gap-3 border-t border-line pt-2">
             <dt className="text-ink-muted">رسوم التوصيل (متوقعة)</dt>
             <dd className="num font-semibold">{chosenAddress && chosenAddress.feeCents !== null ? formatEgp(chosenAddress.feeCents * groups.length) : <span className="text-xs text-ink-muted">اختر عنواناً</span>}</dd>
@@ -141,10 +169,24 @@ export function CheckoutView({ signedIn, starRules, addresses = [] }: CheckoutVi
           {chosenAddress && chosenAddress.feeCents !== null ? (
             <div className="flex items-center justify-between gap-3 text-base">
               <dt className="font-bold">الإجمالي المتوقع</dt>
-              <dd className="num font-bold">{formatEgp(groups.reduce((n, g) => n + g.subtotalCents, 0) + chosenAddress.feeCents * groups.length)}</dd>
+              <dd className="num font-bold">{formatEgp(groups.reduce((n, g) => n + g.subtotalCents, 0) - totalOff + chosenAddress.feeCents * groups.length)}</dd>
             </div>
           ) : null}
         </dl>
+
+        {signedIn ? (
+          <div className="flex flex-col gap-2">
+            <div className="flex items-end gap-2">
+              <div className="min-w-0 flex-1">
+                <Field label="كود خصم (اختياري)" name="coupon" dir="ltr" value={codeText} maxLength={20} onChange={(e) => { setCodeText(e.target.value.toUpperCase()); setCoupon(null); }} />
+              </div>
+              <Button type="button" variant="secondary" loading={checking} disabled={codeText.trim().length < 4} onClick={() => applyCoupon(groups.map((g) => g.merchantId))}>تطبيق</Button>
+            </div>
+            {coupon && totalOff > 0 ? <p className="text-sm font-semibold text-success">تم تطبيق الكوبون. التوصيل لا يشمله الخصم (يُدفع للمندوب كاش).</p> : null}
+            {coupon && totalOff === 0 ? <Notice tone="warning">الكوبون صالح لكن لا ينطبق على منتجات سلتك.</Notice> : null}
+            {couponError ? <Notice tone="danger">{couponError}</Notice> : null}
+          </div>
+        ) : null}
 
         {!signedIn ? (
           <>

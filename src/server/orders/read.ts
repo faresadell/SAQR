@@ -15,6 +15,8 @@ const orderSelect = {
   refundStatus: true,
   deliveryStatus: true,
   subtotalCents: true,
+  discountCents: true,
+  couponCode: true,
   deliveryFeeCents: true,
   totalCents: true,
   addressSnap: true,
