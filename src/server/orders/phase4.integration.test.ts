@@ -118,7 +118,7 @@ describe("order lifecycle", () => {
     expect(await db.refund.count({ where: { orderId: id } })).toBe(1); // confirmed money must be returned
     const types = (await db.notification.findMany({ where: { userId: w.customer.id } })).map((x) => x.type).sort();
     expect(types).toEqual(["ORDER_APPROVED", "ORDER_CANCELLED", "PAYMENT_CONFIRMED"]);
-    expect((await db.notification.findMany({ where: { userId: owner.id } })).map((x) => x.type)).toEqual(["PAYMENT_SUBMITTED"]);
+    expect((await db.notification.findMany({ where: { userId: owner.id } })).map((x) => x.type).sort()).toEqual(["ORDER_PLACED", "PAYMENT_SUBMITTED"]);
   });
 
   it("keeps the balance equal to the ledger", async () => {

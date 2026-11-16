@@ -12,7 +12,7 @@ export const metadata: Metadata = { title: "الإشعارات" };
 const LABEL: Record<string, string> = {
   PLAN_APPROVED: "تفعيل باقة", PLAN_REJECTED: "رفض طلب باقة", DELIVERY_ASSIGNED: "إسناد توصيل", DELIVERY_FAILED: "تعذر التوصيل",
   ORDER_CANCELLED: "إلغاء طلب", REFUND_COMPLETED: "توثيق رد مبلغ", REFUND_PROOF_REJECTED: "رفض إثبات رد", REFUND_OVERDUE: "رد متأخر (للإدارة)",
-  CHAT_MESSAGE: "رسالة محادثة جديدة", REVIEW_RECEIVED: "تقييم جديد (للتاجر)", ORDER_REQUEST_NEW: "طلب مخصص جديد (للتاجر)", ORDER_REQUEST_QUOTED: "سعر طلب مخصص (للعميل)", ORDER_REQUEST_DECLINED: "اعتذار عن طلب مخصص", ORDER_REQUEST_ACCEPTED: "موافقة على سعر (للتاجر)", COMPLAINT_FILED: "شكوى جديدة (للتاجر)", COMPLAINT_UPDATED: "تحديث شكوى (للعميل)", OFFER_STOPPED: "إيقاف عرض", OFFER_CREATED_BY_ADMIN: "عرض أنشأته الإدارة", CONTEST_WINNER: "فوز بالمسابقة", CONTEST_PAID: "صرف جائزة",
+  CHAT_MESSAGE: "رسالة محادثة جديدة", REVIEW_RECEIVED: "تقييم جديد (للتاجر)", ORDER_PLACED: "طلب جديد (للتاجر)", ORDER_REQUEST_NEW: "طلب مخصص جديد (للتاجر)", ORDER_REQUEST_QUOTED: "سعر طلب مخصص (للعميل)", ORDER_REQUEST_DECLINED: "اعتذار عن طلب مخصص", ORDER_REQUEST_ACCEPTED: "موافقة على سعر (للتاجر)", COMPLAINT_FILED: "شكوى جديدة (للتاجر)", COMPLAINT_UPDATED: "تحديث شكوى (للعميل)", OFFER_STOPPED: "إيقاف عرض", OFFER_CREATED_BY_ADMIN: "عرض أنشأته الإدارة", CONTEST_WINNER: "فوز بالمسابقة", CONTEST_PAID: "صرف جائزة",
 };
 
 export default async function Page() {

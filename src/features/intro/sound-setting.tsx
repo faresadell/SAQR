@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { cn } from "@/lib/cn";
 import { isSoundOn, playFalcon, setSoundOn } from "./falcon-sound";
 
-/** Sound on/off for the opening screen, remembered on this device. Shown as a settings row with a switch. */
+/** Sound on/off for the site-start sound, remembered on this device. Shown as a settings row with a switch. */
 export function SoundSetting() {
   const [on, setOn] = useState(true);
   useEffect(() => setOn(isSoundOn()), []);
@@ -23,7 +23,7 @@ export function SoundSetting() {
       className="flex min-h-14 w-full items-center justify-between gap-3 px-4 py-3 text-start hover:bg-canvas"
     >
       <span className="min-w-0">
-        <span className="block font-semibold text-ink">صوت الصقر عند فتح الموقع</span>
+        <span className="block font-semibold text-ink">صوت الصقر عند فتح الموقع (يُسمع عند أول لمسة)</span>
         <span className="block text-sm text-ink-muted">{on ? "مفعّل على هذا الجهاز" : "مكتوم على هذا الجهاز"}</span>
       </span>
       <span aria-hidden="true" className={cn("relative h-7 w-12 shrink-0 rounded-full transition-colors", on ? "bg-brand" : "bg-line-strong")}>

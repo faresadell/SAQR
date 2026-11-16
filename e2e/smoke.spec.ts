@@ -4,14 +4,12 @@ import { expectNoHorizontalScroll, skipIntro, watchErrors } from "./helpers";
 
 const PUBLIC_PAGES = ["/", "/explore", "/offers", "/tasbeeh", "/settings", "/search", "/login", "/register", "/forgot-password", "/privacy", "/legal/terms", "/legal/cancellation", "/legal/refund", "/legal/support"];
 
-test("opening screen shows once and can be skipped", async ({ page }) => {
+test("the start of the site is sound only: no opening screen, the home page is usable at once", async ({ page }) => {
   await page.goto("/");
-  const intro = page.getByRole("dialog", { name: "مرحباً بك في صقر" });
-  await expect(intro).toBeVisible();
-  await page.getByRole("button", { name: "تخطي" }).click();
-  await expect(intro).toBeHidden();
-  await page.reload();
-  await expect(intro).toBeHidden(); // already seen in this session
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  await expect(page.locator("main, h1").first()).toBeVisible();
+  await page.mouse.click(5, 5); // the first touch is what lets the sound play; it must not break anything
+  await expect(page.getByRole("dialog")).toHaveCount(0);
 });
 
 for (const path of PUBLIC_PAGES) {
