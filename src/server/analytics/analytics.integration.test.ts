@@ -65,3 +65,25 @@ describe("driver analytics", () => {
     expect([a.deliveries, a.feesCents, a.collectedCents, a.averageMinutes]).toEqual([2, 5_000, 3_000, 30]);
   });
 });
+
+describe("platform monitoring", () => {
+  it("counts every shop, flags stuck orders, and needs orders.view", async () => {
+    const { platformMonitoring } = await import("@/server/platform/monitoring");
+    const admin = { id: "adm-1", role: "ADMIN" as const, isSuperAdmin: false, permissions: ["orders.view" as const] };
+    const calm = await platformMonitoring(admin);
+    expect([calm.deliveredOrders, calm.cancelRatePercent, calm.attention.merchantSlow, calm.attention.merchantsPending]).toEqual([0, null, 0, 0]);
+
+    await finishedOrder(w.a.merchant.id, w.a.product.id, "DELIVERED", 10_000, 1_000);
+    await finishedOrder(w.b.merchant.id, w.b.product.id, "DELIVERED", 5_000);
+    await finishedOrder(w.b.merchant.id, w.b.product.id, "CANCELLED", 3_000);
+    const stuck = await finishedOrder(w.a.merchant.id, w.a.product.id, "DELIVERED", 2_000);
+    await db.order.update({ where: { id: stuck.id }, data: { orderStatus: "AWAITING_MERCHANT_APPROVAL" } });
+    await db.$executeRaw`UPDATE "Order" SET "updatedAt" = now() - interval '3 hours' WHERE "id" = ${stuck.id}`;
+
+    const m = await platformMonitoring(admin);
+    expect([m.deliveredOrders, m.salesCents, m.cancelledOrders]).toEqual([3, 16_000, 1]);
+    expect(m.attention.merchantSlow).toBe(1);
+    expect(m.openByStatus).toEqual([{ status: "AWAITING_MERCHANT_APPROVAL", count: 1 }]);
+    await expect(platformMonitoring({ ...admin, permissions: [] })).rejects.toBeInstanceOf(AuthorizationError);
+  });
+});

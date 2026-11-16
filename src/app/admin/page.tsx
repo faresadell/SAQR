@@ -27,6 +27,7 @@ export default async function AdminHomePage() {
 
   const pending = merchants?.filter((m) => m.status === "PENDING_REVIEW").length ?? 0;
   const links = [
+    can("orders.view") ? { href: "/admin/monitoring", label: "مراقبة المنصة", icon: "activity" as const } : null,
     can("users.view") ? { href: "/admin/users", label: "إدارة المستخدمين", icon: "users" as const } : null,
     can("merchants.review") ? { href: "/admin/merchants", label: "مراجعة التجار", icon: "store" as const } : null,
     can("catalog.manage") ? { href: "/admin/catalog", label: "التصنيفات وأنواع النشاط", icon: "grid" as const } : null,
