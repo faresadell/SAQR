@@ -1174,3 +1174,13 @@ model Coupon {
   @@index([merchantId, createdAt])
   @@index([isActive, expiresAt])
 }
+
+/// A user who switched off one non-critical kind of notification. Critical kinds (orders, payments, refunds, plans) can never be muted.
+model NotificationMute {
+  id        String   @id @default(cuid())
+  userId    String
+  type      String
+  createdAt DateTime @default(now())
+
+  @@unique([userId, type])
+}

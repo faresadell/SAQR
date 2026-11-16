@@ -6,7 +6,10 @@ import { EmptyState } from "@/components/ui/states";
 import { StarBalance } from "@/components/saqr/star-balance";
 import { formatDateTime, formatNumber, starsLabel } from "@/lib/format";
 import { cn } from "@/lib/cn";
-import { markAllReadAction } from "./notification-actions";
+import { MUTABLE_GROUPS } from "@/lib/notifications/mutable";
+import { requireUser } from "@/server/auth/guards";
+import { listMyMutedGroups } from "@/server/notifications/service";
+import { markAllReadAction, setMuteAction } from "./notification-actions";
 import type { NotificationItem, StarLedgerRow, StarsOverview } from "./types";
 
 const ledgerColumns: Column<StarLedgerRow>[] = [
@@ -46,11 +49,36 @@ export function StarsView({ data, caption }: { data: StarsOverview; caption?: st
   );
 }
 
-export function NotificationsView({ items }: { items: NotificationItem[] }) {
-  if (items.length === 0) return <EmptyState icon="bell" title="لا توجد إشعارات">ستصلك هنا تنبيهات الطلبات والباقات.</EmptyState>;
+/** Switches for the kinds of notification a user may turn off. Orders, payments, refunds and plan notices are always sent. */
+async function NotificationPrefs() {
+  const { user } = await requireUser();
+  const muted = new Set(await listMyMutedGroups(user));
+  return (
+    <Card className="flex flex-col gap-2">
+      <h2 className="font-bold">تحكّم في الإشعارات</h2>
+      <p className="text-xs text-ink-muted">إشعارات الطلبات والدفع والاستردادات والباقات تصلك دائماً ولا يمكن إيقافها.</p>
+      <ul className="flex flex-col divide-y divide-line">
+        {MUTABLE_GROUPS.map((g) => (
+          <li key={g.key}>
+            <form action={setMuteAction} className="flex items-center justify-between gap-3 py-2">
+              <input type="hidden" name="group" value={g.key} />
+              <input type="hidden" name="muted" value={muted.has(g.key) ? "0" : "1"} />
+              <span className="text-sm">{g.label}</span>
+              <Button type="submit" size="sm" variant={muted.has(g.key) ? "primary" : "outline"}>{muted.has(g.key) ? "موقوفة · تشغيل" : "إيقاف"}</Button>
+            </form>
+          </li>
+        ))}
+      </ul>
+    </Card>
+  );
+}
+
+export async function NotificationsView({ items }: { items: NotificationItem[] }) {
+  if (items.length === 0) return <div className="flex flex-col gap-3"><EmptyState icon="bell" title="لا توجد إشعارات">ستصلك هنا تنبيهات الطلبات والباقات.</EmptyState><NotificationPrefs /></div>;
   const unread = items.some((n) => !n.read);
   return (
     <div className="flex flex-col gap-3">
+      <NotificationPrefs />
       {unread ? (
         <form action={markAllReadAction}>
           <Button type="submit" size="sm" variant="outline">تعليم الكل كمقروء</Button>
