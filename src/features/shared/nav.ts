@@ -48,6 +48,7 @@ export function merchantNav(base = "/merchant"): { groups: NavGroup[]; mobile: N
   return {
     groups: [
       { items: [home, orders, { href: `${base}/chats`, label: "المحادثات", icon: "message" }, { href: `${base}/requests`, label: "طلبات مخصصة", icon: "box" }, { href: `${base}/drivers`, label: "السائقون", icon: "truck" }] },
+      { title: "التحليلات", items: [{ href: `${base}/analytics`, label: "تحليلات المتجر", icon: "chart" }] },
       { title: "الكتالوج", items: [products, offers, { href: `${base}/coupons`, label: "الكوبونات", icon: "tag" }] },
       {
         title: "المال",
@@ -76,9 +77,10 @@ export function driverNav(base = "/driver"): { groups: NavGroup[]; mobile: NavIt
   const tasks = { href: `${base}/tasks`, label: "الطلبات المسندة", icon: "list" } as const;
   const trip = { href: `${base}/trip`, label: "قيد التوصيل", icon: "navigation" } as const;
   const history = { href: `${base}/history`, label: "سجل التوصيل", icon: "clock" } as const;
+  const earnings = { href: `${base}/analytics`, label: "أرباحي وأدائي", icon: "wallet" } as const;
   return {
     groups: [
-      { items: [home, board, tasks, trip, history] },
+      { items: [home, board, tasks, trip, history, earnings] },
       {
         title: "حسابي",
         items: [
