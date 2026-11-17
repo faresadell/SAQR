@@ -9,7 +9,7 @@ import { consumeRateLimit } from "@/lib/rate-limit";
 import { AuthorizationError, NotFoundError } from "@/server/errors";
 
 type Client = Prisma.TransactionClient | typeof db;
-export type ProductResult = { ok: true; id: string } | { ok: false; error: "INVALID"; errors: Partial<Record<ProductField, string>> } | { ok: false; error: "CATEGORY_UNAVAILABLE" | "RATE_LIMITED" };
+export type ProductResult = { ok: true; id: string } | { ok: false; error: "INVALID"; errors: Partial<Record<ProductField, string>> } | { ok: false; error: "CATEGORY_UNAVAILABLE" } | { ok: false; error: "RATE_LIMITED" };
 
 /**
  * The merchant whose catalog this actor may change. Derived from the SESSION user, never from the request,
