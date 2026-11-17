@@ -81,6 +81,7 @@ function productFields(formData: FormData) {
 
 function productFailure(result: Awaited<ReturnType<typeof createProduct>>): FormState {
   if (result.ok) return { message: "تم الحفظ." };
+  if (result.error === "RATE_LIMITED") return { error: "أضفت منتجات كثيرة في وقت قصير. انتظر قليلاً ثم أعد المحاولة." };
   if (result.error === "CATEGORY_UNAVAILABLE") return { fieldErrors: { categoryId: "هذا التصنيف غير متاح." } };
   return { fieldErrors: result.errors };
 }

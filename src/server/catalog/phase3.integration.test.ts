@@ -179,6 +179,12 @@ describe("categories", () => {
 });
 
 describe("products: ownership, validation, archive", () => {
+  it("limits how many products one shop can create per hour", async () => {
+    const owner = await approvedMerchant();
+    for (let i = 0; i < 100; i++) expect((await createProduct(owner, product("", { name: `منتج ${i}` }))).ok).toBe(true);
+    expect(await createProduct(owner, product("", { name: "زيادة" }))).toEqual({ ok: false, error: "RATE_LIMITED" });
+  });
+
   it("lets a merchant add a product with no category (goes under أخرى, no admin step) and customers can find it by name", async () => {
     const owner = await approvedMerchant();
     expect((await createProduct(owner, product("", { name: "كشري مميز" }))).ok).toBe(true);
