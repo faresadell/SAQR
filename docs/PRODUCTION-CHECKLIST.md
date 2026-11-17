@@ -43,3 +43,11 @@ The full step-by-step list is in `docs/REAL-TESTS.md` section B. Minimum before 
 
 ## 6. Go / no-go
 Launch only when sections 1–5 are fully ticked, the legal pages are approved by you, and support contact details are entered.
+
+## 6. Clearing test data before launch (owner, from a phone is fine)
+The script `scripts/sql/prelaunch-reset.sql` removes every non-admin account and all test data under it, and keeps the admin(s), the platform configuration and the audit log. It is tested against a real database in CI (`prelaunch-reset.integration.test.ts`), **not** run on your real database by anyone but you.
+1. In Neon, create a backup branch of the production database first (this cannot be undone).
+2. Open the Neon SQL editor on the production database, paste `scripts/sql/prelaunch-preview.sql`, run it, and check the numbers (one or more admins to KEEP, everything else REMOVE).
+3. Paste and run `scripts/sql/prelaunch-reset.sql`. It is one statement: all or nothing, and it refuses to run with no admin.
+4. In Vercel, delete `DEMO_PASSWORD` and `PREVIEW_MODE` so a redeploy does not recreate the demo accounts.
+5. Sign in as the admin and confirm the settings, zones and categories are still there.
