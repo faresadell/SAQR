@@ -12,6 +12,7 @@ const STYLES: Record<string, { icon: IconName; tint: string }> = {
   electronics: { icon: "layers", tint: "bg-brand-soft text-brand" },
   home: { icon: "home", tint: "bg-brand-soft text-brand" },
   cosmetics: { icon: "heart", tint: "bg-brand-soft text-brand" },
+  eyewear: { icon: "eye", tint: "bg-brand-soft text-brand" },
 };
 const FALLBACK = { icon: "store" as IconName, tint: "bg-brand-soft text-brand" };
 
