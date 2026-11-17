@@ -138,7 +138,13 @@ test("a full order: stars bought, order placed and paid, shop accepts and prepar
   await customer.page.reload();
   await expect(customer.page.getByText("تم تحديد السعر").first()).toBeVisible({ timeout: 30_000 });
   await customer.page.getByRole("button", { name: "موافق على السعر وإنشاء الطلب" }).click();
-  await expect(customer.page.getByText("متابعة الطلب والدفع من «طلباتي»")).toBeVisible({ timeout: 30_000 });
+  // Agreeing creates a normal order: the customer lands on it, ready to pay, and the shop sees it in its orders.
+  await expect(customer.page).toHaveURL(/\/account\/orders\/[^/]+$/, { timeout: 30_000 });
+  await expect(customer.page.locator("input[name=referenceNo]")).toBeVisible({ timeout: 30_000 });
+  await shop.page.goto("/merchant/orders");
+  await expect(shop.page.getByText("طلب مخصص: عاوز ٢ كيلو كفتة").first()).toBeVisible({ timeout: 30_000 }).catch(async () => {
+    throw new Error(`the accepted request did not show in the shop's orders. Page said:\n${(await shop.page.locator("main").innerText()).slice(0, 1500)}`);
+  });
 
   errors.assertClean();
   for (const p of [customer, shop, admin, driver]) await p.context.close();
