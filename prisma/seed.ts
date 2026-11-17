@@ -65,6 +65,8 @@ async function main() {
     { code: "electronics", nameAr: "أجهزة وإلكترونيات", sortOrder: 8 },
     { code: "home", nameAr: "أدوات منزلية", sortOrder: 9 },
     { code: "cosmetics", nameAr: "مستحضرات تجميل", sortOrder: 10 },
+    { code: "eyewear", nameAr: "نظارات", sortOrder: 11 },
+    { code: "stationery", nameAr: "مكتبات دراسية", sortOrder: 12 },
   ];
   for (const type of businessTypes) {
     await db.businessType.upsert({ where: { code: type.code }, update: {}, create: type });
