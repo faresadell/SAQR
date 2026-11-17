@@ -65,6 +65,6 @@ test("admin: sign in with email/phone and password, open every page, add a shop 
   await page.getByRole("button", { name: "نشر العرض نيابةً عن النشاط" }).click();
   await expect(page.getByText("تم نشر العرض نيابةً عن النشاط")).toBeVisible();
   await page.goto("/offers");
-  await expect(page.getByText(`عرض الأدمن ${project}`)).toBeVisible();
+  await expect(page.getByText(`عرض الأدمن ${project}`).first()).toBeVisible();
   errors.assertClean();
 });
