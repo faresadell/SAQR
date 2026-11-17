@@ -122,6 +122,30 @@ test("a full order: stars bought, order placed and paid, shop accepts and prepar
   await customer.page.reload();
   await expect(customer.page.getByText("تم التسليم").first()).toBeVisible();
   await expect(customer.page.getByText("السائق: اختبار آلي")).toBeVisible();
+  // A second way to order: the customer writes what they want, the shop answers once with a final price, the customer agrees.
+  await customer.page.goto("/explore?type=restaurant");
+  await customer.page.getByRole("link", { name: new RegExp(acc.seededShopName) }).click();
+  await customer.page.getByRole("link", { name: "اطلب بكلماتك" }).click();
+  await customer.page.locator("textarea[name=body]").fill("عاوز ٢ كيلو كفتة مشكلة مع سلطة");
+  await customer.page.locator("select[name=addressId]").selectOption({ index: 1 });
+  await customer.page.getByRole("button", { name: "إرسال الطلب" }).click();
+  await expect(customer.page.getByText("بانتظار السعر").first()).toBeVisible({ timeout: 30_000 });
+  await shop.page.goto("/merchant/requests");
+  await shop.page.getByRole("link", { name: /عاوز ٢ كيلو كفتة/ }).first().click();
+  await shop.page.locator("input[name=price]").fill("350");
+  await shop.page.getByRole("button", { name: "إرسال السعر" }).click();
+  await expect(shop.page.getByText("تم تحديد السعر").first()).toBeVisible({ timeout: 30_000 });
+  await customer.page.reload();
+  await expect(customer.page.getByText("تم تحديد السعر").first()).toBeVisible({ timeout: 30_000 });
+  await customer.page.getByRole("button", { name: "موافق على السعر وإنشاء الطلب" }).click();
+  // Agreeing creates a normal order: the customer lands on it, ready to pay, and the shop sees it in its orders.
+  await expect(customer.page).toHaveURL(/\/account\/orders\/[^/]+$/, { timeout: 30_000 });
+  await expect(customer.page.locator("input[name=referenceNo]")).toBeVisible({ timeout: 30_000 });
+  await shop.page.goto("/merchant/orders");
+  await expect(shop.page.getByText("طلب مخصص: عاوز ٢ كيلو كفتة").first()).toBeVisible({ timeout: 30_000 }).catch(async () => {
+    throw new Error(`the accepted request did not show in the shop's orders. Page said:\n${(await shop.page.locator("main").innerText()).slice(0, 1500)}`);
+  });
+
   errors.assertClean();
   for (const p of [customer, shop, admin, driver]) await p.context.close();
 });

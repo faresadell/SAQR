@@ -76,13 +76,13 @@ export async function closeRequestAction(_prev: FormState, formData: FormData): 
 
 export async function acceptQuoteAction(_prev: FormState, formData: FormData): Promise<FormState> {
   const { user } = await requireRole("CUSTOMER");
-  let orderId: string;
+  let parentOrderId: string;
   try {
     const r = await acceptOrderQuote(user, get(formData, "requestId"));
     if (!r.ok) return { error: MESSAGES[r.error] ?? GENERIC_ERROR };
-    orderId = r.orderId;
+    parentOrderId = r.parentOrderId;
   } catch (e) {
     return failure(e);
   }
-  redirect(`/account/orders/${orderId}`);
+  redirect(`/account/orders/${parentOrderId}`); // the customer order page is keyed by the main order
 }
