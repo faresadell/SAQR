@@ -32,3 +32,30 @@ Scope: code at `main` after PR #27. Method: reading the code paths named below a
 
 ## Not changed on purpose
 Terms and Privacy pages stay unapproved drafts until you approve a version; no support contact data was invented.
+
+---
+
+# Addendum — review of the features added after PR #27 (2026-11-17, code at `main` after PR #103)
+
+Same method and same limits: a reading of the code paths below plus the automated tests that cover them. **Not a penetration test; nothing was run against the real site; CI green is not a launch approval.**
+
+## Checked by reading, with the tests that cover them
+- **Guards on every entry point.** Server actions go through `requireRole`/`requirePermission` or the `run`/`productCommand` wrappers, and each service re-checks the actor. An automated scan of all `"use server"` files and all `/api/**` routes found no entry point without a guard, except the intentionally public ones (legal pages, public shop picture, health check, own avatar, sign-in/sign-up/reset which have rate limits and a robot check).
+- **Money is decided on the server.** Coupon discounts, delivery fee, stars and totals are computed inside the order transaction (`coupons.integration.test.ts`); the checkout preview is advisory only.
+- **Pictures** (chat, product, offer, shop, receipts): the file type is decided from the bytes, size capped at 5 MB, stored under a fresh private key (nothing overwritten), served with `nosniff` and a sandbox CSP. Chat pictures are served only to the two conversation participants. Product and offer pictures are public only while the product/offer is visible to shoppers. Owner-only upload is tested (`discounts.integration.test.ts`).
+- **Reviews, notification mutes, analytics, monitoring:** ownership and permission checks are in the service layer and tested; order/payment/refund/plan notifications cannot be muted.
+- **SQL:** the only raw queries are tagged templates or `Prisma.sql` with bound parameters (no string concatenation).
+- **Map picker:** tiles load only from `tile.openstreetmap.org` (CSP `img-src`); coordinates are range-checked to Egypt on the server.
+
+## Fixed in this review
+1. **Catalog flooding.** A shop owner could create products without limit (script or stolen session). Product creation is now limited to 100 per hour per shop owner (`phase3.integration.test.ts`).
+
+## Remaining risks / NOT VERIFIED
+| # | Item | Status |
+|---|------|--------|
+| A1 | Public product search and shop pages have no per-IP rate limit (bounded to 60 rows, read-only). A reverse proxy or WAF limit is still advisable (see #6 above). | Recommendation |
+| A2 | Replacing a product/offer/shop picture leaves the old file in storage (orphan files; cost only, not exposure). A cleanup job is not built. | Low, known |
+| A3 | Platform coupons: the discount is paid by the platform, but there is no automated settlement to merchants; an admin sees the owed total. The owner has not decided how it is settled. | Needs owner decision |
+| A4 | Not tested on real phones: map drag/pinch, camera capture, intro sound, picture upload from a phone gallery. | NOT RUN — needs a person |
+| A5 | Image storage in production depends on the configured provider (`STORAGE_PROVIDER`); persistence across deploys must be checked on the real site (upload, redeploy, reload). | NOT RUN — needs your accounts |
+| A6 | The email channel for notifications is not built (in-app notifications only). | Not built on purpose |

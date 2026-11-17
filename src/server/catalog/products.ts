@@ -5,10 +5,11 @@ import { writeAudit } from "@/lib/audit";
 import type { Actor } from "@/lib/auth/permissions";
 import { canManageOwnCatalog } from "@/lib/catalog/catalog-policy";
 import { validateProductInput, type ProductField } from "@/lib/catalog/product-input";
+import { consumeRateLimit } from "@/lib/rate-limit";
 import { AuthorizationError, NotFoundError } from "@/server/errors";
 
 type Client = Prisma.TransactionClient | typeof db;
-export type ProductResult = { ok: true; id: string } | { ok: false; error: "INVALID"; errors: Partial<Record<ProductField, string>> } | { ok: false; error: "CATEGORY_UNAVAILABLE" };
+export type ProductResult = { ok: true; id: string } | { ok: false; error: "INVALID"; errors: Partial<Record<ProductField, string>> } | { ok: false; error: "CATEGORY_UNAVAILABLE" | "RATE_LIMITED" };
 
 /**
  * The merchant whose catalog this actor may change. Derived from the SESSION user, never from the request,
@@ -32,6 +33,7 @@ async function categoryUsable(client: Client, categoryId: string): Promise<boole
   return true;
 }
 
+const PRODUCTS_PER_HOUR = 100;
 export const DEFAULT_CATEGORY_NAME = "أخرى";
 
 /** The catch-all section for products the merchant did not file under an admin category. Created on first use. */
@@ -61,6 +63,8 @@ export async function createProduct(actor: Actor, raw: Parameters<typeof validat
     await requireOwnApprovedMerchant(actor, db); // authorization failures win over validation hints
     return { ok: false, error: "INVALID", errors: parsed.errors };
   }
+  await requireOwnApprovedMerchant(actor, db);
+  if (!(await consumeRateLimit(`product:create:${actor.id}`, PRODUCTS_PER_HOUR, 3600))) return { ok: false, error: "RATE_LIMITED" }; // a runaway script or stolen session cannot flood the catalog
   return db.$transaction(async (tx): Promise<ProductResult> => {
     const shop = await requireOwnApprovedMerchant(actor, tx);
     const categoryId = await resolveCategory(tx, parsed.value.categoryId);
