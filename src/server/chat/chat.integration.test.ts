@@ -21,7 +21,7 @@ async function shopOf(owner: Actor, status: "APPROVED" | "SUSPENDED" = "APPROVED
 }
 
 beforeEach(async () => {
-  await db.$executeRawUnsafe('TRUNCATE "Message","Conversation","Merchant","AuditLog","Notification","User" RESTART IDENTITY CASCADE');
+  await db.$executeRawUnsafe('TRUNCATE "OrderRequest","Message","Conversation","Merchant","AuditLog","Notification","User" RESTART IDENTITY CASCADE');
 });
 
 describe("chat", () => {
@@ -108,5 +108,18 @@ describe("chat", () => {
     await expect(readChatImage(await user("CUSTOMER"), photo.id)).rejects.toBeInstanceOf(NotFoundError);
     await expect(readChatImage(await user("ADMIN"), photo.id)).rejects.toBeInstanceOf(NotFoundError);
     await expect(readChatImage(c, view.messages[0]!.id)).rejects.toBeInstanceOf(NotFoundError); // a text message has no picture
+  });
+
+  it("lists the order requests between the two people in the conversation, and nobody else's", async () => {
+    const customer = await user("CUSTOMER");
+    const owner = await user("MERCHANT");
+    const shop = await shopOf(owner);
+    const started = await startConversation(customer, { merchantId: shop.id, body: "مرحبا" });
+    if (!started.ok) throw new Error("not started");
+    const other = await user("CUSTOMER");
+    const mine = await db.orderRequest.create({ data: { customerId: customer.id, merchantId: shop.id, addressId: "addr-1", body: "عاوز كباب" } });
+    await db.orderRequest.create({ data: { customerId: other.id, merchantId: shop.id, addressId: "addr-2", body: "طلب شخص آخر" } });
+    expect((await openConversation(customer, started.conversationId)).requestIds).toEqual([mine.id]);
+    expect((await openConversation(owner, started.conversationId)).requestIds).toEqual([mine.id]);
   });
 });

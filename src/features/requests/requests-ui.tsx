@@ -11,11 +11,12 @@ import { acceptQuoteAction, closeRequestAction, createRequestAction, quoteReques
 
 const idle: FormState = {};
 
-export function NewRequestForm({ merchantId, addresses }: { merchantId: string; addresses: { id: string; label: string | null; line: string }[] }) {
+export function NewRequestForm({ merchantId, addresses, chatId }: { merchantId: string; addresses: { id: string; label: string | null; line: string }[]; chatId?: string }) {
   const [state, action, pending] = useActionState(createRequestAction, idle);
   return (
     <form action={action} className="flex max-w-2xl flex-col gap-3">
       <input type="hidden" name="merchantId" value={merchantId} />
+      {chatId ? <input type="hidden" name="chatId" value={chatId} /> : null}
       <Textarea label="اكتب طلبك" name="body" required minLength={3} maxLength={1000} rows={5} hint="اكتب ما تريده بكلماتك. سيحدّد النشاط سعراً نهائياً واحداً، ولا يوجد تفاوض على السعر." />
       <Select label="عنوان التوصيل" name="addressId" required defaultValue="">
         <option value="" disabled>اختر العنوان</option>

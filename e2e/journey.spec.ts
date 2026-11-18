@@ -146,6 +146,29 @@ test("a full order: stars bought, order placed and paid, shop accepts and prepar
     throw new Error(`the accepted request did not show in the shop's orders. Page said:\n${(await shop.page.locator("main").innerText()).slice(0, 1500)}`);
   });
 
+  // A third way: order from inside the chat. Customer writes it there, the shop sets the price in the chat, the customer agrees and pays.
+  await customer.page.goto("/explore?type=restaurant");
+  await customer.page.getByRole("link", { name: new RegExp(acc.seededShopName) }).click();
+  await customer.page.getByRole("link", { name: "ابدأ محادثة مع النشاط" }).click();
+  await customer.page.locator("textarea[name=body]").fill("السلام عليكم، عندكم كباب؟");
+  await customer.page.getByRole("button", { name: "بدء المحادثة" }).click();
+  await expect(customer.page).toHaveURL(/\/account\/chats\/[^/]+$/, { timeout: 30_000 });
+  await expect(customer.page.getByRole("heading", { name: "اطلب من هنا" })).toBeVisible({ timeout: 30_000 });
+  await customer.page.locator("form:has(select[name=addressId]) textarea[name=body]").fill("عاوز ٣ كيلو كباب من الشات");
+  await customer.page.locator("select[name=addressId]").selectOption({ index: 1 });
+  await customer.page.getByRole("button", { name: "إرسال الطلب" }).click();
+  await expect(customer.page.getByText("بانتظار السعر").first()).toBeVisible({ timeout: 30_000 });
+  await expect(customer.page).toHaveURL(/\/account\/chats\//); // still in the chat
+  await shop.page.goto("/merchant/chats");
+  await shop.page.locator("a[href^='/merchant/chats/']").first().click();
+  await shop.page.locator("input[name=price]").fill("420");
+  await shop.page.getByRole("button", { name: "إرسال السعر" }).click();
+  await expect(shop.page.getByText("تم تحديد السعر").first()).toBeVisible({ timeout: 30_000 });
+  await customer.page.reload();
+  await customer.page.getByRole("button", { name: "موافق على السعر وإنشاء الطلب" }).click();
+  await expect(customer.page).toHaveURL(/\/account\/orders\/[^/]+$/, { timeout: 30_000 });
+  await expect(customer.page.locator("input[name=referenceNo]")).toBeVisible({ timeout: 30_000 });
+
   errors.assertClean();
   for (const p of [customer, shop, admin, driver]) await p.context.close();
 });

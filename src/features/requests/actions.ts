@@ -44,7 +44,8 @@ export async function createRequestAction(_prev: FormState, formData: FormData):
   } catch (e) {
     return failure(e);
   }
-  redirect(`/account/requests/${id}`);
+  const chatId = get(formData, "chatId");
+  redirect(chatId ? `/account/chats/${encodeURIComponent(chatId.slice(0, 64))}` : `/account/requests/${id}`); // asked from inside a chat: stay in the chat
 }
 
 export async function quoteRequestAction(_prev: FormState, formData: FormData): Promise<FormState> {
@@ -58,6 +59,7 @@ export async function quoteRequestAction(_prev: FormState, formData: FormData): 
     return failure(e);
   }
   revalidatePath("/merchant/requests", "layout");
+  revalidatePath("/merchant/chats", "layout");
   return { message: "تم إرسال السعر النهائي للعميل." };
 }
 
@@ -71,6 +73,7 @@ export async function closeRequestAction(_prev: FormState, formData: FormData): 
     return failure(e);
   }
   revalidatePath(user.role === "CUSTOMER" ? "/account/requests" : "/merchant/requests", "layout");
+  revalidatePath(user.role === "CUSTOMER" ? "/account/chats" : "/merchant/chats", "layout");
   return { message: "تم." };
 }
 

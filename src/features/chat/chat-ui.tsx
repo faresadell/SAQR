@@ -105,7 +105,7 @@ export function StartChatForm({ merchantId }: { merchantId: string }) {
   return (
     <form action={action} className="flex flex-col gap-2">
       <input type="hidden" name="merchantId" value={merchantId} />
-      <Textarea label="رسالتك للنشاط" name="body" required maxLength={1000} rows={4} hint="اسأل عن المنتجات أو اكتب طلبك. الاتفاق على السعر النهائي يتم من خلال التاجر داخل المنصة." />
+      <Textarea label="رسالتك للنشاط" name="body" required maxLength={1000} rows={4} hint="اسأل عن المنتجات. بعد بدء المحادثة تقدر تطلب من داخلها: تكتب طلبك ويرد التاجر بالسعر النهائي وتوافق عليه." />
       {state.error ? <Notice tone="danger">{state.error}</Notice> : null}
       <Button type="submit" loading={pending}>بدء المحادثة</Button>
     </form>

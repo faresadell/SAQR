@@ -100,7 +100,8 @@ export async function openConversation(actor: Actor, conversationId: string) {
     db.merchant.findUnique({ where: { id: row.merchantId }, select: { id: true, name: true } }),
   ]);
   await db.conversation.update({ where: { id: row.id }, data: side === "customer" ? { customerReadAt: new Date() } : { merchantReadAt: new Date() } });
-  return { id: row.id, side, title: side === "customer" ? (shop?.name ?? "النشاط") : (customer?.name ?? "عميل"), shopId: shop?.id ?? null, messages: messages.reverse().map((m) => ({ id: m.id, mine: m.senderId === actor.id, body: m.body, hasImage: m.imageKey !== null, createdAt: m.createdAt.toISOString() })) };
+  const requests = await db.orderRequest.findMany({ where: { customerId: row.customerId, merchantId: row.merchantId }, orderBy: { createdAt: "desc" }, take: 10, select: { id: true } });
+  return { id: row.id, side, requestIds: requests.map((r) => r.id), title: side === "customer" ? (shop?.name ?? "النشاط") : (customer?.name ?? "عميل"), shopId: shop?.id ?? null, messages: messages.reverse().map((m) => ({ id: m.id, mine: m.senderId === actor.id, body: m.body, hasImage: m.imageKey !== null, createdAt: m.createdAt.toISOString() })) };
 }
 
 /** Own conversations, newest activity first, with the last message and an unread flag. */

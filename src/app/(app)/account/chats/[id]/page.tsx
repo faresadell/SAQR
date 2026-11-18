@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { AutoRefresh } from "@/components/layout/auto-refresh";
 import { PageHeader } from "@/components/ui/page-header";
+import { ChatRequests } from "@/features/chat/chat-requests";
 import { MessageList, ReplyForm } from "@/features/chat/chat-ui";
 import { requireRole } from "@/server/auth/guards";
 import { openConversation } from "@/server/chat/service";
@@ -18,6 +19,7 @@ export default async function CustomerChatPage({ params }: { params: Promise<{ i
       <PageHeader title={chat.title} description="تتحدّث مع النشاط مباشرة. تُحدَّث الرسائل كل ثوانٍ قليلة." />
       <div className="flex max-w-2xl flex-col gap-4">
         <MessageList messages={chat.messages} />
+        <ChatRequests actor={user} chat={chat} merchantId={chat.shopId} />
         <ReplyForm conversationId={chat.id} />
       </div>
     </>
