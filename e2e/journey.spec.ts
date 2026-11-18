@@ -154,7 +154,7 @@ test("a full order: stars bought, order placed and paid, shop accepts and prepar
   await customer.page.getByRole("button", { name: "بدء المحادثة" }).click();
   await expect(customer.page).toHaveURL(/\/account\/chats\/[^/]+$/, { timeout: 30_000 });
   await expect(customer.page.getByRole("heading", { name: "اطلب من هنا" })).toBeVisible({ timeout: 30_000 });
-  await customer.page.locator("textarea[name=body]").last().fill("عاوز ٣ كيلو كباب من الشات");
+  await customer.page.locator("form:has(select[name=addressId]) textarea[name=body]").fill("عاوز ٣ كيلو كباب من الشات");
   await customer.page.locator("select[name=addressId]").selectOption({ index: 1 });
   await customer.page.getByRole("button", { name: "إرسال الطلب" }).click();
   await expect(customer.page.getByText("بانتظار السعر").first()).toBeVisible({ timeout: 30_000 });
