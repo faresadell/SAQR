@@ -108,5 +108,9 @@ describe("sign-up and activation by email code", () => {
     setEmailSenderForTests({ send: async () => { throw new Error("provider down"); } });
     expect(await registerAccount(base, "unknown")).toEqual({ ok: false, error: "SEND_FAILED" });
     expect(await db.emailCode.count({ where: { consumedAt: null } })).toBe(0);
+    // the reason is kept for the owner (admin audit log): no address, no code
+    const trace = await db.auditLog.findFirst({ where: { action: "EMAIL_SEND_FAILED" } });
+    expect(JSON.stringify(trace?.after)).toContain("provider down");
+    expect(JSON.stringify(trace?.after)).not.toContain(base.email);
   });
 });

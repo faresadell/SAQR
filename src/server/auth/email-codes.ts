@@ -2,6 +2,7 @@ import "server-only";
 import type { EmailCodePurpose } from "@prisma/client";
 import { db } from "@/lib/db";
 import { getEnv } from "@/lib/env";
+import { writeAudit } from "@/lib/audit";
 import { consumeRateLimit } from "@/lib/rate-limit";
 import { getSetting } from "@/lib/settings";
 import { EMAIL_CODE_MINUTES } from "@/lib/email/resend";
@@ -11,6 +12,21 @@ import { getEmailSender } from "./email-sender";
 export type IssueResult = { ok: true } | { ok: false; reason: "RATE_LIMITED" | "SEND_FAILED"; by?: "ip" | "account" };
 
 const binding = (userId: string, email: string) => `email:${userId}:${email}`;
+
+/**
+ * Leaves a trace of WHY a code email could not be sent, so the owner can see it in the admin audit log without digging in
+ * server logs (a domain that is not verified, a wrong sender address and a key without permission all look the same to the person
+ * signing up). The reason is only the provider's status line or a network error; never the address, the code or the key.
+ */
+async function recordSendFailure(userId: string, purpose: EmailCodePurpose, error: unknown, ip: string): Promise<void> {
+  const reason = (error instanceof Error ? error.message : "unknown").slice(0, 200);
+  console.error(`[email] ${purpose} code could not be sent: ${reason}`);
+  try {
+    await writeAudit({ actorId: null, action: "EMAIL_SEND_FAILED", entityType: "User", entityId: userId, after: { purpose, reason, provider: getEnv().EMAIL_PROVIDER }, ip });
+  } catch {
+    // the trace is best-effort; the sign-up screen already tells the person it failed
+  }
+}
 
 /** Issue a 6-digit code to an address. Within the resend cooldown nothing new is sent (and the answer is still ok). */
 export async function issueEmailCode(userId: string, email: string, purpose: EmailCodePurpose, ip: string): Promise<IssueResult> {
@@ -33,8 +49,9 @@ export async function issueEmailCode(userId: string, email: string, purpose: Ema
   });
   try {
     await getEmailSender().send(email, purpose, code);
-  } catch {
+  } catch (error) {
     await db.emailCode.update({ where: { id: record.id }, data: { consumedAt: new Date() } });
+    await recordSendFailure(userId, purpose, error, ip);
     return { ok: false, reason: "SEND_FAILED" };
   }
   return { ok: true };
