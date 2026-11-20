@@ -34,7 +34,7 @@ export async function assignDriver(actor: Actor, orderId: string, driverId: stri
     if (!(ASSIGNABLE_ORDER as readonly string[]).includes(order.orderStatus) || order.paymentStatus !== "CONFIRMED") fail("WRONG_STATE");
     if (!REASSIGNABLE.includes(order.deliveryStatus)) fail("WRONG_STATE");
     const driver = await tx.driver.findUnique({ where: { id: driverId }, include: { user: true } });
-    if (!driver || !driver.isActive || !driver.isOnline || !driver.lastSeenAt || driver.lastSeenAt < freshSince() || driver.user.status !== "ACTIVE") fail("DRIVER_NOT_AVAILABLE");
+    if (!driver?.isActive || !driver.isOnline || !driver.lastSeenAt || driver.lastSeenAt < freshSince() || driver.user.status !== "ACTIVE") fail("DRIVER_NOT_AVAILABLE");
     if ((await activeJobCount(tx, driver!.id)) > 0) {
       const mine = await tx.deliveryRecord.findMany({ where: { driverId: driver!.id, order: { deliveryStatus: { in: ["DRIVER_ASSIGNED", "PICKED_UP", "OUT_FOR_DELIVERY"] } } }, select: { order: { select: { id: true, parentOrderId: true } } } });
       const sameTrip = mine.every((r) => r.order.id === order.id || (order.parentOrderId !== null && r.order.parentOrderId === order.parentOrderId));
