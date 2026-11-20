@@ -13,12 +13,15 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - run: npm audit fix --package-lock-only --omit=dev
+      - run: npm audit fix --package-lock-only --omit=dev || true
+      - run: npm pkg set overrides.effect="^3.22.1"
+      - run: npm install --package-lock-only
+      - run: npm audit --omit=dev --audit-level=high
       - run: git diff --stat
       - run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git rm -q .github/workflows/tmp-audit-fix.yml
-          git add -A package-lock.json
+          git add -A package.json package-lock.json
           git commit -m "chore(deps): npm audit fix (lockfile only)" || true
           git push
