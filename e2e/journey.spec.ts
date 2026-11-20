@@ -86,6 +86,11 @@ test("a full order: stars bought, order placed and paid, shop accepts and prepar
   // A driver signs up, sees the order on the board (without customer details), takes it, picks it up and delivers it.
   await signUp(driver.page, "DRIVER", `011${uniqueDigits()}`, `drv-${tag}@example.com`);
   await expect(driver.page).toHaveURL(/\/driver/);
+  // The driver says they are taking work; the shop then sees them as available on «اطلب سائق».
+  await driver.page.getByRole("button", { name: "متاح للعمل" }).click();
+  await expect(driver.page.getByRole("button", { name: "إيقاف الاستقبال" })).toBeVisible({ timeout: 30_000 });
+  await shop.page.goto("/merchant/drivers");
+  await expect(shop.page.getByText("متاح الآن")).toBeVisible({ timeout: 30_000 });
   await driver.page.goto("/driver/board");
   const card = driver.page.locator("li", { hasText: acc.seededShopName });
   await expect(card).toBeVisible({ timeout: 60_000 });

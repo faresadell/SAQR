@@ -45,13 +45,13 @@ export function OrderControls({ order, drivers }: { order: MerchantOrderRow; dri
       </div>
       {a.assignDriver ? (
         drivers.length === 0 ? (
-          <p className="text-xs text-ink-muted">أضف سائقاً من صفحة السائقين لتتمكن من إسناد التوصيل.</p>
+          <p className="text-xs text-ink-muted">لا يوجد سائق متاح الآن. جرّب «اطلب سائق» بعد قليل.</p>
         ) : (
           <div className="flex items-end gap-1.5">
-            <Select label="السائق" name="driverId" defaultValue={drivers[0]?.id}>
+            <Select label="اطلب سائق متاح" name="driverId" defaultValue={drivers[0]?.id}>
               {drivers.map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}
             </Select>
-            <Button type="submit" size="sm" variant="outline" name="command" value="assignDriver" loading={pending}>إسناد</Button>
+            <Button type="submit" size="sm" variant="outline" name="command" value="assignDriver" loading={pending}>إرسال للسائق</Button>
           </div>
         )
       ) : null}

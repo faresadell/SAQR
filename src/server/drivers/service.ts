@@ -1,67 +1,59 @@
 import "server-only";
-import { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
 import { writeAudit } from "@/lib/audit";
-import { normalizeEgyptPhone } from "@/lib/auth/phone";
-import { checkPasswordStrength, hashPassword } from "@/lib/auth/password";
 import type { Actor } from "@/lib/auth/permissions";
 import { AuthorizationError, NotFoundError } from "@/server/errors";
+import type { Tx } from "@/server/orders/lifecycle";
 
-export type DriverError = "INVALID_REQUEST" | "PHONE_IN_USE" | "SHOP_NOT_APPROVED" | "WEAK_PASSWORD";
-export type DriverResult<T> = ({ ok: true } & T) | { ok: false; error: DriverError };
+/** Drivers sign up by themselves and are independent. A driver says whether they are taking work; "on a trip" is derived. */
+export type DriverStatus = "AVAILABLE" | "ON_TRIP" | "OFFLINE";
 
-/** A shop may create accounts for its own drivers. Independent drivers sign up themselves and take orders from the open board. */
-async function ownShop(actor: Actor) {
+/** Delivery stages in which a driver is out on (or committed to) a job. */
+export const BUSY_DELIVERY_STATUSES = ["DRIVER_ASSIGNED", "PICKED_UP", "OUT_FOR_DELIVERY"] as const;
+
+export function statusOf(isOnline: boolean, activeJobs: number): DriverStatus {
+  if (!isOnline) return "OFFLINE";
+  return activeJobs > 0 ? "ON_TRIP" : "AVAILABLE";
+}
+
+export async function activeJobCount(tx: Tx | typeof db, driverId: string): Promise<number> {
+  return tx.deliveryRecord.count({ where: { driverId, order: { deliveryStatus: { in: [...BUSY_DELIVERY_STATUSES] } } } });
+}
+
+/** The signed-in driver turns availability on or off. A suspended driver cannot. */
+export async function setMyAvailability(actor: Actor, isOnline: boolean): Promise<void> {
+  if (actor.role !== "DRIVER") throw new AuthorizationError();
+  await db.$transaction(async (tx) => {
+    const driver = await tx.driver.upsert({ where: { userId: actor.id }, create: { userId: actor.id, merchantId: null }, update: {} });
+    if (!driver.isActive) throw new AuthorizationError();
+    if (driver.isOnline === isOnline) return;
+    await tx.driver.update({ where: { id: driver.id }, data: { isOnline } });
+    await writeAudit({ actorId: actor.id, action: "DRIVER_AVAILABILITY_CHANGED", entityType: "Driver", entityId: driver.id, before: { isOnline: driver.isOnline }, after: { isOnline } }, tx);
+  });
+}
+
+export async function getMyAvailability(actor: Actor): Promise<{ status: DriverStatus; isOnline: boolean }> {
+  if (actor.role !== "DRIVER") throw new AuthorizationError();
+  const driver = await db.driver.findUnique({ where: { userId: actor.id } });
+  if (!driver) return { status: "OFFLINE", isOnline: false };
+  return { status: statusOf(driver.isOnline, await activeJobCount(db, driver.id)), isOnline: driver.isOnline };
+}
+
+/**
+ * Drivers a shop can ask for a delivery: the ones who said they are taking work (available or on a trip), with their status.
+ * Only name and status are shown; nothing else about the driver.
+ */
+export async function listDriversForShop(actor: Actor) {
   if (actor.role !== "MERCHANT") throw new AuthorizationError();
   const shop = await db.merchant.findUnique({ where: { ownerId: actor.id } });
   if (!shop) throw new NotFoundError();
-  return shop;
-}
-
-export interface CreateDriverInput {
-  name: string;
-  phone: string;
-  /** Temporary password the shop gives the driver. The shop vouches for the driver, so the account is active at once (there is no SMS code). */
-  password: string;
-}
-
-export async function createDriver(actor: Actor, input: CreateDriverInput): Promise<DriverResult<{ driverId: string }>> {
-  const shop = await ownShop(actor);
-  if (shop.status !== "APPROVED") return { ok: false, error: "SHOP_NOT_APPROVED" };
-  const name = typeof input.name === "string" ? input.name.trim() : "";
-  const phone = typeof input.phone === "string" ? normalizeEgyptPhone(input.phone) : null;
-  if (name.length < 2 || name.length > 80 || !phone) return { ok: false, error: "INVALID_REQUEST" };
-  if (typeof input.password !== "string" || checkPasswordStrength(input.password, phone)) return { ok: false, error: "WEAK_PASSWORD" };
-  const passwordHash = await hashPassword(input.password);
-  try {
-    const driverId = await db.$transaction(async (tx) => {
-      const user = await tx.user.create({ data: { phone, name, passwordHash, role: "DRIVER", status: "ACTIVE" } });
-      await tx.starAccount.create({ data: { userId: user.id } });
-      const driver = await tx.driver.create({ data: { userId: user.id, merchantId: shop.id } });
-      await writeAudit({ actorId: actor.id, action: "DRIVER_CREATED", entityType: "Driver", entityId: driver.id, after: { merchantId: shop.id } }, tx);
-      return driver.id;
-    });
-    return { ok: true, driverId };
-  } catch (error) {
-    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") return { ok: false, error: "PHONE_IN_USE" };
-    throw error;
-  }
-}
-
-export async function listMyDrivers(actor: Actor) {
-  const shop = await ownShop(actor);
-  const rows = await db.driver.findMany({ where: { merchantId: shop.id }, orderBy: { createdAt: "asc" }, include: { user: { select: { name: true, phone: true, status: true } } } });
-  return rows.map((d) => ({ id: d.id, name: d.user.name, phone: d.user.phone, accountStatus: d.user.status, isActive: d.isActive, createdAt: d.createdAt }));
-}
-
-/** Pause or resume one of the shop's drivers. A paused driver cannot be given orders or act on deliveries. */
-export async function setDriverActive(actor: Actor, driverId: string, isActive: boolean): Promise<void> {
-  const shop = await ownShop(actor);
-  await db.$transaction(async (tx) => {
-    const driver = await tx.driver.findUnique({ where: { id: driverId } });
-    if (!driver || driver.merchantId !== shop.id) throw new NotFoundError();
-    if (driver.isActive === isActive) return;
-    await tx.driver.update({ where: { id: driverId }, data: { isActive } });
-    await writeAudit({ actorId: actor.id, action: "DRIVER_ACTIVE_CHANGED", entityType: "Driver", entityId: driverId, before: { isActive: driver.isActive }, after: { isActive } }, tx);
+  const rows = await db.driver.findMany({
+    where: { isActive: true, isOnline: true, user: { status: "ACTIVE" } },
+    orderBy: { createdAt: "asc" },
+    take: 100,
+    select: { id: true, user: { select: { name: true } }, deliveries: { where: { order: { deliveryStatus: { in: [...BUSY_DELIVERY_STATUSES] } } }, select: { id: true } } },
   });
+  return rows
+    .map((d) => ({ id: d.id, name: d.user.name, status: statusOf(true, d.deliveries.length) }))
+    .sort((a, b) => Number(a.status === "ON_TRIP") - Number(b.status === "ON_TRIP"));
 }
