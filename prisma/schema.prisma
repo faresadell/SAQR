@@ -243,8 +243,9 @@ model BusinessType {
 model Driver {
   id         String   @id @default(cuid())
   userId     String   @unique
-  merchantId String? // null = independent driver who takes orders from the open board
-  isActive   Boolean  @default(true)
+  merchantId String? // legacy: drivers are independent now; shops no longer create drivers
+  isActive   Boolean  @default(true) // false = suspended (cannot work at all)
+  isOnline   Boolean  @default(false) // the driver says they are taking work; "on a trip" is derived from active deliveries
   createdAt  DateTime @default(now())
 
   user      User             @relation(fields: [userId], references: [id])

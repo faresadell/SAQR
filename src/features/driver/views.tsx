@@ -98,7 +98,7 @@ export function DriverHomeView({ data, base }: { data: DriverHomeData; base: str
         <LinkButton href={`${base}/tasks`} variant="outline">الطلبات المسندة إليّ</LinkButton>
         <LinkButton href={`${base}/trip`} variant="outline">قيد التوصيل</LinkButton>
       </div>
-      <p className="text-xs text-ink-muted">النشاط هو من يُسند لك الطلبات. لا تُخصم نجوم من السائق على الطلبات أو الرحلات.</p>
+      <p className="text-xs text-ink-muted">الطلبات توصلك من التجار (وانت «متاح») أو تاخدها من «طلبات متاحة». لا تُخصم نجوم من السائق على الطلبات أو الرحلات.</p>
     </div>
   );
 }

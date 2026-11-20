@@ -8,7 +8,7 @@ import { db } from "@/lib/db";
 import type { Actor } from "@/lib/auth/permissions";
 import { invalidateSettingsCache } from "@/lib/settings";
 import { AuthorizationError, NotFoundError } from "@/server/errors";
-import { createDriver, listMyDrivers, setDriverActive } from "@/server/drivers/service";
+import { getMyAvailability, listDriversForShop, setMyAvailability } from "@/server/drivers/service";
 import { placeOrder } from "@/server/orders/checkout";
 import { answerDeliveryFee, assignDriver, deliver, listMyDeliveries, pickUp, proposeDeliveryFee, reportFailure } from "@/server/orders/delivery";
 import { getDriverPositionForCustomer, shareLocation, stopSharing } from "@/server/drivers/location";
@@ -246,30 +246,33 @@ describe("cancellation request", () => {
 });
 
 describe("drivers", () => {
-  it("a shop creates drivers tied to itself; weak password, duplicate phone and non-shops are refused", async () => {
-    const ok = await createDriver(w.owner, { name: "سواق ١", phone: "01011112222", password: "Sturdy-pass-91" });
-    expect(ok.ok).toBe(true);
-    const user = await db.user.findUniqueOrThrow({ where: { phone: "+201011112222" } });
-    expect(user).toMatchObject({ role: "DRIVER", status: "ACTIVE" }); // the shop vouches for its driver; no SMS code exists
-    expect(await db.starAccount.count({ where: { userId: user.id } })).toBe(1);
-    expect(await db.driver.count({ where: { merchantId: w.shopId } })).toBe(1);
-    expect(await createDriver(w.owner, { name: "سواق ٢", phone: "01011112222", password: "Sturdy-pass-91" })).toEqual({ ok: false, error: "PHONE_IN_USE" });
-    expect(await createDriver(w.owner, { name: "سواق ٣", phone: "01022223333", password: "12345678" })).toEqual({ ok: false, error: "WEAK_PASSWORD" });
-    expect(await createDriver(w.owner, { name: "x", phone: "123", password: "Sturdy-pass-91" })).toEqual({ ok: false, error: "INVALID_REQUEST" });
-    await expect(createDriver(w.customer, { name: "سواق", phone: "01033334444", password: "Sturdy-pass-91" })).rejects.toBeInstanceOf(AuthorizationError);
-    expect((await listMyDrivers(w.owner)).length).toBe(1);
-    expect((await listMyDrivers(w.otherOwner)).length).toBe(0);
-    const id = (await db.driver.findFirstOrThrow()).id;
-    await expect(setDriverActive(w.otherOwner, id, false)).rejects.toBeInstanceOf(NotFoundError);
-    await setDriverActive(w.owner, id, false);
-    expect(await db.auditLog.count({ where: { action: "DRIVER_ACTIVE_CHANGED" } })).toBe(1);
+  it("a driver sets availability; shops see only drivers taking work, with AVAILABLE or ON_TRIP; shops cannot create drivers", async () => {
+    const d = await driverOf(w.owner, w.shopId, false);
+    expect(await getMyAvailability(d.actor)).toEqual({ status: "OFFLINE", isOnline: false });
+    expect(await listDriversForShop(w.owner)).toEqual([]);
+    await setMyAvailability(d.actor, true);
+    expect(await getMyAvailability(d.actor)).toEqual({ status: "AVAILABLE", isOnline: true });
+    expect((await listDriversForShop(w.owner)).map((x) => ({ id: x.id, status: x.status }))).toEqual([{ id: d.driverId, status: "AVAILABLE" }]);
+    expect((await listDriversForShop(w.otherOwner)).length).toBe(1); // independent: every shop sees the same drivers
+    const id = await approvedOrder();
+    expect((await assignDriver(w.owner, id, d.driverId)).ok).toBe(true);
+    expect((await listDriversForShop(w.owner))[0]).toMatchObject({ status: "ON_TRIP" });
+    expect(await getMyAvailability(d.actor)).toEqual({ status: "ON_TRIP", isOnline: true });
+    await setMyAvailability(d.actor, false);
+    expect(await listDriversForShop(w.owner)).toEqual([]);
+    expect(await db.auditLog.count({ where: { action: "DRIVER_AVAILABILITY_CHANGED" } })).toBe(2);
+    await expect(setMyAvailability(w.owner, true)).rejects.toBeInstanceOf(AuthorizationError);
+    await expect(listDriversForShop(w.customer)).rejects.toBeInstanceOf(AuthorizationError);
+    await db.driver.update({ where: { id: d.driverId }, data: { isActive: false } });
+    await expect(setMyAvailability(d.actor, true)).rejects.toBeInstanceOf(AuthorizationError);
   });
 });
 
-async function driverOf(owner: Actor, shopId: string): Promise<{ actor: Actor; driverId: string }> {
+async function driverOf(owner: Actor, shopId: string, isOnline = true): Promise<{ actor: Actor; driverId: string }> {
   const actor = await user("DRIVER");
-  const d = await db.driver.create({ data: { userId: actor.id, merchantId: shopId } });
+  const d = await db.driver.create({ data: { userId: actor.id, merchantId: null, isOnline } });
   void owner;
+  void shopId;
   return { actor, driverId: d.id };
 }
 
@@ -323,23 +326,28 @@ describe("delivery", () => {
     expect(await db.deliveryRecord.findUniqueOrThrow({ where: { orderId: id } })).toMatchObject({ collectionStatus: "EXCEPTION", exceptionNote: "العميل رفض الدفع" });
   });
 
-  it("only the shop's own active, verified drivers can be assigned; others cannot see or act on the order", async () => {
+  it("only an online, active, verified driver who is not on another trip can be sent an order; others cannot see or act on it", async () => {
     const id = await approvedOrder();
-    const foreign = await driverOf(w.otherOwner, w.otherShopId);
+    const other = await driverOf(w.otherOwner, w.otherShopId);
     const mine = await driverOf(w.owner, w.shopId);
-    expect(await assignDriver(w.owner, id, foreign.driverId)).toEqual({ ok: false, error: "DRIVER_NOT_AVAILABLE" });
-    await setDriverActive(w.owner, mine.driverId, false);
-    expect(await assignDriver(w.owner, id, mine.driverId)).toEqual({ ok: false, error: "DRIVER_NOT_AVAILABLE" });
-    await setDriverActive(w.owner, mine.driverId, true);
+    await setMyAvailability(mine.actor, false);
+    expect(await assignDriver(w.owner, id, mine.driverId)).toEqual({ ok: false, error: "DRIVER_NOT_AVAILABLE" }); // offline
+    await setMyAvailability(mine.actor, true);
+    await db.driver.update({ where: { id: mine.driverId }, data: { isActive: false } });
+    expect(await assignDriver(w.owner, id, mine.driverId)).toEqual({ ok: false, error: "DRIVER_NOT_AVAILABLE" }); // suspended
+    await db.driver.update({ where: { id: mine.driverId }, data: { isActive: true } });
     await db.user.update({ where: { id: mine.actor.id }, data: { status: "PENDING" } });
     expect(await assignDriver(w.owner, id, mine.driverId)).toEqual({ ok: false, error: "DRIVER_NOT_AVAILABLE" });
     await db.user.update({ where: { id: mine.actor.id }, data: { status: "ACTIVE" } });
-    await expect(assignDriver(w.otherOwner, id, foreign.driverId)).rejects.toBeInstanceOf(NotFoundError);
+    await expect(assignDriver(w.otherOwner, id, other.driverId)).rejects.toBeInstanceOf(NotFoundError); // not their order
     await expect(assignDriver(w.customer, id, mine.driverId)).rejects.toBeInstanceOf(NotFoundError);
     expect((await assignDriver(w.owner, id, mine.driverId)).ok).toBe(true);
-    await expect(pickUp(foreign.actor, id)).rejects.toBeInstanceOf(NotFoundError);
+    expect(await db.notification.count({ where: { userId: mine.actor.id, type: "DELIVERY_ASSIGNED" } })).toBe(1);
+    const second = await approvedOrder();
+    expect(await assignDriver(w.owner, second, mine.driverId)).toEqual({ ok: false, error: "DRIVER_NOT_AVAILABLE" }); // already on a trip
+    await expect(pickUp(other.actor, id)).rejects.toBeInstanceOf(NotFoundError);
     await expect(pickUp(w.owner, id)).rejects.toBeInstanceOf(AuthorizationError);
-    expect((await listMyDeliveries(foreign.actor, "ACTIVE")).length).toBe(0);
+    expect((await listMyDeliveries(other.actor, "ACTIVE")).length).toBe(0);
     expect((await listMyDeliveries(mine.actor, "ACTIVE")).map((x) => x.orderId)).toEqual([id]);
   });
 

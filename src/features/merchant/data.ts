@@ -10,7 +10,7 @@ import { getSetting } from "@/lib/settings";
 import { listOwnProducts } from "@/server/catalog/products";
 import { getOfferQuota, listMyOffers } from "@/server/offers/service";
 import { getOwnMerchant } from "@/server/merchants/service";
-import { listMyDrivers } from "@/server/drivers/service";
+import { listDriversForShop } from "@/server/drivers/service";
 import type { MerchantDriverOption, MerchantOffersData, MerchantOrderActions, MerchantOrderRow, MerchantReport } from "./types";
 
 /**
@@ -83,7 +83,7 @@ export async function loadMerchantOrders(user: U): Promise<Loaded<MerchantOrderR
 }
 
 export async function loadMerchantDriverOptions(user: U): Promise<MerchantDriverOption[]> {
-  return (await listMyDrivers(user)).filter((d) => d.isActive && d.accountStatus === "ACTIVE").map((d) => ({ id: d.id, name: d.name }));
+  return (await listDriversForShop(user)).filter((d) => d.status === "AVAILABLE").map((d) => ({ id: d.id, name: d.name }));
 }
 
 export async function loadMerchantOffers(user: U): Promise<Loaded<MerchantOffersData>> {

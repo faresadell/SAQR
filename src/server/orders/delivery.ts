@@ -4,6 +4,7 @@ import type { DeliveryStatus } from "@prisma/client";
 import { db } from "@/lib/db";
 import { writeAudit } from "@/lib/audit";
 import { consumeRateLimit } from "@/lib/rate-limit";
+import { activeJobCount } from "@/server/drivers/service";
 import { clearLocationIfIdle } from "@/server/drivers/location";
 import type { Actor } from "@/lib/auth/permissions";
 import { AuthorizationError, NotFoundError } from "@/server/errors";
@@ -21,7 +22,10 @@ export async function setDeliveryStatus(tx: Tx, order: OrderRow, to: DeliverySta
   await tx.orderEvent.create({ data: { orderId: order.id, field: "deliveryStatus", fromValue: order.deliveryStatus, toValue: to, actorId, note } });
 }
 
-/** The shop owner gives the order to one of ITS OWN active drivers. A driver of another shop is refused. */
+/**
+ * The shop owner sends the order to one independent driver who is taking work. A driver who is offline, suspended or already on another
+ * trip is refused (a trip with this customer's other sub-orders is fine: it is one trip). The driver can still give the order back.
+ */
 export async function assignDriver(actor: Actor, orderId: string, driverId: string): Promise<LifecycleResult> {
   return run(async (tx) => {
     const order = await tx.order.findUnique({ where: { id: orderId }, include: { merchant: true } });
@@ -29,7 +33,12 @@ export async function assignDriver(actor: Actor, orderId: string, driverId: stri
     if (!(ASSIGNABLE_ORDER as readonly string[]).includes(order.orderStatus) || order.paymentStatus !== "CONFIRMED") fail("WRONG_STATE");
     if (!REASSIGNABLE.includes(order.deliveryStatus)) fail("WRONG_STATE");
     const driver = await tx.driver.findUnique({ where: { id: driverId }, include: { user: true } });
-    if (!driver || driver.merchantId !== order.merchantId || !driver.isActive || driver.user.status !== "ACTIVE") fail("DRIVER_NOT_AVAILABLE");
+    if (!driver || !driver.isActive || !driver.isOnline || driver.user.status !== "ACTIVE") fail("DRIVER_NOT_AVAILABLE");
+    if ((await activeJobCount(tx, driver!.id)) > 0) {
+      const mine = await tx.deliveryRecord.findMany({ where: { driverId: driver!.id, order: { deliveryStatus: { in: ["DRIVER_ASSIGNED", "PICKED_UP", "OUT_FOR_DELIVERY"] } } }, select: { order: { select: { id: true, parentOrderId: true } } } });
+      const sameTrip = mine.every((r) => r.order.id === order.id || (order.parentOrderId !== null && r.order.parentOrderId === order.parentOrderId));
+      if (!sameTrip) fail("DRIVER_NOT_AVAILABLE");
+    }
     const now = new Date();
     await tx.deliveryRecord.upsert({
       where: { orderId },
@@ -37,7 +46,7 @@ export async function assignDriver(actor: Actor, orderId: string, driverId: stri
       update: { driverId: driver!.id, assignedAt: now, pickedUpAt: null, deliveredAt: null },
     });
     await setDeliveryStatus(tx, order, "DRIVER_ASSIGNED", actor.id, `driver ${driverId}`);
-    await notifyInTx(tx, { userId: driver!.userId, type: "DELIVERY_ASSIGNED", title: "طلب توصيل جديد", body: `تم إسناد الطلب رقم ${order.number} إليك.`, data: { orderId }, dedupeKey: `delivery-assigned:${orderId}:${driverId}:${now.getTime()}` });
+    await notifyInTx(tx, { userId: driver!.userId, type: "DELIVERY_ASSIGNED", title: "طلب توصيل جديد", body: `${order.merchant.name} أرسل لك الطلب رقم ${order.number} للتوصيل. تقدر تتراجع من «الطلبات المسندة» قبل الاستلام.`, data: { orderId }, dedupeKey: `delivery-assigned:${orderId}:${driverId}:${now.getTime()}` });
     await writeAudit({ actorId: actor.id, action: "DELIVERY_ASSIGNED", entityType: "Order", entityId: orderId, after: { driverId } }, tx);
   });
 }

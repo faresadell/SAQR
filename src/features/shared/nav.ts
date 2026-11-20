@@ -47,7 +47,7 @@ export function merchantNav(base = "/merchant"): { groups: NavGroup[]; mobile: N
   const offers = { href: `${base}/offers`, label: "العروض", icon: "tag" } as const;
   return {
     groups: [
-      { items: [home, orders, { href: `${base}/chats`, label: "المحادثات", icon: "message" }, { href: `${base}/requests`, label: "طلبات مخصصة", icon: "box" }, { href: `${base}/drivers`, label: "السائقون", icon: "truck" }] },
+      { items: [home, orders, { href: `${base}/chats`, label: "المحادثات", icon: "message" }, { href: `${base}/requests`, label: "طلبات مخصصة", icon: "box" }, { href: `${base}/drivers`, label: "اطلب سائق", icon: "truck" }] },
       { title: "التحليلات", items: [{ href: `${base}/analytics`, label: "تحليلات المتجر", icon: "chart" }] },
       { title: "الكتالوج", items: [products, offers, { href: `${base}/coupons`, label: "الكوبونات", icon: "tag" }] },
       {

@@ -78,13 +78,6 @@ export const OFFER_MESSAGES: Record<string, string> = {
   PRODUCT_ALREADY_IN_OFFER: "أحد المنتجات داخل عرض بخصم جارٍ بالفعل.",
 };
 
-export const DRIVER_MESSAGES: Record<string, string> = {
-  INVALID_REQUEST: "اكتب اسماً ورقم موبايل مصرياً صحيحاً.",
-  PHONE_IN_USE: "رقم الموبايل مسجّل بحساب آخر.",
-  SHOP_NOT_APPROVED: "لا يمكن إضافة سائقين قبل اعتماد النشاط.",
-  WEAK_PASSWORD: "كلمة المرور المؤقتة ضعيفة. استخدم 8 أحرف على الأقل بحروف وأرقام.",
-};
-
 export const ADMIN_MESSAGES: Record<string, string> = {
   INVALID_REQUEST: "راجع البيانات. الأسباب والملاحظات لا تقل عن 3 أحرف.",
   WRONG_STATE: "تغيّرت الحالة. حدّث الصفحة.",
