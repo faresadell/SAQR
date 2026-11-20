@@ -53,3 +53,23 @@ export async function sendCodeEmail(config: ResendConfig, to: string, purpose: E
     clearTimeout(timer);
   }
 }
+
+/** A plain notification email (order and delivery updates). Same contract as sendCodeEmail: reports only whether Resend accepted it. */
+export async function sendNoticeEmail(config: ResendConfig, to: string, subject: string, text: string, fetchFn: FetchLike): Promise<void> {
+  if (!/^[^\s@<>]+@[^\s@<>]+\.[^\s@<>]+$/.test(to) || subject.length === 0 || text.length === 0) throw new Error("Invalid email arguments");
+  const escaped = text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/\n/g, "<br>");
+  const payload = { from: config.from, to: [to], subject: subject.slice(0, 200), text, html: `<div dir="rtl" style="font-family:Tahoma,Arial,sans-serif;line-height:1.8">${escaped}</div>` };
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), config.timeoutMs ?? 8000);
+  try {
+    const response = await fetchFn("https://api.resend.com/emails", {
+      method: "POST",
+      headers: { "content-type": "application/json", authorization: `Bearer ${config.apiKey}` },
+      body: JSON.stringify(payload),
+      signal: controller.signal,
+    });
+    if (!response.ok) throw new Error(`Email provider answered ${response.status}`);
+  } finally {
+    clearTimeout(timer);
+  }
+}

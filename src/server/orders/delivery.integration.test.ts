@@ -9,6 +9,8 @@ import type { Actor } from "@/lib/auth/permissions";
 import { invalidateSettingsCache } from "@/lib/settings";
 import { AuthorizationError, NotFoundError } from "@/server/errors";
 import { getMyAvailability, listDriversForShop, setMyAvailability } from "@/server/drivers/service";
+import { flushNotificationEmails, setNoticeSenderForTests, type NoticeSender } from "@/server/notifications/email";
+import { sweepDeliveryTimeouts } from "@/server/orders/delivery-timeouts";
 import { placeOrder } from "@/server/orders/checkout";
 import { answerDeliveryFee, assignDriver, deliver, listMyDeliveries, pickUp, proposeDeliveryFee, reportFailure } from "@/server/orders/delivery";
 import { getDriverPositionForCustomer, shareLocation, stopSharing } from "@/server/drivers/location";
@@ -270,7 +272,7 @@ describe("drivers", () => {
 
 async function driverOf(owner: Actor, shopId: string, isOnline = true): Promise<{ actor: Actor; driverId: string }> {
   const actor = await user("DRIVER");
-  const d = await db.driver.create({ data: { userId: actor.id, merchantId: null, isOnline } });
+  const d = await db.driver.create({ data: { userId: actor.id, merchantId: null, isOnline, ...(isOnline ? { lastSeenAt: new Date() } : {}) } });
   void owner;
   void shopId;
   return { actor, driverId: d.id };
@@ -282,6 +284,8 @@ describe("delivery", () => {
     const d = await driverOf(w.owner, w.shopId);
     expect((await assignDriver(w.owner, id, d.driverId)).ok).toBe(true);
     expect((await db.order.findUniqueOrThrow({ where: { id } })).deliveryStatus).toBe("DRIVER_ASSIGNED");
+    expect(await pickUp(d.actor, id)).toEqual({ ok: false, error: "FEE_NOT_APPROVED" }); // a shop-sent order also needs the customer's agreement on the price
+    await agreeFee(d.actor, id);
     expect(await pickUp(d.actor, id)).toEqual({ ok: false, error: "WRONG_STATE" }); // the shop has not finished preparing
     await advanceOrder(w.owner, id, "PREPARING");
     await advanceOrder(w.owner, id, "READY");
@@ -319,6 +323,7 @@ describe("delivery", () => {
     const id = await approvedOrder();
     const d = await driverOf(w.owner, w.shopId);
     await assignDriver(w.owner, id, d.driverId);
+    await agreeFee(d.actor, id);
     await advanceOrder(w.owner, id, "PREPARING");
     await advanceOrder(w.owner, id, "READY");
     await pickUp(d.actor, id);
@@ -361,6 +366,7 @@ describe("delivery", () => {
 
     const id = await approvedOrder();
     await assignDriver(w.owner, id, d1.driverId);
+    await agreeFee(d1.actor, id);
     await advanceOrder(w.owner, id, "PREPARING");
     await advanceOrder(w.owner, id, "READY");
     await pickUp(d1.actor, id);
@@ -369,6 +375,7 @@ describe("delivery", () => {
     expect(await db.notification.count({ where: { userId: w.owner.id, type: "DELIVERY_FAILED" } })).toBe(1);
     expect(await deliver(d1.actor, id, { feeCollected: true, code: await codeOf(id) })).toEqual({ ok: false, error: "WRONG_STATE" });
     expect((await assignDriver(w.owner, id, d2.driverId)).ok).toBe(true);
+    await agreeFee(d2.actor, id);
     await expect(pickUp(d1.actor, id)).rejects.toBeInstanceOf(NotFoundError); // no longer theirs
     expect((await pickUp(d2.actor, id)).ok).toBe(true);
     expect(await status(id)).toBe("OUT_FOR_DELIVERY"); // moved once, not again
@@ -493,5 +500,105 @@ describe("open driver board", () => {
     expect((await deliver(a, id, { feeCollected: true, code: await codeOf(id) })).ok).toBe(true);
     expect((await db.order.findUniqueOrThrow({ where: { id } })).orderStatus).toBe("DELIVERED");
     expect((await db.deliveryRecord.findUniqueOrThrow({ where: { orderId: id } })).collectionStatus).toBe("COLLECTED");
+  });
+});
+
+describe("delivery timeouts", () => {
+  const minutesAgo = (m: number) => new Date(Date.now() - m * 60_000);
+
+  it("a driver who does not name a price in time loses the order; everyone is told once; fresh ones are left alone", async () => {
+    const stale = await approvedOrder();
+    const fresh = await approvedOrder();
+    const d1 = await driverOf(w.owner, w.shopId);
+    const d2 = await driverOf(w.owner, w.shopId);
+    await assignDriver(w.owner, stale, d1.driverId);
+    await assignDriver(w.owner, fresh, d2.driverId);
+    await db.deliveryRecord.update({ where: { orderId: stale }, data: { assignedAt: minutesAgo(11) } });
+    expect(await sweepDeliveryTimeouts()).toEqual({ released: 1 });
+    expect(await db.order.findUniqueOrThrow({ where: { id: stale } })).toMatchObject({ deliveryStatus: "AWAITING_DRIVER" });
+    expect(await db.deliveryRecord.findUniqueOrThrow({ where: { orderId: stale } })).toMatchObject({ driverId: null, feeStatus: "NONE" });
+    expect((await db.order.findUniqueOrThrow({ where: { id: fresh } })).deliveryStatus).toBe("DRIVER_ASSIGNED");
+    expect(await db.notification.count({ where: { userId: w.owner.id, type: "DELIVERY_FAILED", dedupeKey: { startsWith: "delivery-timeout-shop:" } } })).toBe(1);
+    expect(await db.notification.count({ where: { userId: d1.actor.id, dedupeKey: { startsWith: "delivery-timeout-driver:" } } })).toBe(1);
+    expect(await sweepDeliveryTimeouts()).toEqual({ released: 0 }); // nothing repeats
+    expect((await assignDriver(w.owner, stale, d1.driverId)).ok).toBe(true); // the shop can send it again
+  });
+
+  it("a customer who does not answer the price in time: the order goes back to the board and the customer is told", async () => {
+    const id = await approvedOrder();
+    const d = await driverOf(w.owner, w.shopId);
+    await assignDriver(w.owner, id, d.driverId);
+    expect(await proposeDeliveryFee(d.actor, id, 2000)).toEqual({ ok: true });
+    await db.deliveryRecord.update({ where: { orderId: id }, data: { feeProposedAt: minutesAgo(5) } });
+    expect(await sweepDeliveryTimeouts()).toEqual({ released: 0 });
+    await db.deliveryRecord.update({ where: { orderId: id }, data: { feeProposedAt: minutesAgo(31) } });
+    expect(await sweepDeliveryTimeouts()).toEqual({ released: 1 });
+    expect((await db.order.findUniqueOrThrow({ where: { id } })).deliveryStatus).toBe("AWAITING_DRIVER");
+    expect(await db.notification.count({ where: { userId: w.customer.id, dedupeKey: { startsWith: "delivery-timeout-customer:" } } })).toBe(1);
+    expect(await db.auditLog.count({ where: { action: "DELIVERY_TIMED_OUT", entityId: id } })).toBe(1);
+  });
+
+  it("an order the customer already agreed to is never pulled back", async () => {
+    const id = await approvedOrder();
+    const d = await driverOf(w.owner, w.shopId);
+    await assignDriver(w.owner, id, d.driverId);
+    await agreeFee(d.actor, id);
+    await db.deliveryRecord.update({ where: { orderId: id }, data: { assignedAt: minutesAgo(120), feeProposedAt: minutesAgo(120) } });
+    expect(await sweepDeliveryTimeouts()).toEqual({ released: 0 });
+  });
+});
+
+describe("driver availability lapses", () => {
+  it("after a few idle hours the driver is no longer available until they switch it on again", async () => {
+    const id = await approvedOrder();
+    const d = await driverOf(w.owner, w.shopId);
+    await db.driver.update({ where: { id: d.driverId }, data: { lastSeenAt: new Date(Date.now() - 4 * 3_600_000) } });
+    expect(await listDriversForShop(w.owner)).toEqual([]);
+    expect(await getMyAvailability(d.actor)).toEqual({ status: "OFFLINE", isOnline: false });
+    expect(await assignDriver(w.owner, id, d.driverId)).toEqual({ ok: false, error: "DRIVER_NOT_AVAILABLE" });
+    await setMyAvailability(d.actor, true);
+    expect(await getMyAvailability(d.actor)).toEqual({ status: "AVAILABLE", isOnline: true });
+    expect((await assignDriver(w.owner, id, d.driverId)).ok).toBe(true);
+  });
+});
+
+describe("notification emails", () => {
+  const sent: Array<{ to: string; subject: string; text: string }> = [];
+  let failing = false;
+  const sender: NoticeSender = {
+    async send(to, subject, text) {
+      if (failing) throw new Error("provider down");
+      sent.push({ to, subject, text });
+      return true;
+    },
+  };
+
+  it("order updates go to verified emails once; chat stays in the app; failures retry a few times then stop", async () => {
+    sent.length = 0;
+    failing = false;
+    setNoticeSenderForTests(sender);
+    try {
+      await db.user.update({ where: { id: w.customer.id }, data: { email: "buyer@example.com", emailVerifiedAt: new Date() } });
+      await db.notification.create({ data: { userId: w.customer.id, type: "CHAT_MESSAGE", title: "رسالة", body: "x", dedupeKey: "chat-1" } });
+      await approvedOrder(); // tells the customer
+      const first = await flushNotificationEmails();
+      expect(first.sent).toBeGreaterThan(0);
+      expect(sent.every((m) => m.to === "buyer@example.com" && m.text.length > 0)).toBe(true);
+      expect(await db.notification.count({ where: { type: "CHAT_MESSAGE", emailedAt: { not: null } } })).toBe(0);
+      expect(await flushNotificationEmails()).toEqual({ sent: 0, failed: 0 }); // already sent: nothing repeats
+      // An unverified address gets nothing.
+      await db.user.update({ where: { id: w.customer.id }, data: { emailVerifiedAt: null } });
+      await approvedOrder();
+      sent.length = 0;
+      expect(await flushNotificationEmails()).toEqual({ sent: 0, failed: 0 });
+      // Provider failures: retried, then given up.
+      await db.user.update({ where: { id: w.customer.id }, data: { emailVerifiedAt: new Date() } });
+      failing = true;
+      for (let i = 0; i < 4; i++) await flushNotificationEmails();
+      expect(await db.notification.count({ where: { emailedAt: null, emailTries: { gte: 3 }, type: { startsWith: "ORDER_" } } })).toBeGreaterThan(0);
+      expect(await db.notification.count({ where: { emailTries: { gt: 3 } } })).toBe(0);
+    } finally {
+      setNoticeSenderForTests(undefined);
+    }
   });
 });

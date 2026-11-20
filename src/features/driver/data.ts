@@ -1,6 +1,7 @@
 import "server-only";
 import type { SessionUser } from "@/server/auth/session";
 import { listMyDeliveries } from "@/server/orders/delivery";
+import { sweepSoon } from "@/server/orders/delivery-timeouts";
 import { listBoard } from "@/server/orders/driver-board";
 import { failed, ready, type Loaded } from "@/features/shared/loaded";
 import type { BoardRow } from "./board-view";
@@ -26,6 +27,7 @@ export interface DriverDeliveryRow {
   orderId: string;
   number: number;
   shop: string;
+  shopPhone: string | null;
   orderStatus: string;
   deliveryStatus: "DRIVER_ASSIGNED" | "PICKED_UP" | "OUT_FOR_DELIVERY" | "DELIVERED" | "FAILED" | string;
   feeToCollectCents: number;
@@ -45,6 +47,7 @@ function toRow(r: Awaited<ReturnType<typeof listMyDeliveries>>[number]): DriverD
     orderId: r.orderId,
     number: r.number,
     shop: r.shop,
+    shopPhone: r.shopPhone,
     orderStatus: r.orderStatus,
     deliveryStatus: r.deliveryStatus,
     feeToCollectCents: r.feeToCollectCents,
@@ -61,6 +64,7 @@ function toRow(r: Awaited<ReturnType<typeof listMyDeliveries>>[number]): DriverD
 
 /** Deliveries this driver holds: accepted from the open board or given by a shop. */
 export async function loadMyDeliveries(user: U, scope: "ACTIVE" | "HISTORY"): Promise<Loaded<DriverDeliveryRow[]>> {
+  sweepSoon();
   return load(async () => (await listMyDeliveries(user, scope)).map(toRow));
 }
 
@@ -100,5 +104,6 @@ export async function loadDriverNotifications(user: U): Promise<Loaded<Notificat
 
 /** The open board: accepted and paid orders still without a driver. Customer details are not part of it. */
 export async function loadBoard(user: U): Promise<Loaded<BoardRow[]>> {
+  sweepSoon();
   return load(async () => (await listBoard(user)).map((r) => ({ ...r, createdAt: r.createdAt.toISOString() })));
 }

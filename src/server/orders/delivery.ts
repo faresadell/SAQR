@@ -4,7 +4,8 @@ import type { DeliveryStatus } from "@prisma/client";
 import { db } from "@/lib/db";
 import { writeAudit } from "@/lib/audit";
 import { consumeRateLimit } from "@/lib/rate-limit";
-import { activeJobCount } from "@/server/drivers/service";
+import { activeJobCount, freshSince, touchDriver } from "@/server/drivers/service";
+import { DRIVER_RESPONSE_MINUTES } from "@/lib/delivery-timing";
 import { clearLocationIfIdle } from "@/server/drivers/location";
 import type { Actor } from "@/lib/auth/permissions";
 import { AuthorizationError, NotFoundError } from "@/server/errors";
@@ -33,20 +34,23 @@ export async function assignDriver(actor: Actor, orderId: string, driverId: stri
     if (!(ASSIGNABLE_ORDER as readonly string[]).includes(order.orderStatus) || order.paymentStatus !== "CONFIRMED") fail("WRONG_STATE");
     if (!REASSIGNABLE.includes(order.deliveryStatus)) fail("WRONG_STATE");
     const driver = await tx.driver.findUnique({ where: { id: driverId }, include: { user: true } });
-    if (!driver || !driver.isActive || !driver.isOnline || driver.user.status !== "ACTIVE") fail("DRIVER_NOT_AVAILABLE");
+    if (!driver || !driver.isActive || !driver.isOnline || !driver.lastSeenAt || driver.lastSeenAt < freshSince() || driver.user.status !== "ACTIVE") fail("DRIVER_NOT_AVAILABLE");
     if ((await activeJobCount(tx, driver!.id)) > 0) {
       const mine = await tx.deliveryRecord.findMany({ where: { driverId: driver!.id, order: { deliveryStatus: { in: ["DRIVER_ASSIGNED", "PICKED_UP", "OUT_FOR_DELIVERY"] } } }, select: { order: { select: { id: true, parentOrderId: true } } } });
       const sameTrip = mine.every((r) => r.order.id === order.id || (order.parentOrderId !== null && r.order.parentOrderId === order.parentOrderId));
       if (!sameTrip) fail("DRIVER_NOT_AVAILABLE");
     }
     const now = new Date();
+    // Like a board claim: the driver names the delivery price and the customer agrees before pickup. Joining a trip that is already priced carries 0.
+    const prior = (await openTrip(tx, driver!.id, orderId)).filter((r) => r.orderId !== orderId);
+    const fee = prior.length > 0 ? { cents: 0, status: prior[0]!.feeStatus } : { cents: order.deliveryFeeCents, status: "NONE" as const };
     await tx.deliveryRecord.upsert({
       where: { orderId },
-      create: { orderId, driverId, feeExpectedCents: order.deliveryFeeCents, assignedAt: now },
-      update: { driverId: driver!.id, assignedAt: now, pickedUpAt: null, deliveredAt: null },
+      create: { orderId, driverId, feeExpectedCents: fee.cents, feeStatus: fee.status, assignedAt: now },
+      update: { driverId: driver!.id, assignedAt: now, pickedUpAt: null, deliveredAt: null, feeExpectedCents: fee.cents, feeStatus: fee.status, feeProposedAt: null },
     });
     await setDeliveryStatus(tx, order, "DRIVER_ASSIGNED", actor.id, `driver ${driverId}`);
-    await notifyInTx(tx, { userId: driver!.userId, type: "DELIVERY_ASSIGNED", title: "طلب توصيل جديد", body: `${order.merchant.name} أرسل لك الطلب رقم ${order.number} للتوصيل. تقدر تتراجع من «الطلبات المسندة» قبل الاستلام.`, data: { orderId }, dedupeKey: `delivery-assigned:${orderId}:${driverId}:${now.getTime()}` });
+    await notifyInTx(tx, { userId: driver!.userId, type: "DELIVERY_ASSIGNED", title: "طلب توصيل جديد", body: `${order.merchant.name} أرسل لك الطلب رقم ${order.number} للتوصيل. اكتب سعر التوصيل من «الطلبات المسندة» خلال ${DRIVER_RESPONSE_MINUTES} دقايق، أو تراجع قبل الاستلام.`, data: { orderId }, dedupeKey: `delivery-assigned:${orderId}:${driverId}:${now.getTime()}` });
     await writeAudit({ actorId: actor.id, action: "DELIVERY_ASSIGNED", entityType: "Order", entityId: orderId, after: { driverId } }, tx);
   });
 }
@@ -155,16 +159,18 @@ export async function listMyDeliveries(actor: Actor, scope: "ACTIVE" | "HISTORY"
   if (actor.role !== "DRIVER") throw new AuthorizationError();
   const driver = await db.driver.findUnique({ where: { userId: actor.id } });
   if (!driver || !driver.isActive) return [];
+  await touchDriver(actor.id);
   const rows = await db.deliveryRecord.findMany({
     where: { driverId: driver.id, order: { deliveryStatus: scope === "ACTIVE" ? { in: ["DRIVER_ASSIGNED", "PICKED_UP", "OUT_FOR_DELIVERY"] } : { in: ["DELIVERED", "FAILED"] } } },
     orderBy: { assignedAt: "desc" },
     take: 50,
-    include: { order: { select: { id: true, number: true, orderStatus: true, deliveryStatus: true, totalCents: true, deliveryFeeCents: true, addressSnap: true, merchant: { select: { name: true } }, customer: { select: { name: true, phone: true } } } } },
+    include: { order: { select: { id: true, number: true, orderStatus: true, deliveryStatus: true, totalCents: true, deliveryFeeCents: true, addressSnap: true, merchant: { select: { name: true, phone: true } }, customer: { select: { name: true, phone: true } } } } },
   });
   return rows.map((r) => ({
     orderId: r.orderId,
     number: r.order.number,
     shop: r.order.merchant.name,
+    shopPhone: r.order.merchant.phone,
     orderStatus: r.order.orderStatus,
     deliveryStatus: r.order.deliveryStatus,
     feeToCollectCents: r.feeExpectedCents,
@@ -190,7 +196,7 @@ export async function proposeDeliveryFee(actor: Actor, orderId: string, feeCents
     const trip = (await openTrip(tx, driver.id, orderId)).filter((r) => r.feeStatus !== "APPROVED");
     const lead = trip[0]!;
     if (feeCents > maxDriverFeeCents(lead.order.deliveryFeeCents)) fail("FEE_TOO_HIGH");
-    for (const r of trip) await tx.deliveryRecord.update({ where: { id: r.id }, data: { feeExpectedCents: r.id === lead.id ? feeCents : 0, feeStatus: "PROPOSED" } });
+    for (const r of trip) await tx.deliveryRecord.update({ where: { id: r.id }, data: { feeExpectedCents: r.id === lead.id ? feeCents : 0, feeStatus: "PROPOSED", feeProposedAt: new Date() } });
     await notifyInTx(tx, { userId: order.customerId, type: "DELIVERY_FEE_PROPOSED", title: "وافق على سعر التوصيل", body: `المندوب طلب ${(feeCents / 100).toFixed(2)} ج.م توصيل${trip.length > 1 ? ` لـ ${trip.length} طلبات في رحلة واحدة` : ` للطلب رقم ${order.number}`}. وافق أو ارفض من صفحة الطلب. تدفعه للمندوب كاش.`, data: { orderId: lead.orderId }, dedupeKey: `fee-proposed:${orderId}:${feeCents}:${Date.now()}` });
     await writeAudit({ actorId: actor.id, action: "DELIVERY_FEE_PROPOSED", entityType: "Order", entityId: orderId, after: { feeCents, orders: trip.length } }, tx);
   });

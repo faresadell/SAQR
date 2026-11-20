@@ -12,6 +12,7 @@ export interface MerchantOrderRow {
   paymentStatus: PaymentStatus;
   deliveryStatus: DeliveryStatus;
   driverName?: string;
+  driverPhone?: string;
   /** Cash-transfer proof for the latest payment, shown to the shop so it can confirm the transfer. */
   payment?: { methodLabel: string; referenceNo?: string; receiptUploadId?: string; amountCents: number; rejectedReason?: string };
   customerName?: string;

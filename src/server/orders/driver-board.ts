@@ -5,6 +5,7 @@ import { writeAudit } from "@/lib/audit";
 import type { Actor } from "@/lib/auth/permissions";
 import { AuthorizationError, NotFoundError } from "@/server/errors";
 import { notifyInTx } from "@/server/notifications/service";
+import { touchDriver } from "@/server/drivers/service";
 import { openTrip, setDeliveryStatus } from "@/server/orders/delivery";
 import type { Tx } from "@/server/orders/lifecycle";
 
@@ -33,6 +34,7 @@ async function holderName(tx: Tx, orderId: string): Promise<string | undefined> 
 /** What a driver may see before accepting: the shop and the area, the fee. NOT the customer's name, phone or exact address. */
 export async function listBoard(actor: Actor) {
   if (actor.role !== "DRIVER") throw new AuthorizationError();
+  await touchDriver(actor.id);
   const rows = await db.order.findMany({
     where: { orderStatus: { in: BOARD_ORDER_STATUS }, paymentStatus: "CONFIRMED", deliveryStatus: { in: BOARD_DELIVERY_STATUS } },
     orderBy: { createdAt: "asc" },
