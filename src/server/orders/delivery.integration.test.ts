@@ -594,8 +594,9 @@ describe("notification emails", () => {
       // Provider failures: retried, then given up.
       await db.user.update({ where: { id: w.customer.id }, data: { emailVerifiedAt: new Date() } });
       failing = true;
+      await approvedOrder();
       for (let i = 0; i < 4; i++) await flushNotificationEmails();
-      expect(await db.notification.count({ where: { emailedAt: null, emailTries: { gte: 3 }, type: { startsWith: "ORDER_" } } })).toBeGreaterThan(0);
+      expect(await db.notification.count({ where: { emailedAt: null, emailTries: 3, type: { startsWith: "ORDER_APPROVED" }, dedupeKey: { not: { in: [] } } } })).toBeGreaterThan(1); // the unverified one was skipped; the new one was tried 3 times
       expect(await db.notification.count({ where: { emailTries: { gt: 3 } } })).toBe(0);
     } finally {
       setNoticeSenderForTests(undefined);

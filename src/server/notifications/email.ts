@@ -41,19 +41,31 @@ export function setNoticeSenderForTests(sender: NoticeSender | undefined): void 
 export async function flushNotificationEmails(limit = 50): Promise<{ sent: number; failed: number }> {
   const sender = override ?? new EnvNoticeSender();
   const rows = await db.notification.findMany({
-    where: { emailedAt: null, emailTries: { lt: MAX_TRIES }, createdAt: { gte: new Date(Date.now() - WINDOW_HOURS * 3_600_000) }, user: { status: "ACTIVE", email: { not: null }, emailVerifiedAt: { not: null } } },
+    where: {
+      emailedAt: null,
+      emailTries: { lt: MAX_TRIES },
+      createdAt: { gte: new Date(Date.now() - WINDOW_HOURS * 3_600_000) },
+      OR: ["ORDER_", "PAYMENT_", "DELIVERY_", "REFUND_", "SETTLEMENT_"].map((prefix) => ({ type: { startsWith: prefix } })),
+    },
     orderBy: { createdAt: "asc" },
-    take: limit * 4,
-    select: { id: true, type: true, title: true, body: true, emailTries: true, user: { select: { email: true } } },
+    take: limit,
+    select: { id: true, userId: true, title: true, body: true, emailTries: true },
   });
+  const users = await db.user.findMany({ where: { id: { in: [...new Set(rows.map((r) => r.userId))] }, status: "ACTIVE", email: { not: null }, emailVerifiedAt: { not: null } }, select: { id: true, email: true } });
+  const emailOf = new Map(users.map((u) => [u.id, u.email]));
+  // People without a verified email are skipped for good, so they never clog the queue.
+  const nobody = rows.filter((r) => !emailOf.get(r.userId)).map((r) => r.id);
+  if (nobody.length > 0) await db.notification.updateMany({ where: { id: { in: nobody } }, data: { emailTries: MAX_TRIES } });
   let sent = 0;
   let failed = 0;
-  for (const row of rows.filter((r) => isEmailedType(r.type)).slice(0, limit)) {
+  for (const row of rows) {
+    const to = emailOf.get(row.userId);
+    if (!to) continue;
     const claim = await db.notification.updateMany({ where: { id: row.id, emailedAt: null, emailTries: row.emailTries }, data: { emailTries: { increment: 1 } } });
-    if (claim.count !== 1 || !row.user.email) continue;
+    if (claim.count !== 1) continue;
     try {
       const text = `${row.body}\n\nافتح صقر: ${getEnv().APP_URL}`;
-      if (!(await sender.send(row.user.email, row.title, text))) continue;
+      if (!(await sender.send(to, row.title, text))) continue;
       await db.notification.update({ where: { id: row.id }, data: { emailedAt: new Date() } });
       sent += 1;
     } catch (error) {
