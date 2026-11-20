@@ -582,6 +582,8 @@ describe("notification emails", () => {
       await db.notification.create({ data: { userId: w.customer.id, type: "CHAT_MESSAGE", title: "رسالة", body: "x", dedupeKey: "chat-1" } });
       await approvedOrder(); // tells the customer
       const first = await flushNotificationEmails();
+      expect(first.failed).toBe(0);
+      expect(await db.notification.count({ where: { userId: w.customer.id, type: "ORDER_APPROVED" } })).toBe(1);
       expect(first.sent).toBeGreaterThan(0);
       expect(sent.every((m) => m.to === "buyer@example.com" && m.text.length > 0)).toBe(true);
       expect(await db.notification.count({ where: { type: "CHAT_MESSAGE", emailedAt: { not: null } } })).toBe(0);

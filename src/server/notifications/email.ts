@@ -64,7 +64,7 @@ export async function flushNotificationEmails(limit = 50): Promise<{ sent: numbe
     const claim = await db.notification.updateMany({ where: { id: row.id, emailedAt: null, emailTries: row.emailTries }, data: { emailTries: { increment: 1 } } });
     if (claim.count !== 1) continue;
     try {
-      const text = `${row.body}\n\nافتح صقر: ${getEnv().APP_URL}`;
+      const text = `${row.body}\n\nافتح صقر: ${process.env.APP_URL ?? "https://www.saqr.sale"}`;
       if (!(await sender.send(to, row.title, text))) continue;
       await db.notification.update({ where: { id: row.id }, data: { emailedAt: new Date() } });
       sent += 1;
