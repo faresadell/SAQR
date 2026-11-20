@@ -15,7 +15,7 @@ jobs:
           node-version: 22
       - run: npm audit fix --package-lock-only --omit=dev || true
       - run: npm pkg set overrides.effect="^3.22.1"
-      - run: npm install --package-lock-only
+      - run: npm install --package-lock-only --ignore-scripts
       - run: npm audit --omit=dev --audit-level=high
       - run: git diff --stat
       - run: |
