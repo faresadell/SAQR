@@ -52,7 +52,7 @@ export async function addAddressAction(_prev: FormState, formData: FormData): Pr
   try {
     const spot = mapPoint(formData);
     if (!spot) return { error: ADDRESS_MESSAGES.BAD_LOCATION! };
-    const result = await createAddress(user, { label: text(formData, "label") || null, line: text(formData, "line"), zoneId: text(formData, "zoneId"), ...spot });
+    const result = await createAddress(user, { label: text(formData, "label") || null, line: text(formData, "line"), ...spot });
     if (!result.ok) return { error: ADDRESS_MESSAGES[result.error] ?? GENERIC_ERROR };
     revalidatePath("/account/addresses");
     revalidatePath("/checkout");

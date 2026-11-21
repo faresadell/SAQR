@@ -7,10 +7,10 @@ import { hasEverHadPackage } from "@/server/plans/service";
 import { shopHasPaymentAccount } from "@/server/payments/merchant-accounts";
 import { isOpenAt, validateOpeningHours } from "@/lib/catalog/opening-hours";
 import { buildCheckoutQuote, type CartLineInput, type CheckoutError, type CheckoutQuote, type PricedProduct } from "@/lib/orders/checkout";
+import { resolveZoneFee, ZoneUnavailableError } from "@/server/delivery/zones";
 import { getSetting } from "@/lib/settings";
 import { AuthorizationError } from "@/server/errors";
 import { buildCommissionSnapshot } from "@/server/commissions/service";
-import { resolveZoneFee, ZoneUnavailableError } from "@/server/delivery/zones";
 import { resolveOfferDiscounts } from "@/server/offers/service";
 import { getStarBalance } from "@/server/stars/ledger";
 import { notifyInTx } from "@/server/notifications/service";
@@ -79,7 +79,9 @@ export async function resolveOrderContext(tx: Prisma.TransactionClient, customer
   if ((await getStarBalance(tx, customerId)) < minCustomer) return { ok: false, error: "CUSTOMER_STARS_TOO_LOW" } as const;
   const address = await tx.address.findFirst({ where: { id: addressId, userId: customerId } }); // owner-scoped (IDOR)
   if (!address) return { ok: false, error: "ADDRESS_NOT_FOUND" } as const;
-  if (!address.zoneId) return { ok: false, error: "ZONE_UNAVAILABLE" } as const;
+  // Addresses carry no zone any more: there are no fixed delivery prices. The driver names the price after taking the order and the
+  // customer agrees to it (cash, to the driver). Only an old address that still has a zone keeps that zone's reference fee.
+  if (!address.zoneId) return { ok: true, address, zone: { zoneId: null, feeCents: 0, feeVersionId: null } } as const;
   try {
     const zone = await resolveZoneFee(address.zoneId, now, tx);
     return { ok: true, address, zone } as const;

@@ -14,7 +14,7 @@ export const LIFECYCLE_MESSAGES: Record<string, string> = {
   DRIVER_NOT_AVAILABLE: "هذا السائق غير متاح.",
   CONFLICT: "تغيّرت حالة الطلب للتو. حدّث الصفحة وحاول مرة أخرى.",
   FEE_NOT_APPROVED: "لازم العميل يوافق على سعر التوصيل قبل الاستلام.",
-  FEE_TOO_HIGH: "السعر أعلى من الحد المسموح للتوصيل ده.",
+  FEE_TOO_HIGH: "السعر أعلى من الحد المسموح (1000 جنيه).",
 };
 
 export const UPLOAD_MESSAGES: Record<string, string> = {

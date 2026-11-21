@@ -31,10 +31,9 @@ function BoardCard({ row }: { row: BoardRow }) {
         <h3 className="font-bold">طلب <span className="num">#{formatNumber(row.number)}</span> — {row.shop}</h3>
         <Badge tone={row.ready ? "success" : "warning"}>{row.ready ? "جاهز للاستلام" : "قيد التجهيز"}</Badge>
       </div>
-      <dl className="grid gap-2 text-sm sm:grid-cols-3">
+      <dl className="grid gap-2 text-sm sm:grid-cols-2">
         <div><dt className="text-ink-muted">عنوان النشاط</dt><dd className="font-semibold">{row.shopAddress ?? "—"}</dd></div>
-        <div><dt className="text-ink-muted">منطقة التوصيل</dt><dd className="font-semibold">{row.zone ?? "—"}</dd></div>
-        <div><dt className="text-ink-muted">رسوم التوصيل (تُحصَّل نقداً)</dt><dd className="num font-bold">{formatEgp(row.feeCents)}</dd></div>
+                <div><dt className="text-ink-muted">رسوم التوصيل (كاش من العميل)</dt><dd className="font-bold">{row.feeCents > 0 ? <span className="num">{formatEgp(row.feeCents)}</span> : "انت بتحددها بعد قبول الطلب"}</dd></div>
       </dl>
       <p className="text-xs text-ink-muted">أُضيف {formatDateTime(row.createdAt)} · بيانات العميل تظهر بعد قبولك الطلب.</p>
       <form action={action} className="flex flex-col gap-2">

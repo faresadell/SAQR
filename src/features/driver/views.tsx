@@ -27,20 +27,20 @@ function DeliveryCard({ d, actionable }: { d: DriverDeliveryRow; actionable: boo
         {status ? <StatusBadge status={status} /> : null}
       </div>
       <dl className="grid gap-2 text-sm sm:grid-cols-2">
-        <div><dt className="text-ink-muted">العنوان</dt><dd className="font-semibold">{d.addressLine || "—"}</dd></div>
+        <div><dt className="text-ink-muted">العنوان</dt><dd className="font-semibold">{d.addressLine || "—"}{d.mapUrl ? <> · <a href={d.mapUrl} target="_blank" rel="noopener noreferrer" className="text-brand underline">افتح الموقع على الخريطة</a></> : null}</dd></div>
         <div>
           <dt className="text-ink-muted">العميل</dt>
           <dd className="font-semibold">{d.customerName} · <a className="ltr-isolate num text-brand underline" href={`tel:${d.customerPhone}`}>{d.customerPhone}</a></dd>
         </div>
-        <div><dt className="text-ink-muted">{d.feeStatus === "APPROVED" ? "رسوم التوصيل المتفق عليها (نقداً من العميل)" : "السعر المرجعي للمنطقة"}</dt><dd className="num font-bold">{formatEgp(d.feeToCollectCents)}</dd></div>
+        <div><dt className="text-ink-muted">{d.feeStatus === "APPROVED" ? "رسوم التوصيل المتفق عليها (نقداً من العميل)" : "سعر التوصيل (لسه ما اتحددش)"}</dt><dd className="num font-bold">{formatEgp(d.feeToCollectCents)}</dd></div>
         <div><dt className="text-ink-muted">أُسند في</dt><dd className="num">{formatDateTime(d.assignedAt)}</dd></div>
       </dl>
-      {actionable && !picked && d.feeStatus !== "APPROVED" && d.feeToCollectCents > 0 ? (
+      {actionable && !picked && d.feeStatus !== "APPROVED" ? (
         <form action={action} className="flex flex-col gap-2 border-t border-line pt-3">
           <input type="hidden" name="orderId" value={d.orderId} />
           <label className="flex flex-col gap-1 text-sm font-semibold">
             سعر التوصيل اللي تطلبه (ج.م) — الحد الأقصى <span className="num">{formatEgp(d.maxFeeCents)}</span>
-            <input name="fee" inputMode="decimal" required defaultValue={(d.feeToCollectCents / 100).toString()} className="ltr-isolate num w-32 rounded-control border border-line bg-surface px-3 py-2 text-lg" />
+            <input name="fee" inputMode="decimal" required defaultValue={d.feeToCollectCents > 0 ? (d.feeToCollectCents / 100).toString() : ""} placeholder="مثلاً 30" className="ltr-isolate num w-32 rounded-control border border-line bg-surface px-3 py-2 text-lg" />
           </label>
           {d.feeStatus === "PROPOSED" ? <Notice tone="info">في انتظار موافقة العميل. تقدر تعدّل السعر وتبعته تاني.</Notice> : <Notice tone="warning">لازم العميل يوافق على السعر قبل ما تستلم الطلب.</Notice>}
           <Button type="submit" name="command" value="proposeFee" loading={pending}>{d.feeStatus === "PROPOSED" ? "تعديل السعر" : "إرسال السعر للعميل"}</Button>

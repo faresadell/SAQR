@@ -113,7 +113,7 @@ export function CheckoutView({ signedIn, starRules, addresses = [] }: CheckoutVi
               <Select label="اختر العنوان" name="addressId" value={addressId} onChange={(e) => setAddressId(e.target.value)}>
                 {addresses.map((a) => <option key={a.id} value={a.id}>{a.label}{a.zoneName ? ` — ${a.zoneName}` : ""} — {a.line}</option>)}
               </Select>
-              {chosenAddress && chosenAddress.feeCents === null ? <Notice tone="danger">منطقة هذا العنوان غير متاحة للتوصيل الآن. اختر عنواناً آخر.</Notice> : <p className="text-xs text-ink-muted">رسم التوصيل لكل نشاط حسب المنطقة. المبلغ النهائي يحدده الخادم عند التأكيد.</p>}
+              {chosenAddress && chosenAddress.feeCents === null ? <Notice tone="danger">منطقة هذا العنوان غير متاحة للتوصيل الآن. اختر عنواناً آخر.</Notice> : <p className="text-xs text-ink-muted">سعر التوصيل بيحدده السائق بعد ما ياخد طلبك، وانت بتوافق عليه قبل الاستلام وتدفعه له كاش.</p>}
             </>
           )}
         </Card>
@@ -164,7 +164,7 @@ export function CheckoutView({ signedIn, starRules, addresses = [] }: CheckoutVi
           ) : null}
           <div className="flex items-center justify-between gap-3 border-t border-line pt-2">
             <dt className="text-ink-muted">رسوم التوصيل (متوقعة)</dt>
-            <dd className="num font-semibold">{chosenAddress && chosenAddress.feeCents !== null ? formatEgp(chosenAddress.feeCents * groups.length) : <span className="text-xs text-ink-muted">اختر عنواناً</span>}</dd>
+            <dd className="num font-semibold">{chosenAddress && chosenAddress.feeCents ? formatEgp(chosenAddress.feeCents * groups.length) : <span className="text-xs text-ink-muted">{chosenAddress ? "يحدده السائق (كاش)" : "اختر عنواناً"}</span>}</dd>
           </div>
           {chosenAddress && chosenAddress.feeCents !== null ? (
             <div className="flex items-center justify-between gap-3 text-base">

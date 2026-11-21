@@ -98,7 +98,9 @@ test("a full order: stars bought, order placed and paid, shop accepts and prepar
   await card.getByRole("button", { name: "قبول الطلب" }).click();
   await expect(card).toBeHidden({ timeout: 60_000 }); // a claimed order leaves the open board
   await driver.page.goto("/driver/tasks");
-  // The driver names the delivery price (pre-filled with the zone price); the customer must approve it before pickup.
+  // The driver sees the customer's address, names the delivery price (there are no fixed prices); the customer must approve it before pickup.
+  await expect(driver.page.getByText("شارع 9 المعادي عمارة 5").first()).toBeVisible({ timeout: 30_000 });
+  await driver.page.locator("input[name=fee]").fill("35");
   await driver.page.getByRole("button", { name: "إرسال السعر للعميل" }).click();
   await expect(driver.page.getByText("في انتظار موافقة العميل")).toBeVisible({ timeout: 60_000 });
   await customer.page.reload();

@@ -13,7 +13,7 @@ export const MAX_ADDRESSES = 20;
 export interface AddressInput {
   label?: string | null;
   line: string;
-  zoneId: string;
+  zoneId?: string; // optional and unused by the app: customers type or pin their address, drivers name the price
   lat?: number | null;
   lng?: number | null;
 }
@@ -64,10 +64,10 @@ export async function createAddress(actor: Actor, input: AddressInput): Promise<
   if (!input || input.line === undefined) return { ok: false, error: "INVALID_REQUEST" };
   const parsed = clean(input);
   if (!parsed.ok) return { ok: false, error: "INVALID_REQUEST" };
-  if (!(await usableZone(input.zoneId))) return { ok: false, error: "ZONE_UNAVAILABLE" };
+  if (input.zoneId !== undefined && !(await usableZone(input.zoneId))) return { ok: false, error: "ZONE_UNAVAILABLE" };
   return db.$transaction(async (tx): Promise<AddressResult<{ addressId: string }>> => {
     if ((await tx.address.count({ where: { userId: actor.id } })) >= MAX_ADDRESSES) return { ok: false, error: "TOO_MANY_ADDRESSES" };
-    const row = await tx.address.create({ data: { userId: actor.id, zoneId: input.zoneId, line: parsed.data.line!, label: parsed.data.label ?? null, lat: parsed.data.lat ?? null, lng: parsed.data.lng ?? null } });
+    const row = await tx.address.create({ data: { userId: actor.id, zoneId: input.zoneId ?? null, line: parsed.data.line!, label: parsed.data.label ?? null, lat: parsed.data.lat ?? null, lng: parsed.data.lng ?? null } });
     await writeAudit({ actorId: actor.id, action: "ADDRESS_CREATED", entityType: "Address", entityId: row.id }, tx);
     return { ok: true, addressId: row.id };
   });
