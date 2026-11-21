@@ -5,6 +5,7 @@ import { DRIVER_RESPONSE_MINUTES, FEE_APPROVAL_MINUTES } from "@/lib/delivery-ti
 import { notifyInTx } from "@/server/notifications/service";
 import { flushNotificationEmails, runSoon } from "@/server/notifications/email";
 import { openTrip, setDeliveryStatus } from "@/server/orders/delivery";
+import { announceBoardOrders } from "@/server/orders/driver-board";
 
 const MIN = 60_000;
 
@@ -63,6 +64,7 @@ export function sweepSoon(): void {
   lastSweep = now;
   runSoon(async () => {
     await sweepDeliveryTimeouts();
+    await announceBoardOrders();
     await flushNotificationEmails();
   });
 }

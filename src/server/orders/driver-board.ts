@@ -5,7 +5,7 @@ import { writeAudit } from "@/lib/audit";
 import type { Actor } from "@/lib/auth/permissions";
 import { AuthorizationError, NotFoundError } from "@/server/errors";
 import { notifyInTx } from "@/server/notifications/service";
-import { touchDriver } from "@/server/drivers/service";
+import { BUSY_DELIVERY_STATUSES, freshSince, touchDriver } from "@/server/drivers/service";
 import { openTrip, setDeliveryStatus } from "@/server/orders/delivery";
 import type { Tx } from "@/server/orders/lifecycle";
 
@@ -126,4 +126,30 @@ export async function releaseOrder(actor: Actor, orderId: string): Promise<Relea
     }
     return { ok: true };
   });
+}
+
+/**
+ * Tells the drivers who are available right now (switched on, seen recently, not on a trip) about orders that just reached the open
+ * board, so nobody has to keep the board open. One notification per order and driver (retry-safe), recent orders only, a capped number
+ * of drivers. Run from the scheduled job and opportunistically; it can be called as often as you like.
+ */
+export async function announceBoardOrders(): Promise<{ notified: number }> {
+  const orders = await db.order.findMany({
+    where: { orderStatus: { in: BOARD_ORDER_STATUS }, paymentStatus: "CONFIRMED", deliveryStatus: { in: BOARD_DELIVERY_STATUS }, createdAt: { gte: new Date(Date.now() - 6 * 3_600_000) } },
+    orderBy: { createdAt: "asc" },
+    take: 20,
+    select: { id: true, number: true, merchant: { select: { name: true } } },
+  });
+  if (orders.length === 0) return { notified: 0 };
+  const drivers = await db.driver.findMany({
+    where: { isActive: true, isOnline: true, lastSeenAt: { gte: freshSince() }, user: { status: "ACTIVE" }, deliveries: { none: { order: { deliveryStatus: { in: [...BUSY_DELIVERY_STATUSES] } } } } },
+    select: { userId: true },
+    take: 30,
+  });
+  if (drivers.length === 0) return { notified: 0 };
+  const before = await db.notification.count({ where: { type: "DELIVERY_AVAILABLE", dedupeKey: { startsWith: "board:" } } });
+  await db.$transaction((tx) =>
+    notifyInTx(tx, ...orders.flatMap((o) => drivers.map((d) => ({ userId: d.userId, type: "DELIVERY_AVAILABLE", title: "طلب جديد متاح للتوصيل", body: `الطلب رقم ${o.number} من ${o.merchant.name} جاهز للسائقين. افتح «طلبات متاحة» وخده قبل غيرك.`, data: { orderId: o.id }, dedupeKey: `board:${o.id}:${d.userId}` })))),
+  );
+  return { notified: (await db.notification.count({ where: { type: "DELIVERY_AVAILABLE", dedupeKey: { startsWith: "board:" } } })) - before };
 }

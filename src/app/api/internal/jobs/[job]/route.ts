@@ -5,6 +5,7 @@ import { apiError, apiOk } from "@/server/api/http";
 import { runMembershipMaintenance } from "@/server/memberships/service";
 import { generateSettlements, previousMonthKey } from "@/server/settlements/service";
 import { sweepDeliveryTimeouts } from "@/server/orders/delivery-timeouts";
+import { announceBoardOrders } from "@/server/orders/driver-board";
 import { flushNotificationEmails } from "@/server/notifications/email";
 import { escalateOverdueRefunds } from "@/server/refunds/service";
 import { runDailyStarCharge, runMonthlyRewards, runPlanReminders } from "@/server/stars/jobs";
@@ -20,6 +21,7 @@ function authorized(request: NextRequest, secret: string): boolean {
 async function runAllJobs(): Promise<Record<string, unknown>> {
   const steps: Array<[string, () => Promise<unknown>]> = [
     ["delivery-timeouts", () => sweepDeliveryTimeouts()],
+    ["board-announcements", () => announceBoardOrders()],
     ["notification-emails", () => flushNotificationEmails()],
     ["membership-maintenance", () => runMembershipMaintenance()],
     ["daily-stars", () => runDailyStarCharge()],
@@ -64,6 +66,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ jo
     return result.ok ? apiOk(result.summary) : apiError(409, result.error);
   }
   if (job === "delivery-timeouts") return apiOk(await sweepDeliveryTimeouts());
+  if (job === "board-announcements") return apiOk(await announceBoardOrders());
   if (job === "notification-emails") return apiOk(await flushNotificationEmails());
   if (job === "plan-reminders") return apiOk(await runPlanReminders());
   return apiError(404, "NOT_FOUND");
