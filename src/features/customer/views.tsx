@@ -15,7 +15,7 @@ import { PACKAGE_STATE } from "@/features/shared/status";
 import type { AddressItem, CurrentPackage, MainOrderView, NotificationItem, RewardsOverview, StarsOverview } from "@/features/shared/types";
 import { formatDate, formatNumber } from "@/lib/format";
 import { deleteAddressAction } from "./actions";
-import { AddressForm, type ZoneOption } from "./address-form";
+import { AddressForm } from "./address-form";
 
 const ACTIVE_STATES = new Set(["AWAITING_PAYMENT", "AWAITING_MERCHANT_APPROVAL", "APPROVED", "PREPARING", "READY", "OUT_FOR_DELIVERY", "CANCELLATION_REQUESTED"]);
 
@@ -147,11 +147,11 @@ export function RewardsView({ data }: { data: RewardsOverview }) {
   );
 }
 
-export function AddressesView({ items, zones = [] }: { items: AddressItem[]; zones?: ZoneOption[] }) {
+export function AddressesView({ items }: { items: AddressItem[] }) {
   return (
     <div className="flex flex-col gap-5">
       {items.length === 0 ? (
-        <EmptyState icon="pin" title="لا توجد عناوين محفوظة">أضف عنواناً ومنطقته ليُحسب رسم التوصيل عند الطلب.</EmptyState>
+        <EmptyState icon="pin" title="لا توجد عناوين محفوظة">أضف عنوانك واختار مكانك على الخريطة لتطلب منه.</EmptyState>
       ) : (
         <ul className="grid gap-3 sm:grid-cols-2">
           {items.map((a) => (
@@ -169,7 +169,7 @@ export function AddressesView({ items, zones = [] }: { items: AddressItem[]; zon
           ))}
         </ul>
       )}
-      <AddressForm zones={zones} />
+      <AddressForm />
     </div>
   );
 }

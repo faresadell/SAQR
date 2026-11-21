@@ -3,7 +3,7 @@ import { z } from "zod";
 import { apiError, apiOk, checkMutation, currentActor, mapThrown, readJson, statusForCode } from "@/server/api/http";
 import { createAddress, listMyAddresses } from "@/server/addresses/service";
 
-const schema = z.object({ label: z.string().max(40).nullable().optional(), line: z.string().min(5).max(200), zoneId: z.string().min(1).max(64), lat: z.number().min(-90).max(90).nullable().optional(), lng: z.number().min(-180).max(180).nullable().optional() }).strict();
+const schema = z.object({ label: z.string().max(40).nullable().optional(), line: z.string().min(5).max(200), zoneId: z.string().min(1).max(64).optional(), lat: z.number().min(-90).max(90).nullable().optional(), lng: z.number().min(-180).max(180).nullable().optional() }).strict();
 
 /** GET /api/v1/addresses — the signed-in customer's saved addresses. */
 export async function GET(): Promise<NextResponse> {
@@ -16,7 +16,7 @@ export async function GET(): Promise<NextResponse> {
   }
 }
 
-/** POST /api/v1/addresses {label?, line, zoneId, lat?, lng?} -> 201 {addressId}. zoneId must be an open delivery zone (fees depend on it). */
+/** POST /api/v1/addresses {label?, line, zoneId, lat?, lng?} -> 201 {addressId}. zoneId is optional (legacy): the driver names the delivery price. */
 export async function POST(request: NextRequest): Promise<NextResponse> {
   try {
     const bad = checkMutation(request);

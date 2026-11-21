@@ -35,10 +35,18 @@ export interface DriverDeliveryRow {
   feeStatus: string;
   maxFeeCents: number;
   addressLine: string;
+  mapUrl: string | null;
   customerName: string;
   customerPhone: string;
   assignedAt: string;
   deliveredAt: string | null;
+}
+
+/** OpenStreetMap link to the customer's pinned spot (free, no key), or null when the customer typed the address only. */
+function mapLink(address: unknown): string | null {
+  const a = address as { lat?: unknown; lng?: unknown } | null;
+  if (typeof a?.lat !== "number" || typeof a.lng !== "number") return null;
+  return `https://www.openstreetmap.org/?mlat=${a.lat.toFixed(6)}&mlon=${a.lng.toFixed(6)}#map=17/${a.lat.toFixed(6)}/${a.lng.toFixed(6)}`;
 }
 
 function toRow(r: Awaited<ReturnType<typeof listMyDeliveries>>[number]): DriverDeliveryRow {
@@ -55,6 +63,7 @@ function toRow(r: Awaited<ReturnType<typeof listMyDeliveries>>[number]): DriverD
     feeStatus: r.feeStatus,
     maxFeeCents: r.maxFeeCents,
     addressLine: typeof line === "string" ? line : "",
+    mapUrl: mapLink(r.address),
     customerName: r.customer.name,
     customerPhone: r.customer.phone,
     assignedAt: (r.assignedAt ?? new Date(0)).toISOString(),

@@ -176,7 +176,7 @@ export async function listMyDeliveries(actor: Actor, scope: "ACTIVE" | "HISTORY"
     feeToCollectCents: r.feeExpectedCents,
     collectionStatus: r.collectionStatus,
     feeStatus: r.feeStatus,
-    maxFeeCents: maxDriverFeeCents(r.order.deliveryFeeCents),
+    maxFeeCents: maxDriverFeeCents(),
     address: r.order.addressSnap,
     customer: { name: r.order.customer.name, phone: r.order.customer.phone },
     assignedAt: r.assignedAt,
@@ -184,8 +184,9 @@ export async function listMyDeliveries(actor: Actor, scope: "ACTIVE" | "HISTORY"
   }));
 }
 
-/** The driver may ask at most this much: twice the zone's reference fee, and never less than 50 EGP of room. */
-export const maxDriverFeeCents = (referenceCents: number): number => Math.max(referenceCents * 2, 5_000);
+/** Typo guard on the price a driver may name (the customer still has to agree to it). */
+export const MAX_DRIVER_FEE_CENTS = 100_000; // 1,000 EGP
+export const maxDriverFeeCents = (): number => MAX_DRIVER_FEE_CENTS;
 
 /** The driver who took the order from the board names the delivery price; the customer is asked to approve it. Can be re-proposed until approved. */
 export async function proposeDeliveryFee(actor: Actor, orderId: string, feeCents: number): Promise<LifecycleResult> {
@@ -195,7 +196,7 @@ export async function proposeDeliveryFee(actor: Actor, orderId: string, feeCents
     if (order.deliveryStatus !== "DRIVER_ASSIGNED" || record.feeStatus === "APPROVED") fail("WRONG_STATE");
     const trip = (await openTrip(tx, driver.id, orderId)).filter((r) => r.feeStatus !== "APPROVED");
     const lead = trip[0]!;
-    if (feeCents > maxDriverFeeCents(lead.order.deliveryFeeCents)) fail("FEE_TOO_HIGH");
+    if (feeCents > maxDriverFeeCents()) fail("FEE_TOO_HIGH");
     for (const r of trip) await tx.deliveryRecord.update({ where: { id: r.id }, data: { feeExpectedCents: r.id === lead.id ? feeCents : 0, feeStatus: "PROPOSED", feeProposedAt: new Date() } });
     await notifyInTx(tx, { userId: order.customerId, type: "DELIVERY_FEE_PROPOSED", title: "وافق على سعر التوصيل", body: `المندوب طلب ${(feeCents / 100).toFixed(2)} ج.م توصيل${trip.length > 1 ? ` لـ ${trip.length} طلبات في رحلة واحدة` : ` للطلب رقم ${order.number}`}. وافق أو ارفض من صفحة الطلب. تدفعه للمندوب كاش.`, data: { orderId: lead.orderId }, dedupeKey: `fee-proposed:${orderId}:${feeCents}:${Date.now()}` });
     await writeAudit({ actorId: actor.id, action: "DELIVERY_FEE_PROPOSED", entityType: "Order", entityId: orderId, after: { feeCents, orders: trip.length } }, tx);

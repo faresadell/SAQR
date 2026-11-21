@@ -23,11 +23,9 @@ async function seedProject(db: PrismaClient, project: E2eProject, categoryId: st
   });
 }
 
-/** What an administrator sets up before launch: a delivery zone with its fee, the merchant response window, and where payments are received. */
+/** What an administrator sets up before launch: the merchant response window, and where payments are received. */
 async function seedPlatform(db: PrismaClient): Promise<void> {
   const past = new Date(Date.now() - 86_400_000);
-  const zone = await db.deliveryZone.create({ data: { name: "المعادي" } });
-  await db.deliveryFeeVersion.create({ data: { zoneId: zone.id, feeCents: 2000, effectiveFrom: past, createdById: "e2e" } });
   await db.platformSettingVersion.create({ data: { key: "orders.merchant_response_minutes", value: { v: 30 }, effectiveFrom: past, createdById: "e2e" } });
   await db.paymentMethodConfig.updateMany({ data: { isEnabled: true, receiverNumber: "01000000999" } });
 }

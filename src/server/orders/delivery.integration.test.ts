@@ -10,6 +10,7 @@ import { invalidateSettingsCache } from "@/lib/settings";
 import { AuthorizationError, NotFoundError } from "@/server/errors";
 import { getMyAvailability, listDriversForShop, setMyAvailability } from "@/server/drivers/service";
 import { flushNotificationEmails, setNoticeSenderForTests, type NoticeSender } from "@/server/notifications/email";
+import { createAddress } from "@/server/addresses/service";
 import { announceBoardOrders } from "@/server/orders/driver-board";
 import { sweepDeliveryTimeouts } from "@/server/orders/delivery-timeouts";
 import { placeOrder } from "@/server/orders/checkout";
@@ -471,7 +472,7 @@ describe("open driver board", () => {
     await advanceOrder(w.owner, id, "READY");
     expect(await pickUp(a, id)).toEqual({ ok: false, error: "FEE_NOT_APPROVED" });
     expect(await proposeDeliveryFee(a, id, 50)).toEqual({ ok: false, error: "INVALID_REQUEST" });
-    expect(await proposeDeliveryFee(a, id, 1_000_000)).toEqual({ ok: false, error: "FEE_TOO_HIGH" }); // reference 2000 -> at most 5000
+    expect(await proposeDeliveryFee(a, id, 1_000_000)).toEqual({ ok: false, error: "FEE_TOO_HIGH" }); // above the 1,000 EGP typo guard -> at most 5000
     expect(await proposeDeliveryFee(a, id, 3500)).toEqual({ ok: true });
     expect(await pickUp(a, id)).toEqual({ ok: false, error: "FEE_NOT_APPROVED" }); // proposed is not approved
     await expect(answerDeliveryFee(await user("CUSTOMER"), id, true)).rejects.toBeInstanceOf(NotFoundError); // only this order's customer
@@ -619,5 +620,31 @@ describe("board announcements", () => {
     expect(await db.notification.count({ where: { userId: free.actor.id, type: "DELIVERY_AVAILABLE", dedupeKey: `board:${id}:${free.actor.id}` } })).toBe(1);
     expect(await db.notification.count({ where: { userId: { in: [off.actor.id, busy.actor.id] }, type: "DELIVERY_AVAILABLE" } })).toBe(0);
     expect(await announceBoardOrders()).toEqual({ notified: 0 }); // nothing repeats
+  });
+});
+
+describe("no delivery zones", () => {
+  it("a customer who just types and pins an address can order; the driver sees who and where, names the price and the customer agrees", async () => {
+    const saved = await createAddress(w.customer, { line: "شارع التحرير 12 الدقي", lat: 30.0384, lng: 31.2117 }); // no zone, no fee table
+    expect(saved.ok).toBe(true);
+    const addressId = (saved as { addressId: string }).addressId;
+    const before = w.addressId;
+    w.addressId = addressId;
+    let id: string;
+    try {
+      id = await approvedOrder();
+    } finally {
+      w.addressId = before;
+    }
+    expect((await db.order.findUniqueOrThrow({ where: { id } })).deliveryFeeCents).toBe(0);
+    const d = await driverOf(w.owner, w.shopId);
+    expect((await assignDriver(w.owner, id, d.driverId)).ok).toBe(true);
+    const row = (await listMyDeliveries(d.actor, "ACTIVE"))[0]!;
+    expect(row.customer.phone.length).toBeGreaterThan(5);
+    expect(row.address).toMatchObject({ line: "شارع التحرير 12 الدقي", lat: 30.0384, lng: 31.2117 });
+    expect(await proposeDeliveryFee(d.actor, id, 100_001)).toEqual({ ok: false, error: "FEE_TOO_HIGH" });
+    expect(await proposeDeliveryFee(d.actor, id, 3500)).toEqual({ ok: true });
+    expect((await answerDeliveryFee(w.customer, id, true)).ok).toBe(true);
+    expect(await db.deliveryRecord.findUniqueOrThrow({ where: { orderId: id } })).toMatchObject({ feeStatus: "APPROVED", feeExpectedCents: 3500 });
   });
 });
