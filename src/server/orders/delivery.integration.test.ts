@@ -10,6 +10,7 @@ import { invalidateSettingsCache } from "@/lib/settings";
 import { AuthorizationError, NotFoundError } from "@/server/errors";
 import { getMyAvailability, listDriversForShop, setMyAvailability } from "@/server/drivers/service";
 import { flushNotificationEmails, setNoticeSenderForTests, type NoticeSender } from "@/server/notifications/email";
+import { announceBoardOrders } from "@/server/orders/driver-board";
 import { sweepDeliveryTimeouts } from "@/server/orders/delivery-timeouts";
 import { placeOrder } from "@/server/orders/checkout";
 import { answerDeliveryFee, assignDriver, deliver, listMyDeliveries, pickUp, proposeDeliveryFee, reportFailure } from "@/server/orders/delivery";
@@ -603,5 +604,20 @@ describe("notification emails", () => {
     } finally {
       setNoticeSenderForTests(undefined);
     }
+  });
+});
+
+describe("board announcements", () => {
+  it("available drivers hear about a new board order once; offline and busy drivers do not", async () => {
+    const id = await approvedOrder();
+    const free = await driverOf(w.owner, w.shopId);
+    const off = await driverOf(w.owner, w.shopId, false);
+    const busy = await driverOf(w.owner, w.shopId);
+    const other = await approvedOrder();
+    await assignDriver(w.owner, other, busy.driverId);
+    expect(await announceBoardOrders()).toEqual({ notified: 1 });
+    expect(await db.notification.count({ where: { userId: free.actor.id, type: "DELIVERY_AVAILABLE", dedupeKey: `board:${id}:${free.actor.id}` } })).toBe(1);
+    expect(await db.notification.count({ where: { userId: { in: [off.actor.id, busy.actor.id] }, type: "DELIVERY_AVAILABLE" } })).toBe(0);
+    expect(await announceBoardOrders()).toEqual({ notified: 0 }); // nothing repeats
   });
 });
