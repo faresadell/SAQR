@@ -32,13 +32,7 @@ export function emailBodies(purpose: EmailPurpose, code: string): { subject: str
   };
 }
 
-export async function sendCodeEmail(config: ResendConfig, to: string, purpose: EmailPurpose, code: string, fetchFn: FetchLike): Promise<void> {
-  if (!/^[^\s@<>]+@[^\s@<>]+\.[^\s@<>]+$/.test(to) || !/^\d{6}$/.test(code)) throw new Error("Invalid email arguments");
-  const bodies = emailBodies(purpose, code);
-  const templateId = config.templateIds?.[purpose];
-  const payload = templateId
-    ? { from: config.from, to: [to], subject: bodies.subject, template: { id: templateId, variables: { code, minutes: EMAIL_CODE_MINUTES, app_name: APP_NAME } } }
-    : { from: config.from, to: [to], subject: bodies.subject, html: bodies.html, text: bodies.text };
+async function postToResend(config: ResendConfig, payload: unknown, fetchFn: FetchLike): Promise<void> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), config.timeoutMs ?? 8000);
   try {
@@ -52,4 +46,23 @@ export async function sendCodeEmail(config: ResendConfig, to: string, purpose: E
   } finally {
     clearTimeout(timer);
   }
+}
+
+const looksLikeEmail = (to: string): boolean => to.length <= 254 && /^[^\s@<>]+@[^\s@<>]+\.[^\s@<>]+$/.test(to);
+
+export async function sendCodeEmail(config: ResendConfig, to: string, purpose: EmailPurpose, code: string, fetchFn: FetchLike): Promise<void> {
+  if (!looksLikeEmail(to) || !/^\d{6}$/.test(code)) throw new Error("Invalid email arguments");
+  const bodies = emailBodies(purpose, code);
+  const templateId = config.templateIds?.[purpose];
+  const payload = templateId
+    ? { from: config.from, to: [to], subject: bodies.subject, template: { id: templateId, variables: { code, minutes: EMAIL_CODE_MINUTES, app_name: APP_NAME } } }
+    : { from: config.from, to: [to], subject: bodies.subject, html: bodies.html, text: bodies.text };
+  await postToResend(config, payload, fetchFn);
+}
+
+/** A plain notification email (order and delivery updates). Same contract as sendCodeEmail: reports only whether Resend accepted it. */
+export async function sendNoticeEmail(config: ResendConfig, to: string, subject: string, text: string, fetchFn: FetchLike): Promise<void> {
+  if (!looksLikeEmail(to) || subject.length === 0 || text.length === 0) throw new Error("Invalid email arguments");
+  const escaped = text.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll("\n", "<br>");
+  await postToResend(config, { from: config.from, to: [to], subject: subject.slice(0, 200), text, html: `<div dir="rtl" style="font-family:Tahoma,Arial,sans-serif;line-height:1.8">${escaped}</div>` }, fetchFn);
 }

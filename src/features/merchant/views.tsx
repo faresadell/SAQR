@@ -41,7 +41,7 @@ export function MerchantOrdersView({ rows, drivers = [] }: { rows: MerchantOrder
         <span className="flex flex-wrap justify-end gap-1.5 md:justify-start">
           <StatusBadge status={ORDER_STATUS[r.orderStatus]} />
           <StatusBadge status={DELIVERY_STATUS[r.deliveryStatus]} />
-          {r.driverName ? <span className="text-sm font-semibold text-ink-muted">السائق: {r.driverName}</span> : null}
+          {r.driverName ? <span className="text-sm font-semibold text-ink-muted">السائق: {r.driverName}{r.driverPhone ? <> · <a href={`tel:${r.driverPhone}`} className="ltr-isolate num underline">{r.driverPhone}</a></> : null}</span> : null}
         </span>
       ),
     },

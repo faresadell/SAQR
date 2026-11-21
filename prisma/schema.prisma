@@ -245,6 +245,7 @@ model Driver {
   userId     String   @unique
   merchantId String? // legacy: drivers are independent now; shops no longer create drivers
   isActive   Boolean  @default(true) // false = suspended (cannot work at all)
+  lastSeenAt DateTime? // last time the driver used the app; "available" lapses a few hours after it
   isOnline   Boolean  @default(false) // the driver says they are taking work; "on a trip" is derived from active deliveries
   createdAt  DateTime @default(now())
 
@@ -795,8 +796,11 @@ model Notification {
   dedupeKey String    @unique
   readAt    DateTime?
   createdAt DateTime  @default(now())
+  emailedAt  DateTime? // set once the email copy was accepted by the provider
+  emailTries Int       @default(0)
 
   @@index([userId, readAt, createdAt])
+  @@index([emailedAt, createdAt])
 }
 
 // ───────────── Refunds (merchant sends money, admin verifies) ─────────────
@@ -829,6 +833,7 @@ model DeliveryRecord {
   collectedAt       DateTime?
   exceptionNote     String?
   assignedAt        DateTime?
+  feeProposedAt     DateTime?
   pickedUpAt        DateTime?
   deliveredAt       DateTime?
   order             Order               @relation(fields: [orderId], references: [id])

@@ -10,6 +10,7 @@ import { getSetting } from "@/lib/settings";
 import { listOwnProducts } from "@/server/catalog/products";
 import { getOfferQuota, listMyOffers } from "@/server/offers/service";
 import { getOwnMerchant } from "@/server/merchants/service";
+import { sweepSoon } from "@/server/orders/delivery-timeouts";
 import { listDriversForShop } from "@/server/drivers/service";
 import type { MerchantDriverOption, MerchantOffersData, MerchantOrderActions, MerchantOrderRow, MerchantReport } from "./types";
 
@@ -52,12 +53,15 @@ export function merchantActionsFor(o: { orderStatus: string; paymentStatus: stri
 /** Real orders for the signed-in shop (the service scopes them to the owner), with the actions the shop may use now. */
 export async function loadMerchantOrders(user: U): Promise<Loaded<MerchantOrderRow[]>> {
   return load(async () => {
+    sweepSoon();
     const page = await listOrdersForActor(user, { limit: 50 });
     const ids = page.items.map((o) => o.id);
-    const [uploads, customers] = await Promise.all([
+    const [uploads, customers, drivers] = await Promise.all([
       db.receiptUpload.findMany({ where: { orderId: { in: ids }, usedAt: { not: null } }, orderBy: { createdAt: "desc" }, select: { id: true, orderId: true } }),
       db.order.findMany({ where: { id: { in: ids } }, select: { id: true, customer: { select: { name: true } } } }),
+      db.deliveryRecord.findMany({ where: { orderId: { in: ids }, driverId: { not: null } }, select: { orderId: true, driver: { select: { user: { select: { phone: true } } } } } }),
     ]);
+    const phoneByOrder = new Map(drivers.map((d) => [d.orderId, d.driver?.user.phone]));
     const uploadByOrder = new Map<string, string>();
     for (const u of uploads) if (u.orderId && !uploadByOrder.has(u.orderId)) uploadByOrder.set(u.orderId, u.id);
     const nameByOrder = new Map(customers.map((c) => [c.id, c.customer.name]));
@@ -74,6 +78,7 @@ export async function loadMerchantOrders(user: U): Promise<Loaded<MerchantOrderR
         paymentStatus: o.paymentStatus,
         deliveryStatus: o.deliveryStatus,
         ...(o.driverName ? { driverName: o.driverName } : {}),
+        ...(o.driverName && phoneByOrder.get(o.id) ? { driverPhone: phoneByOrder.get(o.id)! } : {}), // the shop and the driver on the same order may call each other
         ...(nameByOrder.get(o.id) ? { customerName: nameByOrder.get(o.id)! } : {}),
         ...(pay ? { payment: { methodLabel: pay.method, amountCents: pay.amountCents, ...(pay.referenceNo ? { referenceNo: pay.referenceNo } : {}), ...(receiptUploadId ? { receiptUploadId } : {}), ...(pay.rejectedReason ? { rejectedReason: pay.rejectedReason } : {}) } } : {}),
         actions: merchantActionsFor(o),

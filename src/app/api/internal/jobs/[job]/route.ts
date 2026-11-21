@@ -4,6 +4,8 @@ import { getEnv } from "@/lib/env";
 import { apiError, apiOk } from "@/server/api/http";
 import { runMembershipMaintenance } from "@/server/memberships/service";
 import { generateSettlements, previousMonthKey } from "@/server/settlements/service";
+import { sweepDeliveryTimeouts } from "@/server/orders/delivery-timeouts";
+import { flushNotificationEmails } from "@/server/notifications/email";
 import { escalateOverdueRefunds } from "@/server/refunds/service";
 import { runDailyStarCharge, runMonthlyRewards, runPlanReminders } from "@/server/stars/jobs";
 
@@ -17,6 +19,8 @@ function authorized(request: NextRequest, secret: string): boolean {
 /** Every periodic job once, in order. One failing job never stops the others; the result names which ones failed. All are idempotent. */
 async function runAllJobs(): Promise<Record<string, unknown>> {
   const steps: Array<[string, () => Promise<unknown>]> = [
+    ["delivery-timeouts", () => sweepDeliveryTimeouts()],
+    ["notification-emails", () => flushNotificationEmails()],
     ["membership-maintenance", () => runMembershipMaintenance()],
     ["daily-stars", () => runDailyStarCharge()],
     ["plan-reminders", () => runPlanReminders()],
@@ -59,6 +63,8 @@ export async function POST(request: NextRequest, context: { params: Promise<{ jo
     const result = await generateSettlements(previousMonthKey(), null);
     return result.ok ? apiOk(result.summary) : apiError(409, result.error);
   }
+  if (job === "delivery-timeouts") return apiOk(await sweepDeliveryTimeouts());
+  if (job === "notification-emails") return apiOk(await flushNotificationEmails());
   if (job === "plan-reminders") return apiOk(await runPlanReminders());
   return apiError(404, "NOT_FOUND");
 }

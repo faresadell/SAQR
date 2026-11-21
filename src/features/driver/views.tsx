@@ -23,7 +23,7 @@ function DeliveryCard({ d, actionable }: { d: DriverDeliveryRow; actionable: boo
   return (
     <Card className="flex flex-col gap-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <h3 className="font-bold">طلب <span className="num">#{formatNumber(d.number)}</span> — {d.shop}</h3>
+        <h3 className="font-bold">طلب <span className="num">#{formatNumber(d.number)}</span> — {d.shop}{d.shopPhone ? <> · <a href={`tel:${d.shopPhone}`} className="ltr-isolate num text-sm underline">{d.shopPhone}</a></> : null}</h3>
         {status ? <StatusBadge status={status} /> : null}
       </div>
       <dl className="grid gap-2 text-sm sm:grid-cols-2">

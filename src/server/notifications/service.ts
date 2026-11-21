@@ -3,6 +3,7 @@ import type { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
 import type { Actor } from "@/lib/auth/permissions";
 import { MUTABLE_GROUPS, mutableTypes } from "@/lib/notifications/mutable";
+import { isEmailedType, scheduleEmailFlush } from "@/server/notifications/email";
 
 export interface NewNotification {
   userId: string;
@@ -26,6 +27,7 @@ export async function notifyInTx(tx: Prisma.TransactionClient, ...items: NewNoti
     data: wanted.map((n) => ({ userId: n.userId, type: n.type, title: n.title, body: n.body, dedupeKey: n.dedupeKey, ...(n.data !== undefined ? { data: n.data } : {}) })),
     skipDuplicates: true,
   });
+  if (wanted.some((n) => isEmailedType(n.type))) scheduleEmailFlush(); // email copy, sent after the response (the row is already in this transaction)
 }
 
 const select = { id: true, type: true, title: true, body: true, data: true, readAt: true, createdAt: true } satisfies Prisma.NotificationSelect;
