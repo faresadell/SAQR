@@ -132,6 +132,7 @@ export function adminNav(base = "/admin"): { groups: NavGroup[]; mobile: NavItem
           { href: `${base}/notifications`, label: "الإشعارات", icon: "bell", permission: "settings.view" },
           { href: `${base}/audit`, label: "سجل العمليات", icon: "shield", permission: "audit.view" },
           { href: `${base}/legal`, label: "الصفحات القانونية", icon: "list", permission: "content.manage" },
+          { href: `${base}/system`, label: "فحص النظام", icon: "activity", permission: "settings.view" },
           { href: `${base}/security`, label: "أمان حسابي", icon: "shield" },
         ],
       },
