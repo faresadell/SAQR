@@ -5,6 +5,7 @@ import { writeAudit } from "@/lib/audit";
 import { consumeRateLimit } from "@/lib/rate-limit";
 import { getSetting } from "@/lib/settings";
 import { burnPasswordCheck, hashPassword, verifyPassword } from "@/lib/auth/password";
+import { sendNoticeTo } from "@/server/notifications/email";
 import { consumeEmailCode, issueEmailCode } from "./email-codes";
 
 export const CONSENT_VERSION = "2026-10-v1";
@@ -36,6 +37,7 @@ export async function registerAccount(input: RegisterInput, ip: string): Promise
   const passwordHash = await hashPassword(input.password);
   const [byPhone, byEmail] = await Promise.all([db.user.findUnique({ where: { phone: input.phone } }), db.user.findUnique({ where: { email: input.email } })]);
   let targetId: string | null = null;
+  let outcome = "RACE";
 
   if (!byPhone && !byEmail) {
     try {
@@ -43,6 +45,7 @@ export async function registerAccount(input: RegisterInput, ip: string): Promise
         data: { phone: input.phone, email: input.email, name: input.name, passwordHash, role: input.role, status: "PENDING", consentVersion: CONSENT_VERSION, consentAcceptedAt: new Date() },
       });
       targetId = created.id;
+      outcome = "CREATED";
     } catch (error) {
       // A parallel request created the same phone/email first: treat as already existing.
       if (!(error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002")) throw error;
@@ -54,13 +57,38 @@ export async function registerAccount(input: RegisterInput, ip: string): Promise
       data: { email: input.email, name: input.name, passwordHash, role: input.role, consentVersion: CONSENT_VERSION, consentAcceptedAt: new Date() },
     });
     targetId = byPhone.id;
+    outcome = "RESENT_PENDING";
+  } else {
+    outcome = byEmail ? "EXISTING_EMAIL" : "EXISTING_PHONE";
   }
+
+  await recordRegisterAttempt(outcome, targetId ?? byEmail?.id ?? byPhone?.id ?? "none", ip);
+  if (outcome === "EXISTING_EMAIL") await tellOwnerTheyHaveAnAccount(input.email);
 
   if (targetId) {
     const sent = await issueEmailCode(targetId, input.email, "VERIFY_EMAIL", ip);
     if (!sent.ok) return { ok: false, error: sent.reason };
   }
   return { ok: true };
+}
+
+/** What a sign-up attempt did, without the address, phone or password, so "no code arrived" can be explained from the admin check page. */
+async function recordRegisterAttempt(outcome: string, entityId: string, ip: string): Promise<void> {
+  try {
+    await writeAudit({ actorId: null, action: "REGISTER_ATTEMPT", entityType: "User", entityId, after: { outcome }, ip });
+  } catch (error) {
+    console.error("[register] could not record the attempt:", error instanceof Error ? error.message : "unknown");
+  }
+}
+
+/** The screen stays neutral (it never says who has an account), but the owner of that address is told by email. At most one per address per hour. */
+async function tellOwnerTheyHaveAnAccount(email: string): Promise<void> {
+  try {
+    if (!(await consumeRateLimit(`register:exists-mail:${email}`, 1, 3600))) return;
+    await sendNoticeTo(email, "صقر: لديك حساب بالفعل", "حاول أحدهم (ربما أنت) إنشاء حساب في صقر بهذا البريد، لكن لديك حساب بالفعل.\nسجّل الدخول، أو اختر «نسيت كلمة المرور» إن لم تتذكرها.\nإن لم تكن أنت فتجاهل هذه الرسالة.");
+  } catch (error) {
+    console.error("[register] could not send the existing-account notice:", error instanceof Error ? error.message.slice(0, 120) : "unknown");
+  }
 }
 
 /** A pending account that a shop created for its driver is not something a stranger may take over. */
