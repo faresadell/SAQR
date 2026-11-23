@@ -146,9 +146,9 @@ export function LandingSections() {
           tag="السائق"
           title="اقبل المشاوير"
           accent="القريبة منك"
-          text="اختر من الطلبات المتاحة، واعرف عنوان الاستلام والتسليم قبل أن تبدأ، وتابع توصيلاتك."
-          cta="سجّل كسائق"
-          href="/register?role=driver"
+          text="اختر من الطلبات المتاحة، واعرف عنوان الاستلام والتسليم قبل أن تبدأ، وتابع توصيلاتك. فريق صقر هو من يفتح حساب السائق: تواصل معنا."
+          cta="تواصل معنا"
+          href="/legal/support"
           image="/images/driver.webp"
           alt="سائق توصيل بزي صقر يحمل هاتفه بجوار دراجته"
           width={640}
@@ -229,11 +229,11 @@ export function LandingSections() {
               </Link>
             </li>
             <li>
-              <Link href="/register?role=driver" className="flex h-full flex-col gap-2 rounded-card bg-emerald-800 p-6 text-white shadow-card transition-transform hover:-translate-y-0.5">
+              <Link href="/legal/support" className="flex h-full flex-col gap-2 rounded-card bg-emerald-800 p-6 text-white shadow-card transition-transform hover:-translate-y-0.5">
                 <span className="text-xs font-bold text-emerald-200">للسائق</span>
                 <span className="text-2xl font-bold">انضم إلى صقر</span>
                 <span className="text-sm text-emerald-50">وصّل الطلبات القريبة منك.</span>
-                <span className="mt-auto pt-3 text-sm font-bold text-emerald-200">قدّم كسائق ←</span>
+                <span className="mt-auto pt-3 text-sm font-bold text-emerald-200">تواصل معنا ←</span>
               </Link>
             </li>
           </ul>

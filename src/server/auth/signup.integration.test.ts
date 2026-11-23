@@ -44,26 +44,24 @@ describe("sign-up and activation by email code", () => {
     expect((await authenticate({ phone: base.phone, password: base.password }, "unknown")).ok).toBe(true);
   });
 
-  it("merchants and drivers sign up the same way; a driver gets no shop", async () => {
-    await registerAccount({ ...base, role: "DRIVER", phone: "+201022222222", email: "d@example.com" }, "unknown");
-    const r = await completeEmailActivation("+201022222222", mails[0]!.code, "unknown");
-    expect(r).toMatchObject({ ok: true, user: { role: "DRIVER" } });
+  it("merchants sign up the same way as customers", async () => {
     await registerAccount({ ...base, role: "MERCHANT", phone: "+201033333333", email: "m@example.com" }, "unknown");
-    expect(await completeEmailActivation("+201033333333", mails[1]!.code, "unknown")).toMatchObject({ ok: true, user: { role: "MERCHANT" } });
+    expect(await completeEmailActivation("+201033333333", mails[0]!.code, "unknown")).toMatchObject({ ok: true, user: { role: "MERCHANT" } });
   });
 
-  it("answers the same, and sends nothing, when the phone or the email already belongs to an active account", async () => {
+  it("says which of phone/email is already registered, sends nothing, and changes nothing", async () => {
     await registerAccount(base, "unknown");
     await completeEmailActivation(base.phone, mails[0]!.code, "unknown");
     mails.length = 0;
-    expect(await registerAccount({ ...base, name: "منتحل", password: "Other-pass-77" }, "unknown")).toEqual({ ok: true }); // same phone and email
-    expect(await registerAccount({ ...base, phone: "+201099999999" }, "unknown")).toEqual({ ok: true }); // same email, new phone
-    expect(await registerAccount({ ...base, email: "other@example.com" }, "unknown")).toEqual({ ok: true }); // same phone, new email
+    expect(await registerAccount({ ...base, name: "منتحل", password: "Other-pass-77" }, "unknown")).toEqual({ ok: false, error: "ALREADY_REGISTERED", phone: true, email: true });
+    expect(await registerAccount({ ...base, phone: "+201099999999" }, "unknown")).toEqual({ ok: false, error: "ALREADY_REGISTERED", phone: false, email: true });
+    expect(await registerAccount({ ...base, email: "other@example.com" }, "unknown")).toEqual({ ok: false, error: "ALREADY_REGISTERED", phone: true, email: false });
     expect(mails).toHaveLength(0);
     const u = await db.user.findUniqueOrThrow({ where: { phone: base.phone } });
     expect(u.name).toBe("أحمد علي"); // not overwritten
     expect((await authenticate({ phone: base.phone, password: base.password }, "unknown")).ok).toBe(true);
     expect(await db.user.count()).toBe(1);
+    expect(await db.auditLog.count({ where: { action: "REGISTER_ATTEMPT" } })).toBe(4); // the first sign-up and the three refused ones, outcomes only
   });
 
   it("a pending account can be re-registered with the same phone (new email/password), the old code stops working", async () => {

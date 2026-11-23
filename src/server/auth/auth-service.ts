@@ -5,7 +5,6 @@ import { writeAudit } from "@/lib/audit";
 import { consumeRateLimit } from "@/lib/rate-limit";
 import { getSetting } from "@/lib/settings";
 import { burnPasswordCheck, hashPassword, verifyPassword } from "@/lib/auth/password";
-import { sendNoticeTo } from "@/server/notifications/email";
 import { consumeEmailCode, issueEmailCode } from "./email-codes";
 
 export const CONSENT_VERSION = "2026-10-v1";
@@ -17,15 +16,19 @@ export interface RegisterInput {
   phone: string; // already normalized to E.164 (a contact/login number; it is NOT verified by a code)
   email: string; // already normalized; the activation code is sent here
   password: string;
-  role: "CUSTOMER" | "MERCHANT" | "DRIVER";
+  role: "CUSTOMER" | "MERCHANT"; // drivers are added by an administrator, never by self sign-up
 }
 
-export type RegisterResult = { ok: true } | { ok: false; error: "RATE_LIMITED" | "SEND_FAILED" };
+export type RegisterResult =
+  | { ok: true }
+  | { ok: false; error: "RATE_LIMITED" | "SEND_FAILED" }
+  | { ok: false; error: "ALREADY_REGISTERED"; phone: boolean; email: boolean };
 
 /**
- * The result is identical whether the phone/email is new, pending or already registered, so this endpoint
- * cannot be used to discover which numbers or addresses have accounts. A code is only sent for a new account or a
- * still-pending one with the same phone; an account is activated only by the code sent to its email.
+ * If the phone or the email already belongs to an account the person is told which one (a deliberate choice: people
+ * kept waiting for a code that was never going to be sent). The per-IP limit above bounds how fast this can be probed.
+ * A code is only sent for a new account or a still-pending one with the same phone; an account is activated only by
+ * the code sent to its email.
  */
 export async function registerAccount(input: RegisterInput, ip: string): Promise<RegisterResult> {
   const perHour = await getSetting("auth.register.max_per_ip_per_hour");
@@ -36,8 +39,8 @@ export async function registerAccount(input: RegisterInput, ip: string): Promise
   // Hash first so response time is the same for every branch.
   const passwordHash = await hashPassword(input.password);
   const [byPhone, byEmail] = await Promise.all([db.user.findUnique({ where: { phone: input.phone } }), db.user.findUnique({ where: { email: input.email } })]);
-  let targetId: string | null = null;
-  let outcome = "RACE";
+  let targetId: string;
+  let outcome: string;
 
   if (!byPhone && !byEmail) {
     try {
@@ -49,6 +52,8 @@ export async function registerAccount(input: RegisterInput, ip: string): Promise
     } catch (error) {
       // A parallel request created the same phone/email first: treat as already existing.
       if (!(error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002")) throw error;
+      await recordRegisterAttempt("RACE", "none", ip);
+      return { ok: false, error: "ALREADY_REGISTERED", phone: true, email: true };
     }
   } else if (byPhone && (!byEmail || byEmail.id === byPhone.id) && byPhone.status === "PENDING" && !byPhone.emailVerifiedAt && (await isSelfRegisteredPending(byPhone))) {
     // Safe: whoever completes the email code is the owner of that address, and the account is still unused.
@@ -60,15 +65,14 @@ export async function registerAccount(input: RegisterInput, ip: string): Promise
     outcome = "RESENT_PENDING";
   } else {
     outcome = byEmail ? "EXISTING_EMAIL" : "EXISTING_PHONE";
+    await recordRegisterAttempt(outcome, byEmail?.id ?? byPhone?.id ?? "none", ip);
+    return { ok: false, error: "ALREADY_REGISTERED", phone: Boolean(byPhone), email: Boolean(byEmail) };
   }
 
-  await recordRegisterAttempt(outcome, targetId ?? byEmail?.id ?? byPhone?.id ?? "none", ip);
-  if (outcome === "EXISTING_EMAIL") await tellOwnerTheyHaveAnAccount(input.email);
+  await recordRegisterAttempt(outcome, targetId, ip);
 
-  if (targetId) {
-    const sent = await issueEmailCode(targetId, input.email, "VERIFY_EMAIL", ip);
-    if (!sent.ok) return { ok: false, error: sent.reason };
-  }
+  const sent = await issueEmailCode(targetId, input.email, "VERIFY_EMAIL", ip);
+  if (!sent.ok) return { ok: false, error: sent.reason };
   return { ok: true };
 }
 
@@ -78,16 +82,6 @@ async function recordRegisterAttempt(outcome: string, entityId: string, ip: stri
     await writeAudit({ actorId: null, action: "REGISTER_ATTEMPT", entityType: "User", entityId, after: { outcome }, ip });
   } catch (error) {
     console.error("[register] could not record the attempt:", error instanceof Error ? error.message : "unknown");
-  }
-}
-
-/** The screen stays neutral (it never says who has an account), but the owner of that address is told by email. At most one per address per hour. */
-async function tellOwnerTheyHaveAnAccount(email: string): Promise<void> {
-  try {
-    if (!(await consumeRateLimit(`register:exists-mail:${email}`, 1, 3600))) return;
-    await sendNoticeTo(email, "صقر: لديك حساب بالفعل", "حاول أحدهم (ربما أنت) إنشاء حساب في صقر بهذا البريد، لكن لديك حساب بالفعل.\nسجّل الدخول، أو اختر «نسيت كلمة المرور» إن لم تتذكرها.\nإن لم تكن أنت فتجاهل هذه الرسالة.");
-  } catch (error) {
-    console.error("[register] could not send the existing-account notice:", error instanceof Error ? error.message.slice(0, 120) : "unknown");
   }
 }
 

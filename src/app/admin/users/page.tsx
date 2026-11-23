@@ -7,7 +7,7 @@ import { db } from "@/lib/db";
 import { hasPermission } from "@/lib/auth/permissions";
 import { normalizeEgyptPhone } from "@/lib/auth/phone";
 import { requirePermission } from "@/server/auth/guards";
-import { setUserStatusAction } from "./actions";
+import { createDriverAction, setUserStatusAction } from "./actions";
 
 export const metadata: Metadata = { title: "المستخدمون" };
 
@@ -19,6 +19,13 @@ const notices: Record<string, string> = {
   invalid: "البيانات غير مكتملة. اكتب سبباً واضحاً.",
   forbidden: "ليست لديك صلاحية لهذا الإجراء.",
   missing: "المستخدم غير موجود.",
+  driver_created: "تم فتح حساب السائق. سلّمه الإيميل وكلمة المرور المؤقتة، وانصحه بتغييرها من «أمان حسابي».",
+  driver_name: "اكتب اسم السائق (حرفان على الأقل).",
+  driver_phone: "رقم الموبايل غير صحيح (مثال: 01012345678).",
+  driver_email: "الإيميل غير صحيح.",
+  driver_password: "كلمة المرور ضعيفة: 8 أحرف على الأقل، وتجمع حروفاً مع أرقام أو رموز.",
+  driver_phone_taken: "رقم الموبايل ده مسجّل قبل كده.",
+  driver_email_taken: "الإيميل ده مسجّل قبل كده.",
 };
 
 export default async function UsersPage({ searchParams }: { searchParams: Promise<{ q?: string; notice?: string }> }) {
@@ -40,6 +47,20 @@ export default async function UsersPage({ searchParams }: { searchParams: Promis
     <div className="flex flex-col gap-4">
       <h1 className="text-2xl font-bold">المستخدمون</h1>
       {notice && notices[notice] ? <p role="status" className="rounded-control bg-brand-soft p-3 text-sm font-medium">{notices[notice]}</p> : null}
+
+      {canManage ? (
+        <Card className="flex flex-col gap-3">
+          <h2 className="font-bold">إضافة سائق</h2>
+          <p className="text-sm text-ink-muted">السائق لا يسجّل بنفسه. اكتب بياناته وكلمة مرور مؤقتة، وسلّمها له ليدخل بالإيميل.</p>
+          <form action={createDriverAction} className="grid gap-2 sm:grid-cols-2">
+            <input name="name" required minLength={2} maxLength={80} placeholder="اسم السائق" autoComplete="off" className="h-11 min-w-0 rounded-control border border-line bg-surface px-3" />
+            <input name="phone" required inputMode="tel" dir="ltr" placeholder="رقم الموبايل 01XXXXXXXXX" autoComplete="off" className="h-11 min-w-0 rounded-control border border-line bg-surface px-3" />
+            <input name="email" type="email" required dir="ltr" placeholder="الإيميل" autoComplete="off" className="h-11 min-w-0 rounded-control border border-line bg-surface px-3" />
+            <input name="password" type="text" required minLength={8} dir="ltr" placeholder="كلمة مرور مؤقتة" autoComplete="off" className="h-11 min-w-0 rounded-control border border-line bg-surface px-3" />
+            <Button type="submit" className="sm:col-span-2">فتح حساب سائق</Button>
+          </form>
+        </Card>
+      ) : null}
 
       <form className="flex gap-2">
         <input name="q" defaultValue={q ?? ""} placeholder="ابحث بالاسم أو رقم الموبايل" className="h-11 min-w-0 flex-1 rounded-control border border-line bg-surface px-3" />

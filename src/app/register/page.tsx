@@ -10,7 +10,7 @@ export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = { title: "إنشاء حساب" };
 
-type Role = "CUSTOMER" | "MERCHANT" | "DRIVER";
+type Role = "CUSTOMER" | "MERCHANT";
 
 const ROLES: Record<Role, { tab: string; tag: string; title: string; text: string; need: string[]; steps: string[]; note?: string }> = {
   CUSTOMER: {
@@ -30,19 +30,11 @@ const ROLES: Record<Role, { tab: string; tag: string; title: string; text: strin
     steps: ["فعّل حسابك بالرمز المرسل إلى إيميلك", "أضف بيانات نشاطك، ويراجعها فريق صقر ويمكنك تعديلها حتى الاعتماد", "أضف منتجاتك، وبعد الاعتماد يظهر نشاطك للعملاء وتستقبل طلباتك"],
     note: "عمولة صقر 8% على قيمة المنتجات بعد الخصم (5% لباقة Premium)، ولا تُحسب على رسوم التوصيل.",
   },
-  DRIVER: {
-    tab: "سائق",
-    tag: "للسائقين",
-    title: "اشتغل بمواعيدك",
-    text: "سجّل حسابك، واختر من الطلبات المتاحة، وتابع توصيلاتك من لوحة السائق.",
-    need: ["إيميل شغّال (يصله رمز تفعيل الحساب)", "رقم موبايل مصري", "كلمة مرور قوية"],
-    steps: ["فعّل حسابك بالرمز المرسل إلى إيميلك", "افتح لوحة السائق واختر من الطلبات المتاحة", "وصّل الطلب إلى العميل وتابع سجل توصيلاتك"],
-  },
 };
 
-const isRole = (v: string | undefined): v is Role => v === "CUSTOMER" || v === "MERCHANT" || v === "DRIVER";
-const SLUG: Record<Role, string> = { CUSTOMER: "customer", MERCHANT: "merchant", DRIVER: "driver" };
-const FROM_SLUG: Record<string, Role> = { customer: "CUSTOMER", merchant: "MERCHANT", driver: "DRIVER" };
+const isRole = (v: string | undefined): v is Role => v === "CUSTOMER" || v === "MERCHANT";
+const SLUG: Record<Role, string> = { CUSTOMER: "customer", MERCHANT: "merchant" };
+const FROM_SLUG: Record<string, Role> = { customer: "CUSTOMER", merchant: "MERCHANT" };
 
 export default async function RegisterPage({ searchParams }: { searchParams: Promise<{ role?: string }> }) {
   const { role: raw } = await searchParams;
@@ -68,7 +60,7 @@ export default async function RegisterPage({ searchParams }: { searchParams: Pro
           </nav>
         </div>
         <div className="mx-auto flex w-full max-w-page flex-col gap-4 px-4 pb-10 pt-6 sm:px-6">
-          <div role="tablist" aria-label="نوع الحساب" className="grid w-full max-w-sm grid-cols-3 gap-1 rounded-full bg-white/10 p-1">
+          <div role="tablist" aria-label="نوع الحساب" className="grid w-full max-w-sm grid-cols-2 gap-1 rounded-full bg-white/10 p-1">
             {(Object.keys(ROLES) as Role[]).map((r) => (
               <Link
                 key={r}

@@ -11,7 +11,7 @@ import { Turnstile } from "./turnstile";
 
 const initial: FormState = {};
 
-export function RegisterForm({ role, siteKey, nonce }: { role: "CUSTOMER" | "MERCHANT" | "DRIVER"; siteKey: string | null; nonce?: string }) {
+export function RegisterForm({ role, siteKey, nonce }: { role: "CUSTOMER" | "MERCHANT"; siteKey: string | null; nonce?: string }) {
   const [state, formAction, pending] = useActionState(registerAction, initial);
   const errors = state.fieldErrors ?? {};
 
