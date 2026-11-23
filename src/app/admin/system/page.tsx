@@ -20,6 +20,14 @@ function mailNotice(code: string | undefined): { tone: "ok" | "bad"; text: strin
   return null;
 }
 
+const outcomeLabel: Record<string, string> = {
+  CREATED: "CREATED (account made, code sent)",
+  RESENT_PENDING: "RESENT_PENDING (pending account, code re-sent)",
+  EXISTING_EMAIL: "EXISTING_EMAIL (email already has an account, nothing sent)",
+  EXISTING_PHONE: "EXISTING_PHONE (phone already has an account, nothing sent)",
+  RACE: "RACE (parallel duplicate)",
+};
+
 function Row({ label, value, bad }: { label: string; value: string; bad?: boolean }) {
   return (
     <div className="flex flex-wrap items-center justify-between gap-2 border-b border-line py-2 last:border-0">
@@ -46,6 +54,11 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ m
           <Row label="عدد المستخدمين" value={String(c.users)} />
           <Row label="آخر مستخدم سُجّل" value={c.newestUserAt ? formatCairo(c.newestUserAt) : "لا يوجد"} />
           <Row label="آخر كود تفعيل أُصدر" value={c.newestCodeAt ? formatCairo(c.newestCodeAt) : "لا يوجد"} />
+          <h3 className="mt-3 text-sm font-semibold">آخر محاولات التسجيل</h3>
+          {c.registerAttempts.length === 0 ? <p className="text-sm text-ink-muted">لا توجد محاولات مسجّلة بعد.</p> : null}
+          {c.registerAttempts.map((a, i) => (
+            <p key={i} dir="ltr" className="text-xs text-ink-muted">{formatCairo(a.at)} · {outcomeLabel[a.outcome] ?? a.outcome}</p>
+          ))}
           {split ? <p className="mt-2 text-sm text-danger">الرابطان يشيران إلى قاعدتين مختلفتين: الموقع يكتب في مكان غير الذي تُجرى عليه التحديثات.</p> : null}
         </Card>
         <Card>

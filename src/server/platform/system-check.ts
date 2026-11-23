@@ -27,19 +27,21 @@ export interface SystemCheck {
   fromDomain: string | null;
   appUrl: string;
   deployment: string | null;
+  registerAttempts: { at: Date; outcome: string }[];
 }
 
 /** What this running deployment is actually connected to and configured with. Names and counts only: no secret value is returned. */
 export async function systemCheck(): Promise<SystemCheck> {
   const env = getEnv();
   const since = new Date(Date.now() - 7 * 24 * 3600 * 1000);
-  const [dbRow, users, newestUser, newestCode, failures7d, failures] = await Promise.all([
+  const [dbRow, users, newestUser, newestCode, failures7d, failures, attempts] = await Promise.all([
     db.$queryRaw<{ db: string }[]>`SELECT current_database() AS db`,
     db.user.count(),
     db.user.findFirst({ orderBy: { createdAt: "desc" }, select: { createdAt: true } }),
     db.emailCode.findFirst({ orderBy: { createdAt: "desc" }, select: { createdAt: true } }),
     db.auditLog.count({ where: { action: "EMAIL_SEND_FAILED", createdAt: { gte: since } } }),
     db.auditLog.findMany({ where: { action: "EMAIL_SEND_FAILED" }, orderBy: { createdAt: "desc" }, take: 3, select: { createdAt: true, after: true } }),
+    db.auditLog.findMany({ where: { action: "REGISTER_ATTEMPT" }, orderBy: { createdAt: "desc" }, take: 5, select: { createdAt: true, after: true } }),
   ]);
   const fromMatch = /@([^<>\s@]+)>?\s*$/.exec(env.EMAIL_FROM ?? "");
   return {
@@ -55,6 +57,7 @@ export async function systemCheck(): Promise<SystemCheck> {
     hasApiKey: Boolean(env.RESEND_API_KEY),
     fromDomain: fromMatch?.[1] ?? null,
     appUrl: env.APP_URL,
+    registerAttempts: attempts.map((a) => ({ at: a.createdAt, outcome: String((a.after as { outcome?: unknown } | null)?.outcome ?? "") })),
     deployment: process.env.VERCEL_GIT_COMMIT_SHA?.slice(0, 7) ?? null,
   };
 }
