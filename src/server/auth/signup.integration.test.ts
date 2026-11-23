@@ -82,7 +82,7 @@ describe("sign-up and activation by email code", () => {
     const shop = await db.merchant.create({ data: { ownerId: owner.id, name: "S", businessType: "restaurant", status: "APPROVED" } });
     const driverUser = await db.user.create({ data: { phone: "+201066666666", name: "سواق", passwordHash: await hashPassword("Temp-pass-1234"), role: "DRIVER", status: "PENDING" } });
     await db.driver.create({ data: { userId: driverUser.id, merchantId: shop.id } });
-    expect(await registerAccount({ ...base, role: "DRIVER", phone: "+201066666666", email: "thief@example.com" }, "unknown")).toEqual({ ok: true });
+    expect(await registerAccount({ ...base, phone: "+201066666666", email: "thief@example.com" }, "unknown")).toEqual({ ok: false, error: "ALREADY_REGISTERED", phone: true, email: false });
     expect(mails).toHaveLength(0);
     expect((await db.user.findUniqueOrThrow({ where: { id: driverUser.id } })).email).toBeNull();
   });
