@@ -5,7 +5,7 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { db } from "@/lib/db";
 import { hashPassword } from "@/lib/auth/password";
-import { authenticate, completeEmailActivation, registerAccount, resendActivationCode } from "@/server/auth/auth-service";
+import { authenticate, completeEmailActivation, isContactTaken, registerAccount, resendActivationCode } from "@/server/auth/auth-service";
 import { setEmailSenderForTests } from "@/server/auth/email-sender";
 
 process.env.APP_URL ??= "http://localhost:3000";
@@ -62,6 +62,16 @@ describe("sign-up and activation by email code", () => {
     expect((await authenticate({ phone: base.phone, password: base.password }, "unknown")).ok).toBe(true);
     expect(await db.user.count()).toBe(1);
     expect(await db.auditLog.count({ where: { action: "REGISTER_ATTEMPT" } })).toBe(4); // the first sign-up and the three refused ones, outcomes only
+  });
+
+  it("the live check calls a phone/email taken only once the account is active, never a still-pending one", async () => {
+    await registerAccount(base, "unknown");
+    expect(await isContactTaken("phone", base.phone, "unknown")).toBe(false); // pending: it can still be registered again
+    expect(await isContactTaken("email", base.email, "unknown")).toBe(false);
+    await completeEmailActivation(base.phone, mails[0]!.code, "unknown");
+    expect(await isContactTaken("phone", base.phone, "unknown")).toBe(true);
+    expect(await isContactTaken("email", base.email, "unknown")).toBe(true);
+    expect(await isContactTaken("phone", "+201099999999", "unknown")).toBe(false);
   });
 
   it("a pending account can be re-registered with the same phone (new email/password), the old code stops working", async () => {

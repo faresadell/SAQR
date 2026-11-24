@@ -8,7 +8,7 @@ import { checkPasswordStrength, type PasswordProblem } from "@/lib/auth/password
 import { getEnv } from "@/lib/env";
 import { normalizeEmail } from "@/lib/auth/email";
 import { verifyTurnstile } from "@/lib/security/captcha";
-import { authenticate, completeEmailActivation, registerAccount, resendActivationCode } from "@/server/auth/auth-service";
+import { authenticate, completeEmailActivation, isContactTaken, registerAccount, resendActivationCode } from "@/server/auth/auth-service";
 import {
   clearPendingPhone,
   createSession,
@@ -89,6 +89,14 @@ export async function registerAction(_prev: FormState, formData: FormData): Prom
 
   await setPendingPhone(phone);
   redirect("/verify");
+}
+
+/** Live check while typing on the sign-up form: is this phone/email already registered? */
+export async function checkContactTakenAction(kind: "phone" | "email", raw: string): Promise<{ taken: boolean }> {
+  if (kind !== "phone" && kind !== "email") return { taken: false };
+  const value = kind === "phone" ? normalizeEgyptPhone(String(raw).slice(0, 30)) : normalizeEmail(String(raw).slice(0, 200));
+  if (!value) return { taken: false };
+  return { taken: await isContactTaken(kind, value, await getClientIp()) };
 }
 
 // ───────────── Activate by email code ─────────────
