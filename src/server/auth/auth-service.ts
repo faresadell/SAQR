@@ -76,6 +76,18 @@ export async function registerAccount(input: RegisterInput, ip: string): Promise
   return { ok: true };
 }
 
+/**
+ * Is this phone/email already used by an account that can no longer be re-registered? (An unverified pending account may be registered again,
+ * so it does not count.) Lets the sign-up form say so while the person is still typing. Rate-limited per IP; over the limit it answers "not taken"
+ * and registerAccount remains the authority.
+ */
+export async function isContactTaken(kind: "phone" | "email", value: string, ip: string): Promise<boolean> {
+  if (ip !== "unknown" && !(await consumeRateLimit(`register:check:${ip}`, 40, 600))) return false;
+  const user = await db.user.findUnique({ where: kind === "phone" ? { phone: value } : { email: value }, select: { status: true, emailVerifiedAt: true } });
+  if (!user) return false;
+  return !(user.status === "PENDING" && !user.emailVerifiedAt);
+}
+
 /** What a sign-up attempt did, without the address, phone or password, so "no code arrived" can be explained from the admin check page. */
 async function recordRegisterAttempt(outcome: string, entityId: string, ip: string): Promise<void> {
   try {
