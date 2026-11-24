@@ -50,7 +50,7 @@ const registerSchema = z.object({
   email: z.string().max(200),
   password: z.string().max(200),
   confirmPassword: z.string().max(200),
-  role: z.enum(["CUSTOMER", "MERCHANT", "DRIVER"], { message: "اختر نوع الحساب." }),
+  role: z.enum(["CUSTOMER", "MERCHANT"], { message: "اختر نوع الحساب." }),
   consent: z.literal("on", { message: "يجب الموافقة على سياسة الخصوصية للمتابعة." }),
 });
 
@@ -79,6 +79,12 @@ export async function registerAction(_prev: FormState, formData: FormData): Prom
   }
 
   const result = await registerAccount({ name: `${parsed.data.firstName} ${parsed.data.lastName}`, phone, email, password: parsed.data.password, role: parsed.data.role }, ip);
+  if (!result.ok && result.error === "ALREADY_REGISTERED") {
+    const fieldErrors: Record<string, string> = {};
+    if (result.phone) fieldErrors.phone = "رقم الموبايل ده مسجّل قبل كده. سجّل دخولك، أو استخدم رقماً آخر.";
+    if (result.email) fieldErrors.email = "الإيميل ده مسجّل قبل كده. سجّل دخولك (أو «نسيت كلمة المرور»)، أو استخدم إيميلاً آخر.";
+    return { fieldErrors };
+  }
   if (!result.ok) return { error: result.error === "RATE_LIMITED" ? RATE_LIMITED : "تعذر إرسال رمز التفعيل إلى بريدك. حاول لاحقاً." };
 
   await setPendingPhone(phone);

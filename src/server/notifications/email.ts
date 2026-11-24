@@ -29,11 +29,6 @@ class EnvNoticeSender implements NoticeSender {
   }
 }
 
-/** One plain email to an address, through whatever provider is configured. Returns false when none is. Throws when the provider refuses. */
-export async function sendNoticeTo(to: string, subject: string, text: string): Promise<boolean> {
-  return (override ?? new EnvNoticeSender()).send(to, subject, text);
-}
-
 let override: NoticeSender | undefined;
 export function setNoticeSenderForTests(sender: NoticeSender | undefined): void {
   override = sender;
