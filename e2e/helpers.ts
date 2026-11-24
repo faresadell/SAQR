@@ -80,7 +80,7 @@ export async function logout(page: Page): Promise<void> {
 /** Drivers cannot sign up: a signed-in administrator opens the account from Users, then the driver signs in with the email. */
 export async function adminAddsDriver(adminPage: Page, phone: string, email: string): Promise<void> {
   await adminPage.goto("/admin/users");
-  await adminPage.locator("input[name=name]").fill("سائق اختبار");
+  await adminPage.locator("input[name=name]").fill("اختبار آلي");
   await adminPage.locator("input[name=phone]").fill(phone);
   await adminPage.locator("input[name=email]").fill(email);
   await adminPage.locator("input[name=password]").fill(USER_PASSWORD);
