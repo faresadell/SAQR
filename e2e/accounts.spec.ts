@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
-import { E2E_ADMIN_PW } from "./accounts";
-import { expectNoHorizontalScroll, login, logout, signUp, skipIntro, USER_PASSWORD, uniqueDigits, watchErrors } from "./helpers";
+import { E2E_ACCOUNTS, E2E_ADMIN_PW, type E2eProject } from "./accounts";
+import { adminAddsDriver, expectNoHorizontalScroll, login, logout, signUp, skipIntro, USER_PASSWORD, uniqueDigits, watchErrors } from "./helpers";
 
 const PASSWORD = USER_PASSWORD;
 
@@ -35,7 +35,7 @@ test("customer: sign up with an emailed code, change phone with the password, si
   errors.assertClean();
 });
 
-test("merchant and driver: sign up by email code and reach their own dashboards", async ({ page }, testInfo) => {
+test("merchant signs up by email code; the admin opens a driver account; both reach their own dashboards", async ({ page }, testInfo) => {
   await skipIntro(page);
   const errors = watchErrors(page);
   const tag = `${testInfo.project.name}${uniqueDigits()}`;
@@ -47,7 +47,12 @@ test("merchant and driver: sign up by email code and reach their own dashboards"
     await expectNoHorizontalScroll(page);
   }
   await page.context().clearCookies();
-  await signUp(page, "DRIVER", `011${uniqueDigits()}`, `driver-${tag}@example.com`);
+  const driverEmail = `driver-${tag}@example.com`;
+  await login(page, E2E_ACCOUNTS[testInfo.project.name as E2eProject].adminPhone.replace("+20", "0"), E2E_ADMIN_PW);
+  await expect(page).toHaveURL(/\/admin/);
+  await adminAddsDriver(page, `011${uniqueDigits()}`, driverEmail);
+  await page.context().clearCookies();
+  await login(page, driverEmail, PASSWORD);
   await expect(page).toHaveURL(/\/driver/);
   for (const path of ["/driver", "/driver/board", "/driver/tasks", "/driver/history", "/driver/profile", "/driver/package"]) {
     const r = await page.goto(path);

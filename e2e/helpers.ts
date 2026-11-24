@@ -47,7 +47,7 @@ export const TINY_PNG = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcS
 export const USER_PASSWORD = E2E_USER_PW;
 
 /** Registers through the real form and activates with the code the server "emailed" (printed in the dev log). */
-export async function signUp(page: Page, role: "CUSTOMER" | "MERCHANT" | "DRIVER", phone: string, email: string): Promise<void> {
+export async function signUp(page: Page, role: "CUSTOMER" | "MERCHANT", phone: string, email: string): Promise<void> {
   await page.goto(`/register?role=${role.toLowerCase()}`);
   await page.locator("input[name=firstName]").fill("اختبار");
   await page.locator("input[name=lastName]").fill("آلي");
@@ -75,4 +75,15 @@ export async function logout(page: Page): Promise<void> {
   const button = page.locator('button[aria-label="تسجيل الخروج"]:visible');
   if ((await button.count()) === 0) await page.getByRole("button", { name: "فتح القائمة" }).click();
   await button.click();
+}
+
+/** Drivers cannot sign up: a signed-in administrator opens the account from Users, then the driver signs in with the email. */
+export async function adminAddsDriver(adminPage: Page, phone: string, email: string): Promise<void> {
+  await adminPage.goto("/admin/users");
+  await adminPage.locator("input[name=name]").fill("سائق اختبار");
+  await adminPage.locator("input[name=phone]").fill(phone);
+  await adminPage.locator("input[name=email]").fill(email);
+  await adminPage.locator("input[name=password]").fill(USER_PASSWORD);
+  await adminPage.getByRole("button", { name: "فتح حساب سائق" }).click();
+  await expect(adminPage.getByText("تم فتح حساب السائق")).toBeVisible({ timeout: 30_000 });
 }
