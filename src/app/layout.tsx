@@ -2,7 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Cairo, Inter } from "next/font/google";
 import { RegisterServiceWorker } from "@/components/pwa/register-sw";
 import { ToastProvider } from "@/components/ui/toast";
-import { getEnv } from "@/lib/env";
+import { siteUrl } from "@/lib/site-url";
 import { CartProvider } from "@/features/cart/cart-provider";
 import "./globals.css";
 
@@ -12,7 +12,7 @@ const inter = Inter({ subsets: ["latin"], variable: "--font-inter", display: "sw
 const SITE_DESCRIPTION = "صقر: اطلب من محلاتك القريبة، وتابع طلبك لحد باب بيتك. مطاعم وسوبر ماركت وعطارة وأكتر في مكان واحد.";
 
 export const metadata: Metadata = {
-  metadataBase: new URL(getEnv().APP_URL),
+  metadataBase: new URL(siteUrl()),
   openGraph: { type: "website", locale: "ar_EG", siteName: "صقر", title: "صقر", description: SITE_DESCRIPTION, images: [{ url: "/brand/saqr-mark.png", alt: "شعار صقر" }] },
   twitter: { card: "summary", title: "صقر", description: SITE_DESCRIPTION, images: ["/brand/saqr-mark.png"] },
   title: { default: "صقر", template: "%s | صقر" },

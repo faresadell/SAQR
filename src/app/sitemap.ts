@@ -1,12 +1,12 @@
 import type { MetadataRoute } from "next";
 import { db } from "@/lib/db";
-import { getEnv } from "@/lib/env";
+import { siteUrl } from "@/lib/site-url";
 
 export const dynamic = "force-dynamic";
 
 /** Public pages and approved shops. Private areas (admin, merchant, driver, account, checkout) are not listed. */
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
-  const base = getEnv().APP_URL.replace(/\/$/, "");
+  const base = siteUrl();
   const now = new Date();
   const pages: MetadataRoute.Sitemap = ["", "/explore", "/offers", "/search", "/tasbeeh", "/privacy"].map((path) => ({
     url: `${base}${path}`,
