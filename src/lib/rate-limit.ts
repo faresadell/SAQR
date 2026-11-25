@@ -10,7 +10,7 @@ import { db } from "@/lib/db";
 export async function consumeRateLimit(key: string, limit: number, windowSeconds: number): Promise<boolean> {
   const since = new Date(Date.now() - windowSeconds * 1000);
   return db.$transaction(async (tx) => {
-    await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${key}))`;
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${key}))`;
     const count = await tx.rateLimitHit.count({ where: { key, createdAt: { gte: since } } });
     if (count >= limit) return false;
     await tx.rateLimitHit.create({ data: { key } });
