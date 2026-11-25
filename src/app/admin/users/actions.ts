@@ -39,10 +39,12 @@ const driverSchema = z.object({
   phone: z.string().max(30),
   email: z.string().max(200),
   password: z.string().max(200),
+  vehicleType: z.string().max(30),
 });
 
 const driverNotices = {
   INVALID_NAME: "driver_name",
+  INVALID_VEHICLE: "driver_vehicle",
   INVALID_PHONE: "driver_phone",
   INVALID_EMAIL: "driver_email",
   WEAK_PASSWORD: "driver_password",

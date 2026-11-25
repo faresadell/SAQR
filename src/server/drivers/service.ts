@@ -2,6 +2,7 @@ import "server-only";
 import { db } from "@/lib/db";
 import { writeAudit } from "@/lib/audit";
 import type { Actor } from "@/lib/auth/permissions";
+import type { VehicleType } from "@/lib/vehicle";
 import { AuthorizationError, NotFoundError } from "@/server/errors";
 import type { Tx } from "@/server/orders/lifecycle";
 
@@ -61,6 +62,12 @@ export async function getMyAvailability(actor: Actor): Promise<{ status: DriverS
  * Drivers a shop can ask for a delivery: the ones who said they are taking work (available or on a trip), with their status.
  * Only name and status are shown; nothing else about the driver.
  */
+/** The driver's own vehicle type (set by the administrator). */
+export async function getMyVehicleType(actor: Actor): Promise<VehicleType> {
+  if (actor.role !== "DRIVER") throw new AuthorizationError();
+  return (await db.driver.findUnique({ where: { userId: actor.id }, select: { vehicleType: true } }))?.vehicleType ?? "MOTORCYCLE";
+}
+
 export async function listDriversForShop(actor: Actor) {
   if (actor.role !== "MERCHANT") throw new AuthorizationError();
   const shop = await db.merchant.findUnique({ where: { ownerId: actor.id } });
@@ -69,9 +76,9 @@ export async function listDriversForShop(actor: Actor) {
     where: { isActive: true, isOnline: true, user: { status: "ACTIVE" }, OR: [{ lastSeenAt: { gte: freshSince() } }, { deliveries: { some: { order: { deliveryStatus: { in: [...BUSY_DELIVERY_STATUSES] } } } } }] },
     orderBy: { createdAt: "asc" },
     take: 100,
-    select: { id: true, user: { select: { name: true } }, deliveries: { where: { order: { deliveryStatus: { in: [...BUSY_DELIVERY_STATUSES] } } }, select: { id: true } } },
+    select: { id: true, vehicleType: true, user: { select: { name: true } }, deliveries: { where: { order: { deliveryStatus: { in: [...BUSY_DELIVERY_STATUSES] } } }, select: { id: true } } },
   });
   return rows
-    .map((d) => ({ id: d.id, name: d.user.name, status: statusOf({ isOnline: true, lastSeenAt: new Date() }, d.deliveries.length) }))
+    .map((d) => ({ id: d.id, name: d.user.name, vehicleType: d.vehicleType, status: statusOf({ isOnline: true, lastSeenAt: new Date() }, d.deliveries.length) }))
     .sort((a, b) => Number(a.status === "ON_TRIP") - Number(b.status === "ON_TRIP"));
 }

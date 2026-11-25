@@ -81,6 +81,7 @@ export async function logout(page: Page): Promise<void> {
 export async function adminAddsDriver(adminPage: Page, phone: string, email: string): Promise<void> {
   await adminPage.goto("/admin/users");
   await adminPage.locator("input[name=name]").fill("اختبار آلي");
+  await adminPage.locator("select[name=vehicleType]").selectOption("TUKTUK");
   await adminPage.locator("input[name=phone]").fill(phone);
   await adminPage.locator("input[name=email]").fill(email);
   await adminPage.locator("input[name=password]").fill(USER_PASSWORD);

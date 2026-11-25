@@ -1,10 +1,12 @@
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/states";
+import { vehicleLabel } from "@/lib/vehicle";
 
 export interface DriverRow {
   id: string;
   name: string;
+  vehicleType: string;
   status: "AVAILABLE" | "ON_TRIP" | "OFFLINE";
 }
 
@@ -13,7 +15,7 @@ const STATUS = { AVAILABLE: { label: "متاح الآن", tone: "success" }, ON_
 /** Independent drivers who are taking work. To send an order to one, use «إرسال للسائق» on the order itself. */
 export function DriversPanel({ drivers }: { drivers: DriverRow[] }) {
   if (drivers.length === 0) {
-    return <EmptyState icon="truck" title="لا يوجد سائق متاح الآن">السائقون يسجلون بأنفسهم ويفعّلون «متاح للعمل». ستظهر أسماؤهم هنا فور توفرهم.</EmptyState>;
+    return <EmptyState icon="truck" title="لا يوجد سائق متاح الآن">السائقون يفعّلون «متاح للعمل» من حساباتهم. ستظهر أسماؤهم هنا ونوع مركبة كل واحد فور توفرهم.</EmptyState>;
   }
   return (
     <div className="flex flex-col gap-4">
@@ -22,7 +24,7 @@ export function DriversPanel({ drivers }: { drivers: DriverRow[] }) {
         {drivers.map((d) => (
           <li key={d.id}>
             <Card className="flex items-center justify-between gap-2">
-              <h3 className="font-bold">{d.name}</h3>
+              <div className="min-w-0"><h3 className="font-bold">{d.name}</h3><p className="text-sm text-ink-muted">{vehicleLabel(d.vehicleType)}</p></div>
               <Badge tone={STATUS[d.status].tone}>{STATUS[d.status].label}</Badge>
             </Card>
           </li>

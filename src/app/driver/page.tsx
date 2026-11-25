@@ -5,17 +5,17 @@ import { loadDriverHome } from "@/features/driver/data";
 import { DriverHomeView } from "@/features/driver/views";
 import { ResultState } from "@/features/shared/result-state";
 import { requireRole } from "@/server/auth/guards";
-import { getMyAvailability } from "@/server/drivers/service";
+import { getMyAvailability, getMyVehicleType } from "@/server/drivers/service";
 
 export const metadata: Metadata = { title: "الرئيسية" };
 
 export default async function DriverHomePage() {
   const { user } = await requireRole("DRIVER");
-  const [result, availability] = await Promise.all([loadDriverHome(user), getMyAvailability(user).catch(() => null)]);
+  const [result, availability, vehicleType] = await Promise.all([loadDriverHome(user), getMyAvailability(user).catch(() => null), getMyVehicleType(user).catch(() => "MOTORCYCLE")]);
   return (
     <>
       <PageHeader title={`أهلاً ${user.name}`} description="ملخص يومك ومهامك." />
-      {availability ? <div className="mb-5"><AvailabilityCard {...availability} /></div> : null}
+      {availability ? <div className="mb-5"><AvailabilityCard {...availability} vehicleType={vehicleType} /></div> : null}
       {result.status === "ready" ? <DriverHomeView data={result.data} base="/driver" /> : <ResultState result={result} />}
     </>
   );

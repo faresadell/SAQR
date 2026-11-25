@@ -7,6 +7,7 @@ import { db } from "@/lib/db";
 import { hasPermission } from "@/lib/auth/permissions";
 import { normalizeEgyptPhone } from "@/lib/auth/phone";
 import { requirePermission } from "@/server/auth/guards";
+import { VEHICLE_LABELS, VEHICLE_TYPES } from "@/lib/vehicle";
 import { createDriverAction, setUserStatusAction } from "./actions";
 
 export const metadata: Metadata = { title: "المستخدمون" };
@@ -21,6 +22,7 @@ const notices: Record<string, string> = {
   missing: "المستخدم غير موجود.",
   driver_created: "تم فتح حساب السائق. سلّمه الإيميل وكلمة المرور المؤقتة، وانصحه بتغييرها من «أمان حسابي».",
   driver_name: "اكتب اسم السائق (حرفان على الأقل).",
+  driver_vehicle: "اختر نوع مركبة السائق.",
   driver_phone: "رقم الموبايل غير صحيح (مثال: 01012345678).",
   driver_email: "الإيميل غير صحيح.",
   driver_password: "كلمة المرور ضعيفة: 8 أحرف على الأقل، وتجمع حروفاً مع أرقام أو رموز.",
@@ -54,6 +56,9 @@ export default async function UsersPage({ searchParams }: { searchParams: Promis
           <p className="text-sm text-ink-muted">السائق لا يسجّل بنفسه. اكتب بياناته وكلمة مرور مؤقتة، وسلّمها له ليدخل بالإيميل.</p>
           <form action={createDriverAction} className="grid gap-2 sm:grid-cols-2">
             <input name="name" required minLength={2} maxLength={80} placeholder="اسم السائق" autoComplete="off" className="h-11 min-w-0 rounded-control border border-line bg-surface px-3" />
+            <select name="vehicleType" required defaultValue="MOTORCYCLE" aria-label="نوع المركبة" className="h-11 min-w-0 rounded-control border border-line bg-surface px-3">
+              {VEHICLE_TYPES.map((v) => <option key={v} value={v}>{VEHICLE_LABELS[v]}</option>)}
+            </select>
             <input name="phone" required inputMode="tel" dir="ltr" placeholder="رقم الموبايل 01XXXXXXXXX" autoComplete="off" className="h-11 min-w-0 rounded-control border border-line bg-surface px-3" />
             <input name="email" type="email" required dir="ltr" placeholder="الإيميل" autoComplete="off" className="h-11 min-w-0 rounded-control border border-line bg-surface px-3" />
             <input name="password" type="text" required minLength={8} dir="ltr" placeholder="كلمة مرور مؤقتة" autoComplete="off" className="h-11 min-w-0 rounded-control border border-line bg-surface px-3" />

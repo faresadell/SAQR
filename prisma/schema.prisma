@@ -15,6 +15,15 @@ datasource db {
 
 // ───────────── Enums ─────────────
 
+/// What the driver delivers with. Set by the administrator when the account is opened.
+enum VehicleType {
+  MOTORCYCLE
+  TRICYCLE
+  TUKTUK
+  QUARTER_TRUCK
+  HALF_TRUCK
+}
+
 enum Role {
   CUSTOMER
   MERCHANT
@@ -246,6 +255,7 @@ model Driver {
   merchantId String? // legacy: drivers are independent now; shops no longer create drivers
   isActive   Boolean  @default(true) // false = suspended (cannot work at all)
   lastSeenAt DateTime? // last time the driver used the app; "available" lapses a few hours after it
+  vehicleType VehicleType @default(MOTORCYCLE)
   isOnline   Boolean  @default(false) // the driver says they are taking work; "on a trip" is derived from active deliveries
   createdAt  DateTime @default(now())
 
