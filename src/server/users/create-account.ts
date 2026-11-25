@@ -23,16 +23,16 @@ interface BaseInput {
 
 async function validateBase(input: BaseInput) {
   const name = cleanDisplayName(input.name);
-  if (!name) return { error: "INVALID_NAME" as const };
+  if (!name) return { ok: false as const, error: "INVALID_NAME" as const };
   const phone = normalizeEgyptPhone(input.phone);
-  if (!phone) return { error: "INVALID_PHONE" as const };
+  if (!phone) return { ok: false as const, error: "INVALID_PHONE" as const };
   const email = normalizeEmail(input.email);
-  if (!email) return { error: "INVALID_EMAIL" as const };
-  if (checkPasswordStrength(input.password, phone)) return { error: "WEAK_PASSWORD" as const };
+  if (!email) return { ok: false as const, error: "INVALID_EMAIL" as const };
+  if (checkPasswordStrength(input.password, phone)) return { ok: false as const, error: "WEAK_PASSWORD" as const };
   const [byPhone, byEmail] = await Promise.all([db.user.findUnique({ where: { phone }, select: { id: true } }), db.user.findUnique({ where: { email }, select: { id: true } })]);
-  if (byPhone) return { error: "PHONE_TAKEN" as const };
-  if (byEmail) return { error: "EMAIL_TAKEN" as const };
-  return { value: { name, phone, email, passwordHash: await hashPassword(input.password) } };
+  if (byPhone) return { ok: false as const, error: "PHONE_TAKEN" as const };
+  if (byEmail) return { ok: false as const, error: "EMAIL_TAKEN" as const };
+  return { ok: true as const, value: { name, phone, email, passwordHash: await hashPassword(input.password) } };
 }
 
 /**
@@ -44,7 +44,7 @@ export async function createMerchantByAdmin(actor: SessionUser, input: BaseInput
   const shop = validateMerchantInput({ name: input.shopName, businessType: input.businessType });
   if (!shop.ok) return { ok: false, error: shop.errors.businessType ? "INVALID_BUSINESS_TYPE" : "INVALID_SHOP" };
   const base = await validateBase(input);
-  if ("error" in base) return { ok: false, error: base.error };
+  if (!base.ok) return { ok: false, error: base.error };
   try {
     return await db.$transaction(async (tx): Promise<CreateAccountResult> => {
       const type = await tx.businessType.findUnique({ where: { code: shop.value.businessType } });
@@ -66,7 +66,7 @@ export async function createMerchantByAdmin(actor: SessionUser, input: BaseInput
 export async function createCustomerByAdmin(actor: SessionUser, input: BaseInput, ip: string): Promise<CreateAccountResult> {
   if (!hasPermission(actor.user, "users.manage")) throw new AuthorizationError();
   const base = await validateBase(input);
-  if ("error" in base) return { ok: false, error: base.error };
+  if (!base.ok) return { ok: false, error: base.error };
   try {
     return await db.$transaction(async (tx): Promise<CreateAccountResult> => {
       const user = await tx.user.create({ data: { ...base.value, role: "CUSTOMER", status: "ACTIVE", emailVerifiedAt: new Date() } });
