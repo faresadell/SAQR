@@ -12,6 +12,7 @@ import { getSetting } from "@/lib/settings";
 import { AuthorizationError } from "@/server/errors";
 import { buildCommissionSnapshot } from "@/server/commissions/service";
 import { resolveOfferDiscounts } from "@/server/offers/service";
+import { customerHasFreeTrial } from "@/server/stars/trial";
 import { getStarBalance } from "@/server/stars/ledger";
 import { notifyInTx } from "@/server/notifications/service";
 import { couponDiscounts } from "@/lib/coupons/discount";
@@ -76,7 +77,7 @@ export async function resolveOrderContext(tx: Prisma.TransactionClient, customer
   // Trading stays closed until the business sets the merchant response window (docs/PHASE2.md, decision 4).
   if ((await getSetting("orders.merchant_response_minutes")) === null) return { ok: false, error: "TRADING_NOT_CONFIGURED" } as const;
   const minCustomer = await getSetting("stars.min_balance_customer");
-  if ((await getStarBalance(tx, customerId)) < minCustomer) return { ok: false, error: "CUSTOMER_STARS_TOO_LOW" } as const;
+  if ((await getStarBalance(tx, customerId)) < minCustomer && !(await customerHasFreeTrial(tx, customerId))) return { ok: false, error: "CUSTOMER_STARS_TOO_LOW" } as const;
   const address = await tx.address.findFirst({ where: { id: addressId, userId: customerId } }); // owner-scoped (IDOR)
   if (!address) return { ok: false, error: "ADDRESS_NOT_FOUND" } as const;
   // Addresses carry no zone any more: there are no fixed delivery prices. The driver names the price after taking the order and the

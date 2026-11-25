@@ -121,6 +121,22 @@ describe("order lifecycle", () => {
     expect((await db.notification.findMany({ where: { userId: owner.id } })).map((x) => x.type).sort()).toEqual(["ORDER_PLACED", "PAYMENT_SUBMITTED"]);
   });
 
+  it("free trial: a new customer's first order costs the customer nothing and needs no balance, the shop still pays, the second order is charged", async () => {
+    await setting("stars.free_trial_orders", 1);
+    await db.starAccount.update({ where: { userId: w.customer.id }, data: { balance: 0 } }); // no stars at all
+    const r = await place();
+    expect(r.ok).toBe(true); // the minimum balance is not required for the trial order
+    if (!r.ok) throw new Error("setup");
+    const id = r.suborderIds[0]!;
+    const owner = (await db.order.findUniqueOrThrow({ where: { id } })).merchantId === w.a.merchant.id ? w.ownerA : w.ownerB;
+    await payAndConfirm(id, owner);
+    expect((await decideOrder(owner, id, "APPROVE")).ok).toBe(true);
+    expect(await getStarBalance(db, w.customer.id)).toBe(0); // the customer paid no stars
+    expect(await getStarBalance(db, owner.id)).toBe(18); // the shop paid its 2
+    // The trial is used now: a second order needs the normal balance.
+    expect((await place("key-second-aaaa"))).toEqual({ ok: false, error: "CUSTOMER_STARS_TOO_LOW" });
+  });
+
   it("keeps the balance equal to the ledger", async () => {
     const r = await place();
     if (!r.ok) throw new Error("setup");

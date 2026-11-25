@@ -8,7 +8,7 @@ import { hasPermission } from "@/lib/auth/permissions";
 import { normalizeEgyptPhone } from "@/lib/auth/phone";
 import { requirePermission } from "@/server/auth/guards";
 import { VEHICLE_LABELS, VEHICLE_TYPES } from "@/lib/vehicle";
-import { createDriverAction, setUserStatusAction } from "./actions";
+import { adjustStarsAction, createCustomerAction, createDriverAction, createMerchantAction, deleteUserAction, setUserStatusAction } from "./actions";
 
 export const metadata: Metadata = { title: "المستخدمون" };
 
@@ -28,6 +28,15 @@ const notices: Record<string, string> = {
   driver_password: "كلمة المرور ضعيفة: 8 أحرف على الأقل، وتجمع حروفاً مع أرقام أو رموز.",
   driver_phone_taken: "رقم الموبايل ده مسجّل قبل كده.",
   driver_email_taken: "الإيميل ده مسجّل قبل كده.",
+  merchant_created: "تم فتح حساب التاجر ونشاطه. سلّمه الإيميل وكلمة المرور المؤقتة. النشاط يحتاج باقة نجوم وحساب دفع ليستقبل طلبات.",
+  customer_created: "تم فتح حساب العميل. سلّمه الإيميل وكلمة المرور المؤقتة.",
+  merchant_shop: "اكتب اسم النشاط (حرفان على الأقل).",
+  merchant_type: "اختر نوع النشاط.",
+  deleted: "تم حذف الحساب نهائيًا وتسجيل ذلك.",
+  anonymized: "الحساب عليه طلبات أو نجوم، فتم إغلاقه وإخفاء بياناته بدل المسح الكامل. لا يمكنه الدخول والرقم والإيميل أصبحا متاحين للتسجيل من جديد.",
+  stars_done: "تم تعديل رصيد النجوم وتسجيله.",
+  stars_invalid: "اكتب عدد نجوم صحيح (موجب للإضافة، سالب للخصم) وسببًا واضحًا.",
+  stars_below_zero: "الخصم أكبر من رصيد الحساب.",
 };
 
 export default async function UsersPage({ searchParams }: { searchParams: Promise<{ q?: string; notice?: string }> }) {
@@ -42,8 +51,9 @@ export default async function UsersPage({ searchParams }: { searchParams: Promis
     where: q ? { OR: filters } : {},
     orderBy: { createdAt: "desc" },
     take: 50,
-    select: { id: true, name: true, phone: true, role: true, status: true, isSuperAdmin: true },
+    select: { id: true, name: true, phone: true, role: true, status: true, isSuperAdmin: true, starAccount: { select: { balance: true } } },
   });
+  const businessTypes = canManage ? await db.businessType.findMany({ where: { isActive: true }, orderBy: { nameAr: "asc" }, select: { code: true, nameAr: true } }) : [];
 
   return (
     <div className="flex flex-col gap-4">
@@ -67,6 +77,38 @@ export default async function UsersPage({ searchParams }: { searchParams: Promis
         </Card>
       ) : null}
 
+      {canManage ? (
+        <Card className="flex flex-col gap-3">
+          <h2 className="font-bold">إضافة تاجر</h2>
+          <p className="text-sm text-ink-muted">يُفتح حساب التاجر ونشاطه معتمدًا مباشرة. بعدها اشترِ له باقة أو أضف له نجومًا ليبدأ.</p>
+          <form action={createMerchantAction} className="grid gap-2 sm:grid-cols-2">
+            <input name="name" required minLength=2 maxLength=80 placeholder="اسم صاحب النشاط" autoComplete="off" className="h-11 min-w-0 rounded-control border border-line bg-surface px-3" />
+            <input name="shopName" required minLength=2 maxLength=80 placeholder="اسم النشاط" autoComplete="off" className="h-11 min-w-0 rounded-control border border-line bg-surface px-3" />
+            <select name="businessType" required aria-label="نوع النشاط" defaultValue="" className="h-11 min-w-0 rounded-control border border-line bg-surface px-3">
+              <option value="" disabled>نوع النشاط</option>
+              {businessTypes.map((t) => <option key={t.code} value={t.code}>{t.nameAr}</option>)}
+            </select>
+            <input name="phone" required inputMode="tel" dir="ltr" placeholder="رقم الموبايل 01XXXXXXXXX" autoComplete="off" className="h-11 min-w-0 rounded-control border border-line bg-surface px-3" />
+            <input name="email" type="email" required dir="ltr" placeholder="الإيميل" autoComplete="off" className="h-11 min-w-0 rounded-control border border-line bg-surface px-3" />
+            <input name="password" type="text" required minLength=8 dir="ltr" placeholder="كلمة مرور مؤقتة" autoComplete="off" className="h-11 min-w-0 rounded-control border border-line bg-surface px-3" />
+            <Button type="submit" className="sm:col-span-2">فتح حساب تاجر</Button>
+          </form>
+        </Card>
+      ) : null}
+
+      {canManage ? (
+        <Card className="flex flex-col gap-3">
+          <h2 className="font-bold">إضافة عميل</h2>
+          <form action={createCustomerAction} className="grid gap-2 sm:grid-cols-2">
+            <input name="name" required minLength=2 maxLength=80 placeholder="اسم العميل" autoComplete="off" className="h-11 min-w-0 rounded-control border border-line bg-surface px-3" />
+            <input name="phone" required inputMode="tel" dir="ltr" placeholder="رقم الموبايل 01XXXXXXXXX" autoComplete="off" className="h-11 min-w-0 rounded-control border border-line bg-surface px-3" />
+            <input name="email" type="email" required dir="ltr" placeholder="الإيميل" autoComplete="off" className="h-11 min-w-0 rounded-control border border-line bg-surface px-3" />
+            <input name="password" type="text" required minLength=8 dir="ltr" placeholder="كلمة مرور مؤقتة" autoComplete="off" className="h-11 min-w-0 rounded-control border border-line bg-surface px-3" />
+            <Button type="submit" className="sm:col-span-2">فتح حساب عميل</Button>
+          </form>
+        </Card>
+      ) : null}
+
       <form className="flex gap-2">
         <input name="q" defaultValue={q ?? ""} placeholder="ابحث بالاسم أو رقم الموبايل" className="h-11 min-w-0 flex-1 rounded-control border border-line bg-surface px-3" />
         <Button type="submit" variant="secondary">بحث</Button>
@@ -83,6 +125,7 @@ export default async function UsersPage({ searchParams }: { searchParams: Promis
               <div className="flex gap-2">
                 <Badge>{roleLabels[u.role]}</Badge>
                 <Badge tone={statusTones[u.status]}>{statusLabels[u.status]}</Badge>
+                {u.role !== "ADMIN" ? <Badge>{u.starAccount?.balance ?? 0} ★</Badge> : null}
               </div>
             </div>
             {canManage && !u.isSuperAdmin && u.id !== actor.user.id ? (
@@ -93,6 +136,21 @@ export default async function UsersPage({ searchParams }: { searchParams: Promis
                 <Button type="submit" size="sm" variant={u.status === "SUSPENDED" ? "primary" : "danger"}>
                   {u.status === "SUSPENDED" ? "إعادة التفعيل" : "إيقاف الحساب"}
                 </Button>
+              </form>
+            ) : null}
+            {canManage && u.role !== "ADMIN" ? (
+              <form action={adjustStarsAction} className="flex flex-wrap gap-2">
+                <input type="hidden" name="userId" value={u.id} />
+                <input name="amount" type="number" required step={1} dir="ltr" placeholder="نجوم (+ إضافة / − خصم)" aria-label="عدد النجوم" className="h-10 w-40 rounded-control border border-line bg-surface px-3 text-sm" />
+                <input name="note" required minLength={3} maxLength={200} placeholder="السبب" className="h-10 min-w-0 flex-1 rounded-control border border-line bg-surface px-3 text-sm" />
+                <Button type="submit" size="sm" variant="secondary">تعديل النجوم</Button>
+              </form>
+            ) : null}
+            {canManage && !u.isSuperAdmin && u.id !== actor.user.id && u.phone.startsWith("deleted-") === false ? (
+              <form action={deleteUserAction} className="flex flex-wrap gap-2">
+                <input type="hidden" name="userId" value={u.id} />
+                <input name="reason" required minLength={3} maxLength={300} placeholder="سبب الحذف" className="h-10 min-w-0 flex-1 rounded-control border border-line bg-surface px-3 text-sm" />
+                <Button type="submit" size="sm" variant="danger">حذف الحساب</Button>
               </form>
             ) : null}
           </Card>

@@ -67,7 +67,7 @@ describe("validation", () => {
   });
 
   it("groups settings for the dashboard", () => {
-    expect(settingKeysInGroup("orders").length).toBe(5);
+    expect(settingKeysInGroup("orders").length).toBe(6);
     expect(settingKeysInGroup("security").length).toBe(12);
   });
 });

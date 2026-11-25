@@ -26,6 +26,11 @@ export const SETTING_DEFINITIONS = {
     label: "الحد الأدنى لرصيد العميل لإرسال طلب",
     group: "orders", unit: "نجمة", min: 0, max: 50, default: 5,
   },
+  "stars.free_trial_orders": {
+    label: "عدد الطلبات المجانية لكل عميل جديد (تجربة بدون نجوم)",
+    help: "أول طلبات العميل الجديد لا تُخصم نجوم العميل عنها ولا يُشترط رصيد، وتُخصم نجوم التاجر كالمعتاد. 0 = بدون تجربة مجانية.",
+    group: "orders", unit: "طلب", min: 0, max: 10, default: 1,
+  },
   "stars.min_balance_merchant": {
     label: "الحد الأدنى لرصيد التاجر لاستقبال الطلبات",
     group: "orders", unit: "نجمة", min: 0, max: 50, default: 5,
