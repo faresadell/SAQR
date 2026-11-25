@@ -88,6 +88,7 @@ describe("placeOrder", () => {
     invalidateSettingsCache();
     expect((await place("key-bbbbbbbb"))).toEqual({ ok: false, error: "TRADING_NOT_CONFIGURED" });
     await setting("orders.merchant_response_minutes", 30);
+    await setting("stars.free_trial_orders", 0);
     await setting("stars.min_balance_customer", 50);
     expect((await place("key-cccccccc"))).toEqual({ ok: false, error: "CUSTOMER_STARS_TOO_LOW" });
   });
