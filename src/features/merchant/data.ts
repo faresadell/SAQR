@@ -2,6 +2,7 @@ import "server-only";
 import type { SessionUser } from "@/server/auth/session";
 import { db } from "@/lib/db";
 import { cairoMonthKey } from "@/lib/stars/rules";
+import { vehicleLabel } from "@/lib/vehicle";
 import { merchantSalesReport } from "@/server/reports/service";
 import { failed, ready, type Loaded } from "@/features/shared/loaded";
 import { listOrdersForActor, mapNotifications, mapPackages, mapStars } from "@/features/shared/server-mappers";
@@ -88,7 +89,7 @@ export async function loadMerchantOrders(user: U): Promise<Loaded<MerchantOrderR
 }
 
 export async function loadMerchantDriverOptions(user: U): Promise<MerchantDriverOption[]> {
-  return (await listDriversForShop(user)).filter((d) => d.status === "AVAILABLE").map((d) => ({ id: d.id, name: d.name }));
+  return (await listDriversForShop(user)).filter((d) => d.status === "AVAILABLE").map((d) => ({ id: d.id, name: `${d.name} · ${vehicleLabel(d.vehicleType)}` }));
 }
 
 export async function loadMerchantOffers(user: U): Promise<Loaded<MerchantOffersData>> {

@@ -54,6 +54,7 @@ test("merchant signs up by email code; the admin opens a driver account; both re
   await page.context().clearCookies();
   await login(page, driverEmail, PASSWORD);
   await expect(page).toHaveURL(/\/driver/);
+  await expect(page.getByText("توكتوك")).toBeVisible(); // the vehicle type the admin chose
   for (const path of ["/driver", "/driver/board", "/driver/tasks", "/driver/history", "/driver/profile", "/driver/package"]) {
     const r = await page.goto(path);
     expect(r?.status(), path).toBeLessThan(400);
