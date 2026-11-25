@@ -1,5 +1,6 @@
 "use server";
 
+import { logError } from "@/lib/log";
 import { revalidatePath } from "next/cache";
 import type { FormState } from "@/lib/form-state";
 import { DENIED_ERROR, GENERIC_ERROR, NOT_FOUND_ERROR, OFFER_MESSAGES } from "@/features/shared/messages";
@@ -32,7 +33,7 @@ export async function createOfferAsAdminAction(_prev: FormState, formData: FormD
   } catch (error) {
     if (error instanceof AuthorizationError) return { error: DENIED_ERROR };
     if (error instanceof NotFoundError) return { error: NOT_FOUND_ERROR };
-    console.error(error);
+    logError(error);
     return { error: GENERIC_ERROR };
   }
 }

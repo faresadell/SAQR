@@ -1,5 +1,6 @@
 import { timingSafeEqual } from "node:crypto";
 import type { NextRequest, NextResponse } from "next/server";
+import { logError } from "@/lib/log";
 import { getEnv } from "@/lib/env";
 import { apiError, apiOk } from "@/server/api/http";
 import { runMembershipMaintenance } from "@/server/memberships/service";
@@ -8,6 +9,7 @@ import { sweepDeliveryTimeouts } from "@/server/orders/delivery-timeouts";
 import { announceBoardOrders } from "@/server/orders/driver-board";
 import { flushNotificationEmails } from "@/server/notifications/email";
 import { escalateOverdueRefunds } from "@/server/refunds/service";
+import { purgeOldRows } from "@/server/maintenance/purge";
 import { runDailyStarCharge, runMonthlyRewards, runPlanReminders } from "@/server/stars/jobs";
 
 function authorized(request: NextRequest, secret: string): boolean {
@@ -28,6 +30,7 @@ async function runAllJobs(): Promise<Record<string, unknown>> {
     ["plan-reminders", () => runPlanReminders()],
     ["refund-overdue", () => escalateOverdueRefunds()],
     ["monthly-rewards", () => runMonthlyRewards()],
+    ["purge-old-rows", () => purgeOldRows()],
     ["settlements", async () => {
       const result = await generateSettlements(previousMonthKey(), null);
       return result.ok ? result.summary : { skipped: result.error };
@@ -38,7 +41,7 @@ async function runAllJobs(): Promise<Record<string, unknown>> {
     try {
       out[name] = await run();
     } catch (error) {
-      console.error(`job ${name} failed`, error);
+      logError(error, `job ${name} failed`);
       out[name] = { failed: true };
     }
   }
@@ -68,6 +71,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ jo
   if (job === "delivery-timeouts") return apiOk(await sweepDeliveryTimeouts());
   if (job === "board-announcements") return apiOk(await announceBoardOrders());
   if (job === "notification-emails") return apiOk(await flushNotificationEmails());
+  if (job === "purge-old-rows") return apiOk(await purgeOldRows());
   if (job === "plan-reminders") return apiOk(await runPlanReminders());
   return apiError(404, "NOT_FOUND");
 }

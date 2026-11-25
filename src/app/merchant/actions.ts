@@ -1,5 +1,6 @@
 "use server";
 
+import { logError } from "@/lib/log";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
@@ -23,7 +24,7 @@ function text(formData: FormData, name: string): string {
 function failure(error: unknown): FormState {
   if (error instanceof AuthorizationError) return { error: DENIED };
   if (error instanceof NotFoundError) return { error: "العنصر غير موجود." };
-  console.error(error);
+  logError(error);
   return { error: GENERIC };
 }
 

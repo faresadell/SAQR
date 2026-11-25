@@ -6,6 +6,9 @@ import { sendNoticeEmail } from "@/lib/email/resend";
 
 /** Kinds that are also sent by email: everything about orders, payments, deliveries, refunds and settlements. Chat, reviews and offers stay in the app. */
 const EMAILED = /^(ORDER_|PAYMENT_|DELIVERY_|REFUND_|SETTLEMENT_)/;
+/** The 4-digit handover code is shown only to the customer inside the app; an email copy could be read by anyone with the mailbox. */
+export const withoutHandoverCode = (body: string): string => body.replace(/كود التسليم:\s*\d{4}\.?/g, "كود التسليم تجده داخل التطبيق.");
+
 export const isEmailedType = (type: string): boolean => EMAILED.test(type);
 
 const MAX_TRIES = 3;
@@ -30,6 +33,11 @@ class EnvNoticeSender implements NoticeSender {
 }
 
 let override: NoticeSender | undefined;
+
+/** One plain email to an address, through whatever provider is configured. Returns false when none is. Throws when the provider refuses. */
+export async function sendNoticeTo(to: string, subject: string, text: string): Promise<boolean> {
+  return (override ?? new EnvNoticeSender()).send(to, subject, text);
+}
 export function setNoticeSenderForTests(sender: NoticeSender | undefined): void {
   override = sender;
 }
@@ -64,7 +72,7 @@ export async function flushNotificationEmails(limit = 50): Promise<{ sent: numbe
     const claim = await db.notification.updateMany({ where: { id: row.id, emailedAt: null, emailTries: row.emailTries }, data: { emailTries: { increment: 1 } } });
     if (claim.count !== 1) continue;
     try {
-      const text = `${row.body}\n\nافتح صقر: ${process.env.APP_URL ?? "https://www.saqr.sale"}`;
+      const text = `${withoutHandoverCode(row.body)}\n\nافتح صقر: ${process.env.APP_URL ?? "https://www.saqr.sale"}`;
       if (!(await sender.send(to, row.title, text))) continue;
       await db.notification.update({ where: { id: row.id }, data: { emailedAt: new Date() } });
       sent += 1;

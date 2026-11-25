@@ -30,7 +30,7 @@ function DeliveryCard({ d, actionable }: { d: DriverDeliveryRow; actionable: boo
         <div><dt className="text-ink-muted">العنوان</dt><dd className="font-semibold">{d.addressLine || "—"}{d.mapUrl ? <> · <a href={d.mapUrl} target="_blank" rel="noopener noreferrer" className="text-brand underline">افتح الموقع على الخريطة</a></> : null}</dd></div>
         <div>
           <dt className="text-ink-muted">العميل</dt>
-          <dd className="font-semibold">{d.customerName} · <a className="ltr-isolate num text-brand underline" href={`tel:${d.customerPhone}`}>{d.customerPhone}</a></dd>
+          <dd className="font-semibold">{d.customerName}{d.customerPhone ? <> · <a className="ltr-isolate num text-brand underline" href={`tel:${d.customerPhone}`}>{d.customerPhone}</a></> : <span className="text-xs font-normal text-ink-muted"> (بيانات التواصل تُخفى بعد 24 ساعة)</span>}</dd>
         </div>
         <div><dt className="text-ink-muted">{d.feeStatus === "APPROVED" ? "رسوم التوصيل المتفق عليها (نقداً من العميل)" : "سعر التوصيل (لسه ما اتحددش)"}</dt><dd className="num font-bold">{formatEgp(d.feeToCollectCents)}</dd></div>
         <div><dt className="text-ink-muted">أُسند في</dt><dd className="num">{formatDateTime(d.assignedAt)}</dd></div>

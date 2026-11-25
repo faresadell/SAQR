@@ -1,5 +1,6 @@
 "use server";
 
+import { logError } from "@/lib/log";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
@@ -41,7 +42,7 @@ function categoryMessage(result: Awaited<ReturnType<typeof createCategory>>): Fo
 function failure(error: unknown): FormState {
   if (error instanceof AuthorizationError) return { error: "ليست لديك صلاحية لهذا الإجراء." };
   if (error instanceof NotFoundError) return { error: "العنصر غير موجود." };
-  console.error(error);
+  logError(error);
   return { error: GENERIC };
 }
 

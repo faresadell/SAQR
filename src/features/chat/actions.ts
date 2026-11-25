@@ -1,5 +1,6 @@
 "use server";
 
+import { logError } from "@/lib/log";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import type { FormState } from "@/lib/form-state";
@@ -24,7 +25,7 @@ function text(formData: FormData, name: string): string {
 function failure(error: unknown): FormState {
   if (error instanceof AuthorizationError) return { error: DENIED_ERROR };
   if (error instanceof NotFoundError) return { error: NOT_FOUND_ERROR };
-  console.error(error);
+  logError(error);
   return { error: GENERIC_ERROR };
 }
 

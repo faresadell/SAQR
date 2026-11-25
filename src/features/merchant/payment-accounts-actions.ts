@@ -1,5 +1,6 @@
 "use server";
 
+import { logError } from "@/lib/log";
 import { revalidatePath } from "next/cache";
 import type { FormState } from "@/lib/form-state";
 import { requireRole } from "@/server/auth/guards";
@@ -21,7 +22,7 @@ const text = (formData: FormData, name: string) => {
 function failure(error: unknown): FormState {
   if (error instanceof NotFoundError) return { error: NOT_FOUND_ERROR };
   if (error instanceof AuthorizationError) return { error: "غير مسموح." };
-  console.error(error);
+  logError(error);
   return { error: GENERIC_ERROR };
 }
 

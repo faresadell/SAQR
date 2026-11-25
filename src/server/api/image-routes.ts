@@ -3,7 +3,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { consumeRateLimit } from "@/lib/rate-limit";
 import { MAX_RECEIPT_BYTES } from "@/lib/uploads/image-sniff";
 import type { Actor } from "@/lib/auth/permissions";
-import { apiError, apiOk, checkOrigin, currentActor, mapThrown } from "./http";
+import { apiError, apiOk, checkOrigin, currentActor, mapThrown uploadTooLarge } from "./http";
 
 const STATUS = { INVALID_FILE: 415, FILE_TOO_LARGE: 413 } as const;
 type Upload = { ok: true } | { ok: false; error: keyof typeof STATUS };
@@ -23,7 +23,8 @@ export async function receiveImage(request: NextRequest, rateKeyPrefix: string, 
     if (bad) return bad;
     const actor = await currentActor();
     if (!actor) return apiError(401, "UNAUTHENTICATED");
-    if (Number(request.headers.get("content-length") ?? "0") > MAX_RECEIPT_BYTES + 64 * 1024) return apiError(413, "FILE_TOO_LARGE");
+    const tooLarge = uploadTooLarge(request, MAX_RECEIPT_BYTES);
+    if (tooLarge) return tooLarge;
     if (!(await consumeRateLimit(`${rateKeyPrefix}:${actor.id}`, 60, 3600))) return apiError(429, "RATE_LIMITED");
     const form = await request.formData().catch(() => null);
     const file = form?.get("file");

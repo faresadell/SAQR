@@ -1,7 +1,7 @@
 import type { NextRequest, NextResponse } from "next/server";
 import { consumeRateLimit } from "@/lib/rate-limit";
 import { MAX_RECEIPT_BYTES } from "@/lib/uploads/image-sniff";
-import { apiError, apiOk, checkOrigin, currentActor, mapThrown } from "@/server/api/http";
+import { apiError, apiOk, checkOrigin, currentActor, mapThrown uploadTooLarge } from "@/server/api/http";
 import { uploadShopImage } from "@/server/merchants/admin-shops";
 
 const STATUS = { INVALID_FILE: 415, FILE_TOO_LARGE: 413 } as const;
@@ -13,7 +13,8 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
     if (bad) return bad;
     const actor = await currentActor();
     if (!actor) return apiError(401, "UNAUTHENTICATED");
-    if (Number(request.headers.get("content-length") ?? "0") > MAX_RECEIPT_BYTES + 64 * 1024) return apiError(413, "FILE_TOO_LARGE");
+    const tooLarge = uploadTooLarge(request, MAX_RECEIPT_BYTES);
+    if (tooLarge) return tooLarge;
     if (!(await consumeRateLimit(`shop:image:${actor.id}`, 60, 3600))) return apiError(429, "RATE_LIMITED");
     const form = await request.formData().catch(() => null);
     const file = form?.get("file");

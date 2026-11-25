@@ -1,5 +1,6 @@
 "use server";
 
+import { logError } from "@/lib/log";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import type { FormState } from "@/lib/form-state";
@@ -31,7 +32,7 @@ async function fileBytes(formData: FormData, name: string): Promise<Uint8Array |
 function failure(error: unknown): FormState {
   if (error instanceof AuthorizationError) return { error: DENIED_ERROR };
   if (error instanceof NotFoundError) return { error: NOT_FOUND_ERROR };
-  console.error(error);
+  logError(error);
   return { error: GENERIC_ERROR };
 }
 
@@ -100,7 +101,7 @@ export async function placeOrderAction(input: unknown): Promise<PlaceOrderAction
     revalidatePath("/account/orders");
     return { ok: true, parentOrderId: result.parentOrderId };
   } catch (error) {
-    console.error(error);
+    logError(error);
     return { ok: false, error: GENERIC_ERROR };
   }
 }
@@ -115,7 +116,7 @@ export async function checkCouponAction(code: string, merchantIds: string[]): Pr
     if (!r.ok) return { ok: false, error: PLACE_ORDER_MESSAGES[r.error] ?? (r.error === "RATE_LIMITED" ? "حاولت كثيراً. انتظر قليلاً." : GENERIC_ERROR) };
     return { ok: true, code: r.coupon.code, kind: r.coupon.kind, value: r.coupon.value, merchantId: r.coupon.merchantId };
   } catch (error) {
-    console.error(error);
+    logError(error);
     return { ok: false, error: GENERIC_ERROR };
   }
 }
