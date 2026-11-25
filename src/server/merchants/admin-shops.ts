@@ -6,7 +6,7 @@ import { writeAudit } from "@/lib/audit";
 import { hasPermission, type Actor } from "@/lib/auth/permissions";
 import { validateMerchantInput, type MerchantField } from "@/lib/catalog/merchant-input";
 import { validateShopContact, type ShopContactField, type SocialKey } from "@/lib/catalog/shop-contact";
-import { detectImage, MAX_RECEIPT_BYTES } from "@/lib/uploads/image-sniff";
+import { detectImage, MAX_RECEIPT_BYTES, stripImageMetadata } from "@/lib/uploads/image-sniff";
 import { AuthorizationError, NotFoundError } from "@/server/errors";
 import { getStorage } from "@/server/uploads/storage";
 
@@ -116,10 +116,11 @@ export async function uploadShopImage(actor: Actor, merchantId: string, bytes: U
   const kind = detectImage(bytes);
   if (!kind) return { ok: false, error: "INVALID_FILE" };
   const key = `shop-images/${shop.id}/${randomUUID()}.${kind.ext}`;
-  await getStorage().put(key, bytes);
+  const clean = stripImageMetadata(bytes, kind);
+  await getStorage().put(key, clean);
   await db.$transaction(async (tx) => {
     await tx.merchant.update({ where: { id: shop.id }, data: { imageKey: key } });
-    await writeAudit({ actorId: actor.id, action: "MERCHANT_IMAGE_SET", entityType: "Merchant", entityId: shop.id, before: { imageKey: shop.imageKey }, after: { imageKey: key, sizeBytes: bytes.length } }, tx);
+    await writeAudit({ actorId: actor.id, action: "MERCHANT_IMAGE_SET", entityType: "Merchant", entityId: shop.id, before: { imageKey: shop.imageKey }, after: { imageKey: key, sizeBytes: clean.length } }, tx);
   });
   return { ok: true };
 }

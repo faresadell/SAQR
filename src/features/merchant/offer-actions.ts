@@ -1,5 +1,6 @@
 "use server";
 
+import { logError } from "@/lib/log";
 import { revalidatePath } from "next/cache";
 import type { FormState } from "@/lib/form-state";
 import { requireRole } from "@/server/auth/guards";
@@ -25,7 +26,7 @@ async function guarded(work: () => Promise<OfferResult<object>>, success: string
   } catch (error) {
     if (error instanceof AuthorizationError) return { error: DENIED_ERROR };
     if (error instanceof NotFoundError) return { error: NOT_FOUND_ERROR };
-    console.error(error);
+    logError(error);
     return { error: GENERIC_ERROR };
   }
 }

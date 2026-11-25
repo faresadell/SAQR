@@ -6,6 +6,7 @@ import type { Actor } from "@/lib/auth/permissions";
 import { AuthorizationError, NotFoundError } from "@/server/errors";
 import { notifyInTx } from "@/server/notifications/service";
 import { BUSY_DELIVERY_STATUSES, freshSince, touchDriver } from "@/server/drivers/service";
+import { clearLocationIfIdle } from "@/server/drivers/location";
 import { openTrip, setDeliveryStatus } from "@/server/orders/delivery";
 import type { Tx } from "@/server/orders/lifecycle";
 
@@ -122,6 +123,7 @@ export async function releaseOrder(actor: Actor, orderId: string): Promise<Relea
       await setDeliveryStatus(tx, r.order, "AWAITING_DRIVER", actor.id, "released by driver");
       await tx.deliveryRecord.update({ where: { id: r.id }, data: { driverId: null, assignedAt: null, feeStatus: "NONE", feeExpectedCents: r.order.deliveryFeeCents } });
       await notifyInTx(tx, { userId: r.order.merchant.ownerId, type: "DELIVERY_FAILED", title: "السائق تراجع عن الطلب", body: `السائق تراجع عن توصيل الطلب رقم ${r.order.number} وعاد الطلب لقائمة السائقين.`, data: { orderId: r.orderId }, dedupeKey: `board-released:${r.orderId}:${Date.now()}` });
+      await clearLocationIfIdle(tx, driver.id);
       await writeAudit({ actorId: actor.id, action: "DELIVERY_RELEASED", entityType: "Order", entityId: r.orderId }, tx);
     }
     return { ok: true };

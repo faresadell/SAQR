@@ -7,6 +7,7 @@ import { getSetting } from "@/lib/settings";
 import { normalizeEmail } from "@/lib/auth/email";
 import { checkPasswordStrength, hashPassword, type PasswordProblem } from "@/lib/auth/password";
 import type { Actor } from "@/lib/auth/permissions";
+import { sendNoticeTo } from "@/server/notifications/email";
 import { consumeEmailCode, issueEmailCode } from "./email-codes";
 
 export type StartEmailResult = { ok: true } | { ok: false; error: "INVALID_REQUEST" | "RATE_LIMITED" | "SEND_FAILED" | "ALREADY_VERIFIED" };
@@ -33,6 +34,7 @@ export async function confirmEmailVerification(actor: Actor, code: string, ip: s
   if (!(await consumeRateLimit(`email:confirm:${actor.id}`, perUser, 600))) return { ok: false, error: "RATE_LIMITED" };
   const email = await consumeEmailCode(actor.id, "VERIFY_EMAIL", code);
   if (!email) return { ok: false, error: "INVALID_CODE" };
+  const before = await db.user.findUnique({ where: { id: actor.id }, select: { email: true, emailVerifiedAt: true } });
   try {
     await db.$transaction(async (tx) => {
       await tx.user.update({ where: { id: actor.id }, data: { email, emailVerifiedAt: new Date() } });
@@ -41,6 +43,10 @@ export async function confirmEmailVerification(actor: Actor, code: string, ip: s
   } catch (error) {
     if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") return { ok: false, error: "EMAIL_TAKEN" };
     throw error;
+  }
+  // The address that used to protect this account is told, so a hijacked session cannot quietly move the account to someone else's mailbox.
+  if (before?.email && before.emailVerifiedAt && before.email !== email) {
+    await sendNoticeTo(before.email, "صقر: تم تغيير بريد حسابك", "تم تغيير البريد الإلكتروني المرتبط بحسابك في صقر. إن لم تكن أنت من فعل ذلك، تواصل معنا فوراً من صفحة الدعم.").catch((error: unknown) => console.error("email-change notice failed", error instanceof Error ? error.name : "unknown"));
   }
   return { ok: true, email };
 }

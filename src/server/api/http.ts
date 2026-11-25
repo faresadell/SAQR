@@ -34,6 +34,16 @@ export function checkMutation(request: NextRequest): NextResponse | null {
   return checkOrigin(request);
 }
 
+/**
+ * Uploads must declare their size, and it must fit. A body without Content-Length (chunked) is refused because
+ * request.formData() would buffer all of it in memory before any size check could run.
+ */
+export function uploadTooLarge(request: NextRequest, maxBytes: number): NextResponse | null {
+  const raw = request.headers.get("content-length");
+  if (raw === null || !/^\d{1,12}$/.test(raw)) return apiError(411, "LENGTH_REQUIRED");
+  return Number(raw) > maxBytes + 64 * 1024 ? apiError(413, "FILE_TOO_LARGE") : null;
+}
+
 /** Origin-only check (used by multipart uploads). */
 export function checkOrigin(request: NextRequest): NextResponse | null {
   const origin = request.headers.get("origin");

@@ -1,5 +1,6 @@
 "use server";
 
+import { logError } from "@/lib/log";
 import { revalidatePath } from "next/cache";
 import { getClientIp } from "@/lib/client-ip";
 import type { FormState } from "@/lib/form-state";
@@ -28,7 +29,7 @@ export async function startEmailAction(_prev: FormState, formData: FormData): Pr
     }
     return { message: "إذا كان البريد صحيحاً سيصلك رمز من 6 أرقام خلال لحظات. اكتبه أدناه." };
   } catch (error) {
-    console.error(error);
+    logError(error);
     return { error: GENERIC_ERROR };
   }
 }
@@ -47,7 +48,7 @@ export async function confirmEmailAction(_prev: FormState, formData: FormData): 
     for (const base of ["/account", "/merchant", "/driver", "/admin"]) revalidatePath(base, "layout");
     return { message: `تم تأكيد البريد ${result.email}.` };
   } catch (error) {
-    console.error(error);
+    logError(error);
     return { error: GENERIC_ERROR };
   }
 }

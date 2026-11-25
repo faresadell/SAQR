@@ -1,5 +1,6 @@
 "use server";
 
+import { logError } from "@/lib/log";
 import { requireRole } from "@/server/auth/guards";
 import { AuthorizationError } from "@/server/errors";
 import { shareLocation, stopSharing } from "@/server/drivers/location";
@@ -19,7 +20,7 @@ export async function shareLocationAction(lat: number, lng: number, accuracyM?: 
     return result.ok ? { ok: true } : { ok: false, error: MESSAGES[result.error] ?? "تعذّر تحديث الموقع." };
   } catch (error) {
     if (error instanceof AuthorizationError) return { ok: false, error: "غير مسموح." };
-    console.error(error);
+    logError(error);
     return { ok: false, error: "تعذّر تحديث الموقع." };
   }
 }
@@ -29,6 +30,6 @@ export async function stopSharingAction(): Promise<void> {
   try {
     await stopSharing(user);
   } catch (error) {
-    if (!(error instanceof AuthorizationError)) console.error(error);
+    if (!(error instanceof AuthorizationError)) logError(error);
   }
 }

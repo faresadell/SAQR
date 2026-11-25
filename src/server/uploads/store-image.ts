@@ -1,6 +1,6 @@
 import "server-only";
 import { randomUUID } from "node:crypto";
-import { detectImage, MAX_RECEIPT_BYTES } from "@/lib/uploads/image-sniff";
+import { detectImage, MAX_RECEIPT_BYTES, stripImageMetadata } from "@/lib/uploads/image-sniff";
 import { getStorage } from "./storage";
 
 export type StoreImageFailure = { ok: false; error: "INVALID_FILE" | "FILE_TOO_LARGE" };
@@ -11,8 +11,9 @@ export async function storeCheckedImage(prefix: "product-images" | "offer-images
   const kind = detectImage(bytes);
   if (!kind) return { ok: false, error: "INVALID_FILE" };
   const key = `${prefix}/${ownerId}/${randomUUID()}.${kind.ext}`; // a new key each time: nothing is overwritten, caches never show a stale picture
-  await getStorage().put(key, bytes);
-  return { ok: true, key, sizeBytes: bytes.length };
+  const clean = stripImageMetadata(bytes, kind);
+  await getStorage().put(key, clean);
+  return { ok: true, key, sizeBytes: clean.length };
 }
 
 const TYPES: Record<string, string> = { jpg: "image/jpeg", png: "image/png", webp: "image/webp" };

@@ -1,5 +1,6 @@
 "use server";
 
+import { logError } from "@/lib/log";
 import { revalidatePath } from "next/cache";
 import type { FormState } from "@/lib/form-state";
 import { requireUser } from "@/server/auth/guards";
@@ -32,7 +33,7 @@ export async function createCouponAction(_prev: FormState, formData: FormData): 
   } catch (error) {
     if (error instanceof AuthorizationError) return { error: DENIED_ERROR };
     if (error instanceof NotFoundError) return { error: NOT_FOUND_ERROR };
-    console.error(error);
+    logError(error);
     return { error: GENERIC_ERROR };
   }
 }
@@ -47,7 +48,7 @@ export async function setCouponActiveAction(_prev: FormState, formData: FormData
   } catch (error) {
     if (error instanceof AuthorizationError) return { error: DENIED_ERROR };
     if (error instanceof NotFoundError) return { error: NOT_FOUND_ERROR };
-    console.error(error);
+    logError(error);
     return { error: GENERIC_ERROR };
   }
 }

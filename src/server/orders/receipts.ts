@@ -4,7 +4,7 @@ import { db } from "@/lib/db";
 import { writeAudit } from "@/lib/audit";
 import { canViewReceipt } from "@/lib/auth/receipt-access";
 import { hasPermission, type Actor } from "@/lib/auth/permissions";
-import { detectImage, MAX_RECEIPT_BYTES } from "@/lib/uploads/image-sniff";
+import { detectImage, MAX_RECEIPT_BYTES, stripImageMetadata } from "@/lib/uploads/image-sniff";
 import { AuthorizationError, NotFoundError } from "@/server/errors";
 import { getStorage } from "@/server/uploads/storage";
 
@@ -48,12 +48,13 @@ export async function uploadPlanReceipt(actor: Actor, bytes: Uint8Array): Promis
 async function storeReceipt(actor: Actor, orderId: string | null, bytes: Uint8Array, kind: NonNullable<ReturnType<typeof detectImage>>): Promise<UploadResult> {
   if ((await db.receiptUpload.count({ where: { orderId, uploaderId: actor.id, usedAt: null } })) >= MAX_UNUSED_PER_ORDER) return { ok: false, error: "TOO_MANY_UPLOADS" };
 
+  const clean = stripImageMetadata(bytes, kind);
   const storageKey = `receipts/${orderId ?? `plan${actor.id}`}/${randomUUID()}.${kind.ext}`;
-  await getStorage().put(storageKey, bytes);
+  await getStorage().put(storageKey, clean);
   const row = await db.receiptUpload.create({
-    data: { orderId, uploaderId: actor.id, storageKey, contentType: kind.contentType, sizeBytes: bytes.length, sha256: createHash("sha256").update(bytes).digest("hex") },
+    data: { orderId, uploaderId: actor.id, storageKey, contentType: kind.contentType, sizeBytes: clean.length, sha256: createHash("sha256").update(clean).digest("hex") },
   });
-  await writeAudit({ actorId: actor.id, action: "RECEIPT_UPLOADED", entityType: orderId ? "Order" : "PlanPurchase", entityId: orderId ?? actor.id, after: { uploadId: row.id, sizeBytes: bytes.length } });
+  await writeAudit({ actorId: actor.id, action: "RECEIPT_UPLOADED", entityType: orderId ? "Order" : "PlanPurchase", entityId: orderId ?? actor.id, after: { uploadId: row.id, sizeBytes: clean.length } });
   return { ok: true, uploadId: row.id };
 }
 

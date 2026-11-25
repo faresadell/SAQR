@@ -1,5 +1,6 @@
 "use server";
 
+import { logError } from "@/lib/log";
 import { revalidatePath } from "next/cache";
 import { getClientIp } from "@/lib/client-ip";
 import type { FormState } from "@/lib/form-state";
@@ -31,7 +32,7 @@ export async function changePhoneAction(_prev: FormState, formData: FormData): P
     for (const base of ["/account", "/merchant", "/driver", "/admin"]) revalidatePath(base, "layout");
     return { message: "تم تغيير الرقم. الرقم الجديد غير متحقق منه." };
   } catch (error) {
-    console.error(error);
+    logError(error);
     return { error: GENERIC_ERROR };
   }
 }
@@ -46,7 +47,7 @@ export async function changeNameAction(_prev: FormState, formData: FormData): Pr
     for (const base of ["/account", "/merchant", "/driver", "/admin"]) revalidatePath(base, "layout");
     return { message: "تم تحديث الاسم." };
   } catch (error) {
-    console.error(error);
+    logError(error);
     return { error: GENERIC_ERROR };
   }
 }
@@ -74,7 +75,7 @@ export async function changePasswordAction(_prev: FormState, formData: FormData)
     }
     return { message: "تم تغيير كلمة المرور، وتم تسجيل خروجك من الأجهزة الأخرى." };
   } catch (error) {
-    console.error(error);
+    logError(error);
     return { error: GENERIC_ERROR };
   }
 }

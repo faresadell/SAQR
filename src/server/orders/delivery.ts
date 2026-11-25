@@ -154,6 +154,9 @@ export async function reportFailure(actor: Actor, orderId: string, reason: strin
   });
 }
 
+/** In the history, the customer's phone and exact address are kept for a day after the job and then no longer shown to the driver. */
+const HISTORY_CONTACT_HOURS = 24;
+
 /** A driver's own deliveries (assigned to them). Customer contact and address are shown only for these. */
 export async function listMyDeliveries(actor: Actor, scope: "ACTIVE" | "HISTORY") {
   if (actor.role !== "DRIVER") throw new AuthorizationError();
@@ -166,7 +169,10 @@ export async function listMyDeliveries(actor: Actor, scope: "ACTIVE" | "HISTORY"
     take: 50,
     include: { order: { select: { id: true, number: true, orderStatus: true, deliveryStatus: true, totalCents: true, deliveryFeeCents: true, addressSnap: true, merchant: { select: { name: true, phone: true } }, customer: { select: { name: true, phone: true } } } } },
   });
-  return rows.map((r) => ({
+  const contactSince = Date.now() - HISTORY_CONTACT_HOURS * 3_600_000;
+  return rows.map((r) => {
+    const showContact = scope === "ACTIVE" || (r.deliveredAt ?? r.assignedAt ?? new Date(0)).getTime() >= contactSince;
+    return {
     orderId: r.orderId,
     number: r.order.number,
     shop: r.order.merchant.name,
@@ -177,11 +183,12 @@ export async function listMyDeliveries(actor: Actor, scope: "ACTIVE" | "HISTORY"
     collectionStatus: r.collectionStatus,
     feeStatus: r.feeStatus,
     maxFeeCents: maxDriverFeeCents(),
-    address: r.order.addressSnap,
-    customer: { name: r.order.customer.name, phone: r.order.customer.phone },
+    address: showContact ? r.order.addressSnap : null,
+    customer: { name: r.order.customer.name, phone: showContact ? r.order.customer.phone : "" },
     assignedAt: r.assignedAt,
     deliveredAt: r.deliveredAt,
-  }));
+    };
+  });
 }
 
 /** Typo guard on the price a driver may name (the customer still has to agree to it). */
@@ -218,6 +225,7 @@ export async function answerDeliveryFee(actor: Actor, orderId: string, approve: 
         await tx.deliveryRecord.update({ where: { id: r.id }, data: { feeStatus: "APPROVED" } });
       } else {
         await setDeliveryStatus(tx, r.order, "AWAITING_DRIVER", actor.id, "customer refused the driver's price");
+        if (r.driverId) await clearLocationIfIdle(tx, r.driverId);
         await tx.deliveryRecord.update({ where: { id: r.id }, data: { driverId: null, assignedAt: null, feeStatus: "NONE", feeExpectedCents: r.order.deliveryFeeCents } });
       }
     }

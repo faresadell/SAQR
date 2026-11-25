@@ -1,4 +1,5 @@
 import "server-only";
+import { clearLocationIfIdle } from "@/server/drivers/location";
 import { db } from "@/lib/db";
 import { writeAudit } from "@/lib/audit";
 import { DRIVER_RESPONSE_MINUTES, FEE_APPROVAL_MINUTES } from "@/lib/delivery-timing";
@@ -50,6 +51,7 @@ export async function sweepDeliveryTimeouts(now = new Date()): Promise<{ release
         );
         await writeAudit({ actorId: null, action: "DELIVERY_TIMED_OUT", entityType: "Order", entityId: r.orderId, after: { reason, driverId } }, tx);
       }
+      await clearLocationIfIdle(tx, driverId);
       return trip.length;
     });
   }

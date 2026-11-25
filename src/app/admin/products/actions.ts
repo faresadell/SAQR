@@ -1,5 +1,6 @@
 "use server";
 
+import { logError } from "@/lib/log";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import type { FormState } from "@/lib/form-state";
@@ -36,7 +37,7 @@ function outcome(result: AdminProductResult, done: string): FormState {
 function failure(error: unknown): FormState {
   if (error instanceof AuthorizationError) return { error: "ليست لديك صلاحية لهذا الإجراء." };
   if (error instanceof NotFoundError) return { error: "المنتج أو النشاط غير موجود." };
-  console.error(error);
+  logError(error);
   return { error: GENERIC };
 }
 

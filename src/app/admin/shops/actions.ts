@@ -1,5 +1,6 @@
 "use server";
 
+import { logError } from "@/lib/log";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import type { FormState } from "@/lib/form-state";
@@ -22,7 +23,7 @@ function input(formData: FormData): AdminShopInput {
 function failure(error: unknown): FormState {
   if (error instanceof AuthorizationError) return { error: "ليست لديك صلاحية لهذا الإجراء." };
   if (error instanceof NotFoundError) return { error: "النشاط غير موجود." };
-  console.error(error);
+  logError(error);
   return { error: GENERIC };
 }
 

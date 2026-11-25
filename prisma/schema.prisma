@@ -498,6 +498,7 @@ model Order {
   stars    StarLedgerEntry[]
 
   @@index([parentOrderId])
+  @@index([deliveryStatus])
   @@index([customerId, createdAt])
   @@index([merchantId, orderStatus])
   @@index([orderStatus, paymentStatus])
@@ -848,6 +849,8 @@ model DeliveryRecord {
   deliveredAt       DateTime?
   order             Order               @relation(fields: [orderId], references: [id])
   driver            Driver?             @relation(fields: [driverId], references: [id])
+
+  @@index([driverId])
 }
 
 // ───────────── Audit ─────────────

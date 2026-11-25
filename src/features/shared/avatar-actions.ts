@@ -1,5 +1,6 @@
 "use server";
 
+import { logError } from "@/lib/log";
 import { revalidatePath } from "next/cache";
 import type { FormState } from "@/lib/form-state";
 import { clearAvatar, setAvatar } from "@/server/auth/avatar";
@@ -20,7 +21,7 @@ export async function setAvatarAction(_prev: FormState, formData: FormData): Pro
     revalidatePath("/settings", "layout");
     return { message: "تم حفظ الصورة." };
   } catch (error) {
-    console.error(error);
+    logError(error);
     return { error: GENERIC_ERROR };
   }
 }

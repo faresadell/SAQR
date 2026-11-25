@@ -1,7 +1,7 @@
 import "server-only";
 import { randomUUID } from "node:crypto";
 import { db } from "@/lib/db";
-import { detectImage, MAX_RECEIPT_BYTES } from "@/lib/uploads/image-sniff";
+import { detectImage, MAX_RECEIPT_BYTES, stripImageMetadata } from "@/lib/uploads/image-sniff";
 import { getStorage } from "@/server/uploads/storage";
 import type { Actor } from "@/lib/auth/permissions";
 import { consumeRateLimit } from "@/lib/rate-limit";
@@ -42,7 +42,7 @@ async function storeImage(conversationId: string, bytes: Uint8Array): Promise<{ 
   const kind = detectImage(bytes);
   if (!kind) return { ok: false, error: "INVALID_FILE" };
   const key = `chat-images/${conversationId}/${randomUUID()}.${kind.ext}`;
-  await getStorage().put(key, bytes);
+  await getStorage().put(key, stripImageMetadata(bytes, kind));
   return { ok: true, image: { key, type: kind.contentType } };
 }
 

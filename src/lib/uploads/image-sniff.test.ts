@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { detectImage, STORAGE_KEY_PATTERN } from "./image-sniff";
+import { detectImage, STORAGE_KEY_PATTERN, stripImageMetadata } from "./image-sniff";
 
 const pad = (head: number[]) => Uint8Array.from([...head, ...new Array(32).fill(0)]);
 
@@ -28,5 +28,37 @@ describe("storage key pattern", () => {
     expect(STORAGE_KEY_PATTERN.test("receipts/../../etc/passwd")).toBe(false);
     expect(STORAGE_KEY_PATTERN.test("receipts/clabcdefgh123/../x.jpg")).toBe(false);
     expect(STORAGE_KEY_PATTERN.test("/receipts/clabcdefgh123/123e4567-e89b-12d3-a456-426614174000.jpg")).toBe(false);
+  });
+});
+
+const seg = (marker: number, payload: number[]) => [0xff, marker, (payload.length + 2) >> 8, (payload.length + 2) & 0xff, ...payload];
+const text = (s: string) => [...s].map((c) => c.charCodeAt(0));
+
+describe("stripImageMetadata", () => {
+  const jfif = seg(0xe0, text("JFIF\0"));
+  const exif = seg(0xe1, text("Exif\0\0GPSLatitude=30.04"));
+  const icc = seg(0xe2, text("ICC_PROFILE\0abc"));
+  const comment = seg(0xfe, text("secret note"));
+  const sos = [0xff, 0xda, 0x00, 0x04, 0x01, 0x02, 0x11, 0x22, 0x33, 0xff, 0xd9];
+  const jpeg = Uint8Array.from([0xff, 0xd8, ...jfif, ...exif, ...icc, ...comment, ...sos, ...new Array(8).fill(0)]);
+
+  it("removes EXIF/XMP and comments but keeps the colour profile and the picture data", () => {
+    const kind = detectImage(jpeg)!;
+    const out = stripImageMetadata(jpeg, kind);
+    const asText = Buffer.from(out).toString("latin1");
+    expect(asText).not.toContain("GPSLatitude");
+    expect(asText).not.toContain("secret note");
+    expect(asText).toContain("ICC_PROFILE");
+    expect(asText).toContain("JFIF");
+    expect([...out.slice(0, 2)]).toEqual([0xff, 0xd8]);
+    expect(out.length).toBe(jpeg.length - exif.length - comment.length);
+    expect([...out.slice(-19)]).toEqual([...jpeg.slice(-19)]); // the scan and what follows are untouched
+  });
+
+  it("returns the original bytes when the structure is broken, and leaves PNG alone", () => {
+    const broken = Uint8Array.from([0xff, 0xd8, 0xff, 0xe1, 0xff, 0xff, 1, 2, 3, 0, 0, 0, 0, 0, 0, 0, 0, 0]);
+    expect(stripImageMetadata(broken, { contentType: "image/jpeg", ext: "jpg" })).toBe(broken);
+    const png = Uint8Array.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, ...new Array(12).fill(1)]);
+    expect(stripImageMetadata(png, detectImage(png)!)).toBe(png);
   });
 });
