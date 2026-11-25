@@ -82,15 +82,15 @@ export default async function UsersPage({ searchParams }: { searchParams: Promis
           <h2 className="font-bold">إضافة تاجر</h2>
           <p className="text-sm text-ink-muted">يُفتح حساب التاجر ونشاطه معتمدًا مباشرة. بعدها اشترِ له باقة أو أضف له نجومًا ليبدأ.</p>
           <form action={createMerchantAction} className="grid gap-2 sm:grid-cols-2">
-            <input name="name" required minLength=2 maxLength=80 placeholder="اسم صاحب النشاط" autoComplete="off" className="h-11 min-w-0 rounded-control border border-line bg-surface px-3" />
-            <input name="shopName" required minLength=2 maxLength=80 placeholder="اسم النشاط" autoComplete="off" className="h-11 min-w-0 rounded-control border border-line bg-surface px-3" />
+            <input name="name" required minLength={2} maxLength={80} placeholder="اسم صاحب النشاط" autoComplete="off" className="h-11 min-w-0 rounded-control border border-line bg-surface px-3" />
+            <input name="shopName" required minLength={2} maxLength={80} placeholder="اسم النشاط" autoComplete="off" className="h-11 min-w-0 rounded-control border border-line bg-surface px-3" />
             <select name="businessType" required aria-label="نوع النشاط" defaultValue="" className="h-11 min-w-0 rounded-control border border-line bg-surface px-3">
               <option value="" disabled>نوع النشاط</option>
               {businessTypes.map((t) => <option key={t.code} value={t.code}>{t.nameAr}</option>)}
             </select>
             <input name="phone" required inputMode="tel" dir="ltr" placeholder="رقم الموبايل 01XXXXXXXXX" autoComplete="off" className="h-11 min-w-0 rounded-control border border-line bg-surface px-3" />
             <input name="email" type="email" required dir="ltr" placeholder="الإيميل" autoComplete="off" className="h-11 min-w-0 rounded-control border border-line bg-surface px-3" />
-            <input name="password" type="text" required minLength=8 dir="ltr" placeholder="كلمة مرور مؤقتة" autoComplete="off" className="h-11 min-w-0 rounded-control border border-line bg-surface px-3" />
+            <input name="password" type="text" required minLength={8} dir="ltr" placeholder="كلمة مرور مؤقتة" autoComplete="off" className="h-11 min-w-0 rounded-control border border-line bg-surface px-3" />
             <Button type="submit" className="sm:col-span-2">فتح حساب تاجر</Button>
           </form>
         </Card>
@@ -100,10 +100,10 @@ export default async function UsersPage({ searchParams }: { searchParams: Promis
         <Card className="flex flex-col gap-3">
           <h2 className="font-bold">إضافة عميل</h2>
           <form action={createCustomerAction} className="grid gap-2 sm:grid-cols-2">
-            <input name="name" required minLength=2 maxLength=80 placeholder="اسم العميل" autoComplete="off" className="h-11 min-w-0 rounded-control border border-line bg-surface px-3" />
+            <input name="name" required minLength={2} maxLength={80} placeholder="اسم العميل" autoComplete="off" className="h-11 min-w-0 rounded-control border border-line bg-surface px-3" />
             <input name="phone" required inputMode="tel" dir="ltr" placeholder="رقم الموبايل 01XXXXXXXXX" autoComplete="off" className="h-11 min-w-0 rounded-control border border-line bg-surface px-3" />
             <input name="email" type="email" required dir="ltr" placeholder="الإيميل" autoComplete="off" className="h-11 min-w-0 rounded-control border border-line bg-surface px-3" />
-            <input name="password" type="text" required minLength=8 dir="ltr" placeholder="كلمة مرور مؤقتة" autoComplete="off" className="h-11 min-w-0 rounded-control border border-line bg-surface px-3" />
+            <input name="password" type="text" required minLength={8} dir="ltr" placeholder="كلمة مرور مؤقتة" autoComplete="off" className="h-11 min-w-0 rounded-control border border-line bg-surface px-3" />
             <Button type="submit" className="sm:col-span-2">فتح حساب عميل</Button>
           </form>
         </Card>
