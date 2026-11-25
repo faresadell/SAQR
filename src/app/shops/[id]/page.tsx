@@ -12,7 +12,13 @@ import { getShopRating, listShopReviews } from "@/server/reviews/service";
 import { formatDateTime } from "@/lib/format";
 import { ProductRow } from "@/features/public/product-row";
 
-export const metadata: Metadata = { title: "تفاصيل النشاط" };
+export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
+  const { id } = await params;
+  const page = await loadShopPage(id.slice(0, 64), {});
+  if (!page) return { title: "تفاصيل النشاط" };
+  const name = page.shop.name;
+  return { title: name, description: `تصفّح منتجات ${name} واطلب أونلاين عبر صقر.`, openGraph: { title: name, description: `اطلب من ${name} عبر صقر.` } };
+}
 
 export default async function ShopPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ c?: string; q?: string }> }) {
   const { id } = await params;
