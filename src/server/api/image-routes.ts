@@ -3,7 +3,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { consumeRateLimit } from "@/lib/rate-limit";
 import { MAX_RECEIPT_BYTES } from "@/lib/uploads/image-sniff";
 import type { Actor } from "@/lib/auth/permissions";
-import { apiError, apiOk, checkOrigin, currentActor, mapThrown uploadTooLarge } from "./http";
+import { apiError, apiOk, checkOrigin, currentActor, mapThrown, uploadTooLarge } from "./http";
 
 const STATUS = { INVALID_FILE: 415, FILE_TOO_LARGE: 413 } as const;
 type Upload = { ok: true } | { ok: false; error: keyof typeof STATUS };

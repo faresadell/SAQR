@@ -1,7 +1,7 @@
 import type { NextRequest, NextResponse } from "next/server";
 import { consumeRateLimit } from "@/lib/rate-limit";
 import { MAX_RECEIPT_BYTES } from "@/lib/uploads/image-sniff";
-import { apiError, apiOk, checkOrigin, currentActor, mapThrown uploadTooLarge } from "@/server/api/http";
+import { apiError, apiOk, checkOrigin, currentActor, mapThrown, uploadTooLarge } from "@/server/api/http";
 import { uploadShopImage } from "@/server/merchants/admin-shops";
 
 const STATUS = { INVALID_FILE: 415, FILE_TOO_LARGE: 413 } as const;
