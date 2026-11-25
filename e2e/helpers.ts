@@ -80,11 +80,12 @@ export async function logout(page: Page): Promise<void> {
 /** Drivers cannot sign up: a signed-in administrator opens the account from Users, then the driver signs in with the email. */
 export async function adminAddsDriver(adminPage: Page, phone: string, email: string): Promise<void> {
   await adminPage.goto("/admin/users");
-  await adminPage.locator("input[name=name]").fill("اختبار آلي");
-  await adminPage.locator("select[name=vehicleType]").selectOption("TUKTUK");
-  await adminPage.locator("input[name=phone]").fill(phone);
-  await adminPage.locator("input[name=email]").fill(email);
-  await adminPage.locator("input[name=password]").fill(USER_PASSWORD);
+  const form = adminPage.locator("form").filter({ has: adminPage.locator("select[name=vehicleType]") });
+  await form.locator("input[name=name]").fill("اختبار آلي");
+  await form.locator("select[name=vehicleType]").selectOption("TUKTUK");
+  await form.locator("input[name=phone]").fill(phone);
+  await form.locator("input[name=email]").fill(email);
+  await form.locator("input[name=password]").fill(USER_PASSWORD);
   await adminPage.getByRole("button", { name: "فتح حساب سائق" }).click();
   await expect(adminPage.getByText("تم فتح حساب السائق")).toBeVisible({ timeout: 30_000 });
 }
