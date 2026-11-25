@@ -55,6 +55,7 @@ beforeEach(async () => {
   await db.commissionRate.createMany({ data: [{ tier: "REGULAR", basisPoints: 800, effectiveFrom: past, createdById: "t" }, { tier: "BUSINESS", basisPoints: 500, effectiveFrom: past, createdById: "t" }] });
   await db.paymentMethodConfig.create({ data: { code: "instapay", nameAr: "انستا باي", isEnabled: true, receiverNumber: "01000000000" } });
   await db.platformSettingVersion.create({ data: { key: "orders.merchant_response_minutes", value: { v: 30 }, effectiveFrom: past, createdById: "test" } });
+  await db.platformSettingVersion.create({ data: { key: "stars.free_trial_orders", value: { v: 0 }, effectiveFrom: past, createdById: "test" } });
   invalidateSettingsCache();
   const zone = await db.deliveryZone.create({ data: { name: "المعادي" } });
   await db.deliveryFeeVersion.create({ data: { zoneId: zone.id, feeCents: 2000, effectiveFrom: past, createdById: "t" } });

@@ -9,6 +9,7 @@ import { getSetting } from "@/lib/settings";
 import { AuthorizationError, NotFoundError } from "@/server/errors";
 import { transferConfirmedElsewhere } from "@/server/payments/transfers";
 import { notifyInTx } from "@/server/notifications/service";
+import { customerHasFreeTrial } from "@/server/stars/trial";
 import { applyStarMoves, getStarBalance, InsufficientStarsError, type StarMove } from "@/server/stars/ledger";
 
 export type LifecycleError =
@@ -201,10 +202,11 @@ async function chargeStars(tx: Tx, order: OrderRow, actorId: string): Promise<vo
   if (perParty === 0) return;
   const minCustomer = await getSetting("stars.min_balance_customer");
   const minMerchant = await getSetting("stars.min_balance_merchant");
-  if ((await getStarBalance(tx, order.customerId)) < Math.max(minCustomer, perParty)) fail("INSUFFICIENT_STARS");
+  const trial = await customerHasFreeTrial(tx, order.customerId, order.parentOrderId); // the customer's free trial order: only the shop pays
+  if (!trial && (await getStarBalance(tx, order.customerId)) < Math.max(minCustomer, perParty)) fail("INSUFFICIENT_STARS");
   if ((await getStarBalance(tx, order.merchant.ownerId)) < Math.max(minMerchant, perParty)) fail("INSUFFICIENT_STARS");
   const moves: StarMove[] = [
-    { userId: order.customerId, amount: -perParty, reason: "ORDER_CHARGE", orderId: order.id, actorId, idempotencyKey: ledgerKeys.orderCharge(order.customerId, order.id) },
+    ...(trial ? [] : [{ userId: order.customerId, amount: -perParty, reason: "ORDER_CHARGE" as const, orderId: order.id, actorId, idempotencyKey: ledgerKeys.orderCharge(order.customerId, order.id) }]),
     { userId: order.merchant.ownerId, amount: -perParty, reason: "ORDER_CHARGE", orderId: order.id, actorId, idempotencyKey: ledgerKeys.orderCharge(order.merchant.ownerId, order.id) },
   ];
   await applyStarMoves(tx, moves);
