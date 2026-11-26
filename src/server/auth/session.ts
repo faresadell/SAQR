@@ -24,6 +24,7 @@ export interface SessionUser {
     role: RoleName;
     isSuperAdmin: boolean;
     permissions: string[];
+    mustChangePassword: boolean;
   };
 }
 
@@ -68,6 +69,7 @@ export const getCurrentSession = cache(async (): Promise<SessionUser | null> => 
       role: session.user.role,
       isSuperAdmin: session.user.isSuperAdmin,
       permissions: session.user.admin.map((p) => p.permission),
+      mustChangePassword: session.user.mustChangePassword,
     },
   };
 });

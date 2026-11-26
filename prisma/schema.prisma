@@ -134,6 +134,7 @@ model User {
   totpSecretEnc   String? // AES-256-GCM encrypted TOTP seed, required for ADMIN accounts
   lastTotpStep    Int? // last accepted TOTP time step (blocks replay)
   isSuperAdmin    Boolean    @default(false)
+  mustChangePassword Boolean @default(false) // set when an administrator opened the account with a temporary password
   failedLoginCount Int       @default(0)
   lockedUntil     DateTime?
   consentVersion  String?

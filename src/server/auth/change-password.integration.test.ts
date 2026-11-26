@@ -31,9 +31,11 @@ describe("change password", () => {
     expect(await db.session.count({ where: { userId: me.id } })).toBe(2);
   });
   it("changes it, keeps only the current session and audits", async () => {
+    await db.user.update({ where: { id: me.id }, data: { mustChangePassword: true } });
     expect(await changePassword(me, keep, "Sturdy-pass-91", "Another-pass-77", "1.1.1.1")).toEqual({ ok: true });
     const row = await db.user.findUniqueOrThrow({ where: { id: me.id } });
     expect(await verifyPassword("Another-pass-77", row.passwordHash)).toBe(true);
+    expect(row.mustChangePassword).toBe(false); // the temporary-password restriction is lifted
     const sessions = await db.session.findMany({ where: { userId: me.id } });
     expect(sessions.map((s) => s.id)).toEqual([keep]);
     expect(await db.auditLog.count({ where: { action: "PASSWORD_CHANGED", entityId: me.id } })).toBe(1);

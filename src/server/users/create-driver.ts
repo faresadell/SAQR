@@ -43,7 +43,7 @@ export async function createDriverByAdmin(
   try {
     const userId = await db.$transaction(async (tx) => {
       const now = new Date();
-      const user = await tx.user.create({ data: { phone, email, name, passwordHash, role: "DRIVER", status: "ACTIVE", emailVerifiedAt: now } });
+      const user = await tx.user.create({ data: { phone, email, name, passwordHash, role: "DRIVER", status: "ACTIVE", emailVerifiedAt: now, mustChangePassword: true } });
       await tx.driver.create({ data: { userId: user.id, merchantId: null, vehicleType } });
       await tx.starAccount.upsert({ where: { userId: user.id }, update: {}, create: { userId: user.id } });
       await writeAudit({ actorId: actor.user.id, action: "DRIVER_CREATED_BY_ADMIN", entityType: "User", entityId: user.id, after: { role: "DRIVER", vehicleType }, ip }, tx);

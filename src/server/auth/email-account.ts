@@ -83,7 +83,7 @@ export async function confirmPasswordResetByEmail(rawEmail: string, code: string
   if (!(await consumeEmailCode(user.id, "PASSWORD_RESET", code, email))) return { ok: false, error: "INVALID_CODE" };
   const passwordHash = await hashPassword(newPassword);
   await db.$transaction(async (tx) => {
-    await tx.user.update({ where: { id: user.id }, data: { passwordHash, failedLoginCount: 0, lockedUntil: null } });
+    await tx.user.update({ where: { id: user.id }, data: { passwordHash, mustChangePassword: false, failedLoginCount: 0, lockedUntil: null } });
     await tx.session.deleteMany({ where: { userId: user.id } });
     await writeAudit({ actorId: user.id, action: "PASSWORD_RESET", entityType: "User", entityId: user.id, after: { via: "email" }, ip }, tx);
   });

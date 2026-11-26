@@ -4,9 +4,11 @@ import { hasPermission, type Permission, type RoleName } from "@/lib/auth/permis
 import { getCurrentSession, type SessionUser } from "./session";
 
 /** Page and action guards. Every protected entry point must call one of these on the server. */
-export async function requireUser(): Promise<SessionUser> {
+export async function requireUser(options: { allowPasswordChange?: boolean } = {}): Promise<SessionUser> {
   const session = await getCurrentSession();
   if (!session) redirect("/login");
+  // An account opened by an administrator with a temporary password can do nothing but set its own password first.
+  if (session.user.mustChangePassword && !options.allowPasswordChange) redirect("/settings/account?pw=1");
   return session;
 }
 

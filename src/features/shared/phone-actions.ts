@@ -62,7 +62,7 @@ const PASSWORD_MESSAGES = {
 } as const;
 
 export async function changePasswordAction(_prev: FormState, formData: FormData): Promise<FormState> {
-  const { user, sessionId } = await requireUser();
+  const { user, sessionId } = await requireUser({ allowPasswordChange: true });
   try {
     const next = text(formData, "next");
     if (next !== text(formData, "confirm")) return { fieldErrors: { confirm: "كلمتا المرور غير متطابقتين." } };
@@ -73,6 +73,7 @@ export async function changePasswordAction(_prev: FormState, formData: FormData)
       if (result.error === "RATE_LIMITED") return { error: "محاولات كثيرة. حاول لاحقاً." };
       return { fieldErrors: { next: result.problem ? PASSWORD_MESSAGES[result.problem] : "كلمة المرور ضعيفة." } };
     }
+    for (const base of ["/account", "/merchant", "/driver", "/admin", "/settings"]) revalidatePath(base, "layout");
     return { message: "تم تغيير كلمة المرور، وتم تسجيل خروجك من الأجهزة الأخرى." };
   } catch (error) {
     logError(error);
