@@ -98,7 +98,7 @@ jobs:
       - run: ./node_modules/.bin/playwright install --with-deps chromium
       - name: Start the site (development mode)
         run: |
-          nohup ./node_modules/.bin/next dev -p 3000 > "$DEV_LOG" 2>&1 &
+          NODE_OPTIONS=--max-old-space-size=6144 nohup ./node_modules/.bin/next dev -p 3000 > "$DEV_LOG" 2>&1 &
           for i in $(seq 1 60); do curl -fs -o /dev/null http://localhost:3000/login && break; sleep 2; done
           curl -fs -o /dev/null http://localhost:3000/login
       - name: Browser tests
