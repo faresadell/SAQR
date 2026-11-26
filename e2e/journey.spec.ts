@@ -1,6 +1,6 @@
 import { expect, test, type Browser, type BrowserContext, type Page } from "@playwright/test";
 import { E2E_ACCOUNTS, E2E_ADMIN_PW, type E2eProject } from "./accounts";
-import { adminAddsDriver, expectNoHorizontalScroll, login, signUp, skipIntro, TINY_PNG, uniqueDigits, USER_PASSWORD, watchErrors } from "./helpers";
+import { adminAddsDriver, loginAndSetOwnPassword, expectNoHorizontalScroll, login, signUp, skipIntro, TINY_PNG, uniqueDigits, USER_PASSWORD, watchErrors } from "./helpers";
 
 /** A separate signed-in browser session (one per person), with the same screen size as the project under test. */
 async function person(browser: Browser, project: { use: Record<string, unknown> }): Promise<{ context: BrowserContext; page: Page }> {
@@ -86,7 +86,7 @@ test("a full order: stars bought, order placed and paid, shop accepts and prepar
   // The admin opens a driver account (drivers cannot sign up); the driver signs in, sees the order on the board (without customer details), takes it, picks it up and delivers it.
   const driverEmail = `drv-${tag}@example.com`;
   await adminAddsDriver(admin.page, `011${uniqueDigits()}`, driverEmail);
-  await login(driver.page, driverEmail, USER_PASSWORD);
+  await loginAndSetOwnPassword(driver.page, driverEmail, USER_PASSWORD, "/driver");
   await expect(driver.page).toHaveURL(/\/driver/);
   // The driver says they are taking work; the shop then sees them as available on «اطلب سائق».
   await driver.page.getByRole("button", { name: "متاح للعمل" }).click();
