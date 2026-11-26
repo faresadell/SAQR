@@ -44,7 +44,7 @@ export async function confirmPasswordReset(rawPhone: string, code: string, newPa
   if (!user || user.status !== "ACTIVE" || user.role === "ADMIN") return { ok: false, error: "INVALID_CODE" };
   const passwordHash = await hashPassword(newPassword);
   await db.$transaction(async (tx) => {
-    await tx.user.update({ where: { id: user.id }, data: { passwordHash, failedLoginCount: 0, lockedUntil: null } });
+    await tx.user.update({ where: { id: user.id }, data: { passwordHash, mustChangePassword: false, failedLoginCount: 0, lockedUntil: null } });
     await tx.session.deleteMany({ where: { userId: user.id } });
     await writeAudit({ actorId: user.id, action: "PASSWORD_RESET", entityType: "User", entityId: user.id, ip }, tx);
   });

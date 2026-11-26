@@ -50,7 +50,7 @@ export async function createMerchantByAdmin(actor: SessionUser, input: BaseInput
       const type = await tx.businessType.findUnique({ where: { code: shop.value.businessType } });
       if (!type?.isActive) return { ok: false, error: "INVALID_BUSINESS_TYPE" };
       const now = new Date();
-      const user = await tx.user.create({ data: { ...base.value, role: "MERCHANT", status: "ACTIVE", emailVerifiedAt: now } });
+      const user = await tx.user.create({ data: { ...base.value, role: "MERCHANT", status: "ACTIVE", emailVerifiedAt: now, mustChangePassword: true } });
       const merchant = await tx.merchant.create({ data: { ownerId: user.id, name: shop.value.name, businessType: shop.value.businessType, status: "APPROVED", reviewedById: actor.user.id, reviewedAt: now } });
       await tx.starAccount.upsert({ where: { userId: user.id }, update: {}, create: { userId: user.id } });
       await writeAudit({ actorId: actor.user.id, action: "MERCHANT_ACCOUNT_CREATED_BY_ADMIN", entityType: "User", entityId: user.id, after: { role: "MERCHANT", merchantId: merchant.id, shop: shop.value.name }, ip }, tx);
@@ -69,7 +69,7 @@ export async function createCustomerByAdmin(actor: SessionUser, input: BaseInput
   if (!base.ok) return { ok: false, error: base.error };
   try {
     return await db.$transaction(async (tx): Promise<CreateAccountResult> => {
-      const user = await tx.user.create({ data: { ...base.value, role: "CUSTOMER", status: "ACTIVE", emailVerifiedAt: new Date() } });
+      const user = await tx.user.create({ data: { ...base.value, role: "CUSTOMER", status: "ACTIVE", emailVerifiedAt: new Date(), mustChangePassword: true } });
       await tx.starAccount.upsert({ where: { userId: user.id }, update: {}, create: { userId: user.id } });
       await writeAudit({ actorId: actor.user.id, action: "CUSTOMER_CREATED_BY_ADMIN", entityType: "User", entityId: user.id, after: { role: "CUSTOMER" }, ip }, tx);
       return { ok: true, userId: user.id };

@@ -34,7 +34,7 @@ describe("admin opens merchant and customer accounts", () => {
     const m = await createMerchantByAdmin(admin, merchantInput, "unknown");
     expect(m.ok).toBe(true);
     const owner = await db.user.findUniqueOrThrow({ where: { email: "shop@example.com" }, include: { merchant: true } });
-    expect(owner).toMatchObject({ role: "MERCHANT", status: "ACTIVE" });
+    expect(owner).toMatchObject({ role: "MERCHANT", status: "ACTIVE", mustChangePassword: true });
     expect(owner.merchant).toMatchObject({ name: "مطعم الصقر", status: "APPROVED", businessType: "restaurant" });
     expect((await authenticate({ email: "shop@example.com", password: merchantInput.password }, "unknown")).ok).toBe(true);
     expect((await createCustomerByAdmin(admin, customerInput, "unknown")).ok).toBe(true);

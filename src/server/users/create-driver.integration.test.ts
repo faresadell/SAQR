@@ -31,6 +31,7 @@ describe("admin opens a driver account", () => {
     const user = await db.user.findUniqueOrThrow({ where: { email: "driver@example.com" } });
     expect(user).toMatchObject({ role: "DRIVER", status: "ACTIVE", phone: "+201011112222" });
     expect(user.emailVerifiedAt).not.toBeNull();
+    expect(user.mustChangePassword).toBe(true); // temporary password: must be replaced at first sign-in
     expect(await db.driver.findUniqueOrThrow({ where: { userId: user.id } })).toMatchObject({ vehicleType: "TUKTUK", isActive: true });
     expect(await db.auditLog.count({ where: { action: "DRIVER_CREATED_BY_ADMIN", entityId: user.id } })).toBe(1);
     expect((await authenticate({ email: "driver@example.com", password: input.password }, "unknown")).ok).toBe(true);

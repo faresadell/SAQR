@@ -70,6 +70,18 @@ export async function login(page: Page, identifier: string, password: string): P
   await page.getByRole("button", { name: "دخول" }).click();
 }
 
+/** First sign-in of an account an admin opened: the temporary password must be replaced before anything else works. */
+export async function loginAndSetOwnPassword(page: Page, identifier: string, temporary: string, landing: string): Promise<void> {
+  await login(page, identifier, temporary);
+  await expect(page).toHaveURL(/\/settings\/account/, { timeout: 30_000 });
+  await page.locator("input[name=current]").fill(temporary);
+  await page.locator("input[name=next]").fill(`${temporary}-new1`);
+  await page.locator("input[name=confirm]").fill(`${temporary}-new1`);
+  await page.getByRole("button", { name: "تغيير كلمة المرور" }).click();
+  await expect(page.getByText("تم تغيير كلمة المرور")).toBeVisible({ timeout: 30_000 });
+  await page.goto(landing);
+}
+
 /** On a phone the sign-out button lives in the side menu; on desktop it is always on screen. */
 export async function logout(page: Page): Promise<void> {
   const button = page.locator('button[aria-label="تسجيل الخروج"]:visible');

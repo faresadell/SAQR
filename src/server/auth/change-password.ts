@@ -24,7 +24,7 @@ export async function changePassword(actor: Actor, currentSessionId: string, cur
   if (problem) return { ok: false, error: "WEAK", problem };
   const passwordHash = await hashPassword(next);
   await db.$transaction(async (tx) => {
-    await tx.user.update({ where: { id: actor.id }, data: { passwordHash } });
+    await tx.user.update({ where: { id: actor.id }, data: { passwordHash, mustChangePassword: false } });
     await tx.session.deleteMany({ where: { userId: actor.id, id: { not: currentSessionId } } });
     await writeAudit({ actorId: actor.id, action: "PASSWORD_CHANGED", entityType: "User", entityId: actor.id, ip }, tx);
   });

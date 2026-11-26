@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 import { E2E_ACCOUNTS, E2E_ADMIN_PW, type E2eProject } from "./accounts";
-import { adminAddsDriver, expectNoHorizontalScroll, login, logout, signUp, skipIntro, USER_PASSWORD, uniqueDigits, watchErrors } from "./helpers";
+import { adminAddsDriver, loginAndSetOwnPassword, expectNoHorizontalScroll, login, logout, signUp, skipIntro, USER_PASSWORD, uniqueDigits, watchErrors } from "./helpers";
 
 const PASSWORD = USER_PASSWORD;
 
@@ -52,7 +52,7 @@ test("merchant signs up by email code; the admin opens a driver account; both re
   await expect(page).toHaveURL(/\/admin/);
   await adminAddsDriver(page, `011${uniqueDigits()}`, driverEmail);
   await page.context().clearCookies();
-  await login(page, driverEmail, PASSWORD);
+  await loginAndSetOwnPassword(page, driverEmail, PASSWORD, "/driver");
   await expect(page).toHaveURL(/\/driver/);
   await expect(page.getByText("توكتوك")).toBeVisible(); // the vehicle type the admin chose
   for (const path of ["/driver", "/driver/board", "/driver/tasks", "/driver/history", "/driver/profile", "/driver/package"]) {
