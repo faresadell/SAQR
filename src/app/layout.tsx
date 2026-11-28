@@ -13,6 +13,7 @@ const SITE_DESCRIPTION = "صقر: اطلب من محلاتك القريبة، و
 
 export const metadata: Metadata = {
   metadataBase: new URL(siteUrl()),
+  other: { "google-adsense-account": "ca-pub-8268526700912387" }, // AdSense site verification (public publisher id, not a secret)
   openGraph: { type: "website", locale: "ar_EG", siteName: "صقر", title: "صقر", description: SITE_DESCRIPTION, images: [{ url: "/brand/saqr-mark.png", alt: "شعار صقر" }] },
   twitter: { card: "summary", title: "صقر", description: SITE_DESCRIPTION, images: ["/brand/saqr-mark.png"] },
   title: { default: "صقر", template: "%s | صقر" },
